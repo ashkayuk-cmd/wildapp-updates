@@ -1,1 +1,0 @@
-# wildapp-updates
