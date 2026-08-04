@@ -13,7 +13,91 @@ Kiosk mode fights the installer.
    pick your original launcher.
    (Some builds: Settings → **Home** → choose launcher.)
 
-## v1.31 (current — WildApp.apk)  ⚠ built on v1.30
+## v1.39 (current — WildApp.apk)  ⚠ built on v1.38 · versionCode 35
+
+Two app changes plus a data update. Installs straight over the current app
+(same signing key), so your saved corrections and scan history are kept.
+
+- **Correcting a walk no longer changes the whole postcode by accident.**
+  When you tap “Wrong walk?” on a scan that has **no house number**, the app
+  now asks what to change: **“Just this address”** or **“Every address in
+  \<postcode\>”**. Before, a numberless correction quietly re-walked *every*
+  numberless scan of that postcode. Scans that already have a house number are
+  pinned to that number as before. The **Manage my corrections** screen now
+  labels each saved fix — THIS ADDRESS ONLY / WHOLE POSTCODE / THIS HOUSE
+  NUMBER — so you can see (and delete) exactly what each one covers.
+
+- **The BACK button now works on every screen.** Pressing BACK closes whatever
+  is open — the Wrong-walk pickers, the scope chooser, Manage / Recent /
+  backup / GitHub screens, the scanner info/voice/lens sheets, the address
+  detail sheet, the camera panel, or an expanded walk row — one step at a time.
+  It never closes the app itself (the 10-second-BACK → “Leave” escape at the
+  top of this file is still how you get out).
+
+- **Data updated.** Oak Tree Lodge (49-50 Leinster Gardens, W2 3AT, 21 flats)
+  moved from **20 HALLFIELD → 35 CLEVELAND**, and a new **Paddington Exchange**
+  (Hermitage Street, W2 1HG) row was added on **6 SHELDON**. 24,147 records.
+  *(Heads-up: that new row’s street column is spelled “Hermitage Steet” —
+  scanning by the W2 1HG postcode works fine; only the Walks-tab street header
+  would show the typo. Say the word and I’ll correct it.)*
+
+**Install:** same signing key as every build since v1.7, version number goes
+up (35), so it installs straight over the current app. Remember the
+**10-second-BACK → “Leave”** step first (kiosk mode fights the installer).
+
+**To publish the OTA update (both steps):** in the `ashkayuk-cmd/wildapp-updates`
+repo, upload this `WildApp.apk` **and** set `version.txt` to **`35`** (plain
+number). If you bump the APK but leave version.txt behind, the phone never
+shows the update banner.
+
+---
+
+## v1.38 (current — WildApp.apk)  ⚠ built on v1.37 · versionCode 34
+
+Three scan fixes. **Data unchanged** from the last few builds (same
+24,146-record dataset, same wild_data.json/xlsx) — only the app logic
+(index.html), the manifest version number, and the signatures changed.
+
+- **Name / worker-code scans no longer guess a firm.** Scanning a 1D code
+  that's just a dotted person-name (e.g. `susan.d.williams`, `fran.llorente`)
+  used to fuzzy-match a real surname and confidently show ONE firm/walk —
+  which was wrong (`susan.d.williams` → "William Hill Bookmakers 74 Queensway,
+  walk 24" made no sense; `fran.llorente` → "Knight Frank" was a lucky guess
+  from the *same* broken mechanism). These codes now show a plain
+  **"🪪 Name / worker code — no delivery address"** card (or register as
+  "no postcode" on a live trigger-scan) instead of inventing a walk.
+  *Trade-off, being honest:* this also stops the occasional right-ish guess
+  like fran.llorente→Knight Frank. There's no reliable way to keep the good
+  guesses without the bad ones — the app can't tell a real surname from a
+  coincidence. If you actually want name→firm lookup, that's a separate
+  feature (a real staff/firm name list), not a fuzzy guess — say the word.
+
+- **Junction Mews "12" vs "1-2" now asks instead of assuming.** A barcode for
+  **1-2 Junction Mews** (your firm) often arrives glued as `12` because
+  Mailmark drops the hyphen — identical to a genuine **No. 12 Junction Mews**.
+  The app can't tell them apart from the digits alone, so a `12 … Junction
+  Mews` scan (W2 1PN) now shows a **two-button picker**:
+  **① 1-2 Junction Mews (firm)** or **② 12 Junction Mews → walk 11 Norfolk**,
+  with a note explaining why. Tap the right one. A scan that keeps the hyphen
+  (`1-2` / `1 2`) still snaps straight to the firm as before — only the glued
+  `12` asks.
+  *(Note: the dataset still lists "1-2, Junction Mews" as walk 11 while your
+  hand-override says it's a firm — I did NOT change any walk assignments.
+  Flagging it so you can decide; nothing was auto-reassigned.)*
+
+**Install:** same signing key as every build since v1.7, version number goes
+up (34), so it installs straight over the current app. Remember the
+**10-second-BACK → "Leave"** step first (kiosk mode fights the installer).
+
+**To publish the OTA update (both steps — this is the bit that's easy to
+half-do):** in the `ashkayuk-cmd/wildapp-updates` repo, upload this
+`WildApp.apk` **and** set `version.txt` to **`34`** (plain number, nothing
+else). If you bump the APK but leave version.txt behind, the phone never
+shows the update banner.
+
+---
+
+## v1.31 (older)  ⚠ built on v1.30
 Four changes plus the dataset update.
 
 - **Sleeps after 8 minutes idle.** With no tap, key, or trigger for 8 minutes
