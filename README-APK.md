@@ -13,6 +13,78 @@ Kiosk mode fights the installer.
    pick your original launcher.
    (Some builds: Settings → **Home** → choose launcher.)
 
+## v1.42 (current — WildApp.apk)  ⚠ built on v1.41 · versionCode 38
+
+Data update — three corrections, keeping the working hardware-BACK fix from v1.41 (the app's compiled code is byte-identical to v1.41, so BACK behaves exactly as before).
+
+- **43 Leinster Gardens (W2 3AT)** → walk **35 CLEVELAND** (was 20 HALLFIELD)
+- **47-48 Leinster Gardens (W2 3AT)** → walk **35 CLEVELAND** (was 20 HALLFIELD)
+- **Paddington Exchange, Hermitage Street (W2 1HG)** — fixed the street spelling "Hermitage Steet" → "Hermitage Street" (walk unchanged, still 6 SHELDON)
+
+All of W2 3AT / Leinster Gardens now sits on 35 CLEVELAND (24 addresses); none left on 20 HALLFIELD. Still 24,147 records.
+
+I also added the Paddington Exchange row to the master `wild_data.xlsx` (it was missing from the embedded copy, which is why the spelling only existed in the app's baked data), so the spreadsheet and the app now match.
+
+**Install:** same key, installs over the top. Hold **BACK 10 seconds → "Leave"** first.
+
+**To publish the OTA update (both steps):** upload this `WildApp.apk` to `ashkayuk-cmd/wildapp-updates` **and** set `version.txt` to **`38`**.
+
+---
+
+## v1.41 (current — WildApp.apk)  ⚠ built on v1.40 · versionCode 37
+
+**The Android hardware BACK button now works inside the app.** This is a
+native fix, not a web one.
+
+*What was wrong:* the kiosk was built to completely swallow the BACK key (so
+the app stays pinned as the Home screen). A short BACK press did nothing but
+cancel the 10-second-hold-to-exit timer — it never reached the in-app back
+handler, which is why the earlier attempt (a web-page back handler) never
+fired: the key press wasn’t being handed to the web page at all.
+
+*The fix:* a quick tap of BACK is now forwarded into the app, so it closes
+whatever is open — the Wrong-walk pickers, the scope chooser, Manage / Recent
+/ backup / GitHub screens, the info/voice/lens sheets, the address detail
+sheet, the camera panel, or an expanded walk row — one step at a time. The
+**10-second hold → “Leave”** escape is unchanged and still works exactly as
+before (a long hold still reaches the exit prompt; only a short tap now does
+the in-app back).
+
+No data or address changes — same 24,147 records as v1.40.
+
+**Install:** same signing key, version number up to 37, installs over the top.
+Remember the **10-second-BACK → “Leave”** step first (kiosk fights the installer).
+
+**To publish the OTA update (both steps):** upload this `WildApp.apk` to the
+`ashkayuk-cmd/wildapp-updates` repo **and** set `version.txt` to **`37`**.
+
+---
+
+## v1.40 (current — WildApp.apk)  ⚠ built on v1.39 · versionCode 36
+
+**Data update only** — no app changes. Same code as v1.39 (the walk-scoping
+correction and the universal BACK button are all still there), just refreshed
+addresses. Installs straight over the current app (same signing key), so your
+saved corrections and scan history are kept.
+
+- **L H A London Ltd (Leinster House, 44-46 Leinster Gardens, W2 3AT)** moved
+  from **20 HALLFIELD → 35 CLEVELAND**. 24,147 records, everything else
+  unchanged.
+  *(Two other W2 3AT addresses — 43 and 47-48 Leinster Gardens — are still on
+  20 HALLFIELD; I left those as they were. Say the word if they should move
+  too.)*
+  *(The earlier “Hermitage Steet” typo on the Paddington Exchange row is still
+  there — harmless for scanning, only the Walks-tab street header shows it.
+  Tell me and I’ll fix it.)*
+
+**Install:** same signing key, version number up to 36, installs over the top.
+Remember the **10-second-BACK → “Leave”** step first (kiosk fights the installer).
+
+**To publish the OTA update (both steps):** upload this `WildApp.apk` to the
+`ashkayuk-cmd/wildapp-updates` repo **and** set `version.txt` to **`36`**.
+
+---
+
 ## v1.39 (current — WildApp.apk)  ⚠ built on v1.38 · versionCode 35
 
 Two app changes plus a data update. Installs straight over the current app
