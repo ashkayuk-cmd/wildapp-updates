@@ -13,7 +13,39 @@ Kiosk mode fights the installer.
    pick your original launcher.
    (Some builds: Settings → **Home** → choose launcher.)
 
-## v1.46 (current — WildApp.apk)  ⚠ replaces v1.45 · versionCode 42
+## v1.47 (current) — OVER-THE-AIR UPDATE, NO APK  · content build 43
+
+**First update delivered without an APK.** Put `index.html` and `content.json`
+in `ashkayuk-cmd/wildapp-updates`, then tap **⟳ Update** on the PDA. Nothing
+to install; the PDA is still running the build 42 APK underneath.
+
+**The fix:** the red **RESET** button is `position:fixed` in the top-right
+corner, so it floats OVER the title bar and was sitting on top of the
+⟳ Update button. The bar now measures RESET and reserves exactly that much
+room on its right, so nothing ends up underneath it (the title shortens with
+an ellipsis if space runs short). Because it measures rather than guesses, it
+stays correct if the RESET label or the screen size changes.
+
+**Two more self-rejection bugs found while testing this** — both would have
+stopped over-the-air updates working at all:
+
+- The check that a downloaded file "really is the app" looked for
+  `var BUILD_NUM=<number>`, a stamp v1.45 replaced with a derived value — so
+  every published update would have been refused. It now looks for the
+  constant the app actually carries.
+- (v1.46 fixed the same class of bug in the anti-loop marker.)
+
+Found by a new end-to-end test that publishes this exact file to a mock repo,
+lets the update layer download and cache it, then hands that cache to the real
+loader and checks it boots this build — the whole path, start to finish.
+
+**To publish:** upload `index.html` and `content.json` to the repo (replacing
+`content.json`), then tap ⟳ Update → "Update ready" → tap the green banner.
+No `version.txt` change and no install — that's only for APK builds.
+
+---
+
+## v1.46 (WildApp.apk)  ⚠ replaces v1.45 · versionCode 42
 
 Everything in v1.45, plus a **⟳ Update** button in the top bar, next to
 "Handheld Scanner". Tap it any time to check right now instead of waiting for
