@@ -13,7 +13,37 @@ Kiosk mode fights the installer.
    pick your original launcher.
    (Some builds: Settings → **Home** → choose launcher.)
 
-## v1.47 (current) — OVER-THE-AIR UPDATE, NO APK  · content build 43
+## v1.48 (current — WildApp.apk)  · versionCode 44 · DATA UPDATE
+
+Rebuilt from the `wild_data.xlsx` you sent, and it also carries the v1.47 fix
+(the ⟳ Update button no longer sits under the red RESET button), so this one
+APK brings you fully up to date.
+
+**24,147 addresses — what changed from what was on the PDA:**
+
+| | |
+|---|---|
+| Leinster House 44-46, Leinster Gardens | 20 HALLFIELD → **35 CLEVELAND** |
+| Hilton London Paddington, Eastbourne Terrace | FIRM → **12 WESTCLIFFE** (the "1-2" naming tidied) |
+| 225 Edgware Road | Contrasti salon row is now **Hilton London Metropole**, FIRM |
+| Oak Tree Lodge 49-50, Leinster Gardens (21 flats) | 35 CLEVELAND → **20 HALLFIELD** |
+
+That last row is the one to check — see below.
+
+**Oak Tree Lodge:** your sheet has these 21 flats on 20 HALLFIELD, but they
+were moved to 35 CLEVELAND back in v1.39. Built as your sheet has it. Scanning
+still works cleanly either way — a label naming Oak Tree Lodge gives
+20 HALLFIELD, and 43 / 47-48 / Leinster House give 35 CLEVELAND. Only a label
+with the bare postcode and no address text will now ask which walk, because
+W2 3AT covers both. Say the word and I'll flip them back.
+
+**Install:** same key, installs over the top. Hold **BACK 10 seconds →
+"Leave"** first, then upload this `WildApp.apk` to the repo and set
+`version.txt` to **`44`**.
+
+---
+
+## v1.47 — OVER-THE-AIR UPDATE, NO APK  · content build 43
 
 **First update delivered without an APK.** Put `index.html` and `content.json`
 in `ashkayuk-cmd/wildapp-updates`, then tap **⟳ Update** on the PDA. Nothing
