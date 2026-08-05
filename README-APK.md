@@ -13,7 +13,53 @@ Kiosk mode fights the installer.
    pick your original launcher.
    (Some builds: Settings → **Home** → choose launcher.)
 
-## v1.43 (current — WildApp.apk)  ⚠ built on v1.42 · versionCode 39
+## v1.44 (current — WildApp.apk)  ⚠ built on v1.43 · versionCode 40
+
+**Fixes the "SOUTH CONCIERGE" scan showing walk 6 instead of walk 29.**
+
+*What was wrong:* the label carries postcode **W2 4BF** (139 Queensway — all
+36 addresses there are on **29 HATHERLEY**) and the text "SOUTH CONCIERGE".
+The round has exactly one address containing the word CONCIERGE —
+*Concierge 6, Hermitage Street, W2 1BE*, on **6 SHELDON**. Because that word
+appears on only one street, the matcher's confidence floor rated it a
+"confident" match, and the postcode/address cross-check added in v1.31 then
+decided the printed postcode must be wrong and handed the walk to the address.
+One incidental word was outranking a perfectly good postcode. That's why it
+was right on older builds — the cross-check didn't exist before v1.31.
+
+*The fix:* the address text now has to be **corroborated** before it can beat
+a printed postcode:
+
+- at least **two** of the matched address's distinctive words appear on the
+  label (or one, plus a house number that address actually has), **and**
+- at least one of those words is genuinely distinctive — STREET, HOUSE,
+  COURT and the like prove nothing, **and**
+- none of the **scanned postcode's own addresses** explain the same text just
+  as well — if they do, the postcode wins, because it's the harder evidence.
+
+A label that really does carry the wrong postcode (full address text, two or
+more distinctive words, matching number) still gets the walk from the address
+with the amber warning, exactly as before. Everything else falls through to
+the normal postcode path.
+
+Checked on the real data: your scan now gives **29 HATHERLEY**; six other
+one-word labels aimed at a foreign postcode all stay on the scanned postcode;
+a genuine wrong-postcode label still diverts; and 65 Alfred Road → FIRM,
+31 Westbourne Gardens → 22 PORCHESTER and the Harbour Club all still resolve
+as before.
+
+Data unchanged (24,147 records) and the compiled code is byte-identical to
+v1.41–v1.43, so the hardware BACK key behaves exactly as before.
+
+**Install:** same key, installs over the top. Hold **BACK 10 seconds →
+"Leave"** first.
+
+**To publish the OTA update (both steps):** upload this `WildApp.apk` to
+`ashkayuk-cmd/wildapp-updates` **and** set `version.txt` to **`40`**.
+
+---
+
+## v1.43 (WildApp.apk)  ⚠ built on v1.42 · versionCode 39
 
 Two fixes to the correction flow, plus one bug found along the way.
 
