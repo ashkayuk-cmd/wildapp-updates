@@ -641,11 +641,11 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=46;
+const THIS_BUILD_NUM=47;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.50";
+const BUILD_NAME="v1.51";
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
 const LIVE_DATA_KEY="wildLiveData_v1";    // {b:build, rows:n, gz:base64 gzipped JSON}
 const LIVE_PENDING_KEY="wildLivePending_v1";
@@ -4222,14 +4222,6 @@ function showHandManage(){
     box.innerHTML=`<div style="width:100%;text-align:left">
       <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">My corrections</div>
       <div style="font-size:13px;color:var(--sub);margin-top:10px">None saved yet. When a scan shows the wrong walk, tap “Wrong walk?” to fix it.</div>
-      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--div)">
-        <div style="font-size:11px;font-weight:800;color:var(--sub);letter-spacing:.06em;text-transform:uppercase">App version</div>
-        <div id="handLiveInfo" style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.45"></div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button id="handLiveCheck" style="flex:1;padding:10px;background:transparent;border:1px solid var(--div);border-radius:10px;font-size:12px;font-weight:700;color:var(--txt);cursor:pointer">Check now</button>
-          <button id="handLiveRevert" style="flex:1;padding:10px;background:transparent;border:1px solid var(--div);border-radius:10px;font-size:12px;font-weight:700;color:#8a5300;cursor:pointer">Use built-in version</button>
-        </div>
-      </div>
       <button id="handMgBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
     </div>`;
   }else{
@@ -4250,14 +4242,6 @@ function showHandManage(){
       ${rows}
       <button id="handMgExport" style="margin-top:14px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">📤 Back up / copy all corrections</button>
       <button id="handMgGit" style="margin-top:8px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">⬆ Upload corrections to GitHub</button>
-      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--div)">
-        <div style="font-size:11px;font-weight:800;color:var(--sub);letter-spacing:.06em;text-transform:uppercase">App version</div>
-        <div id="handLiveInfo" style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.45"></div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button id="handLiveCheck" style="flex:1;padding:10px;background:transparent;border:1px solid var(--div);border-radius:10px;font-size:12px;font-weight:700;color:var(--txt);cursor:pointer">Check now</button>
-          <button id="handLiveRevert" style="flex:1;padding:10px;background:transparent;border:1px solid var(--div);border-radius:10px;font-size:12px;font-weight:700;color:#8a5300;cursor:pointer">Use built-in version</button>
-        </div>
-      </div>
       <button id="handMgBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
     </div>`;
     box.querySelectorAll(".handMgDel").forEach(b=>{
@@ -4268,11 +4252,35 @@ function showHandManage(){
     const git=document.getElementById("handMgGit");
     if(git)git.onclick=()=>showGithubUpload();
   }
+  const back=document.getElementById("handMgBack");
+  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}};
+}
+
+/* ── APP VERSION SCREEN (v1.51) ────────────────────────────────────────────
+   What build is running, what has been downloaded, a manual update check and
+   the escape hatch back to the copy inside the APK. This used to sit at the
+   bottom of "Manage my corrections", which is the wrong place to look for it —
+   it now opens by TAPPING THE VERSION PILL in the bottom-left corner, right
+   where the build number is already shown. */
+function showAppVersion(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{box.dataset.sub="version";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">App version</div>
+    <div id="handLiveInfo" style="font-size:13px;color:var(--sub);margin-top:10px;line-height:1.5"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button id="handLiveCheck" style="flex:1;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">Check now</button>
+      <button id="handLiveRevert" style="flex:1;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:#8a5300;cursor:pointer">Use built-in version</button>
+    </div>
+    <button id="handVerBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+  </div>`;
   const info=document.getElementById("handLiveInfo");
   if(info){
     const lc=liveCodeBuild(), ld=liveDataBuild(), run=runningBuild();
     let note="";try{note=localStorage.getItem(LIVE_NOTE_KEY)||"";}catch(e){}
-    const bits=["Running build <b>"+run+"</b>"+(run!==THIS_BUILD_NUM?" (downloaded)":" (built in)")];
+    const bits=[BUILD_NAME+" · running build <b>"+run+"</b>"+(run!==THIS_BUILD_NUM?" (downloaded)":" (built in)")];
     if(lc>run)bits.push("Build <b>"+lc+"</b> downloaded — restart to apply.");
     if(ld>THIS_BUILD_NUM)bits.push("Addresses: downloaded set <b>"+ld+"</b> in use.");
     if(note)bits.push('<span style="color:#8a5300">'+escHtml(note)+"</span>");
@@ -4284,7 +4292,7 @@ function showHandManage(){
     chk.textContent="Checking…";
     Promise.resolve(checkForUpdate("manual")).then((res)=>{
       chk.textContent=(!res||res.offline)?"No signal":(res.found?"Update ready":"Up to date");
-      setTimeout(()=>showHandManage(),1200);
+      setTimeout(()=>showAppVersion(),1200);
     });
   };
   const rev=document.getElementById("handLiveRevert");
@@ -4295,8 +4303,8 @@ function showHandManage(){
     try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the built-in version ("+THIS_BUILD_NUM+").");}catch(e){}
     liveApplyNow();
   };
-  const back=document.getElementById("handMgBack");
-  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}};
+  const back=document.getElementById("handVerBack");
+  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}};
 }
 // Colour a logged scan by its outcome, for the Recent list's left border.
 function handOutcomeColor(res){
@@ -8401,7 +8409,17 @@ document.addEventListener("visibilitychange",()=>{
       "background:rgba(255,255,255,.86)","border:1px solid rgba(0,0,0,.14)",
       "border-radius:8px","padding:2px 8px","letter-spacing:.04em",
       "box-shadow:0 1px 3px rgba(0,0,0,.18)"];
-    t.style.cssText=pill.concat(["position:static","pointer-events:none"]).join(";");
+    /* v1.51: the pill is now the door to the App version screen (it used to
+       live at the bottom of "Manage my corrections"). That means it has to
+       take taps — pointer-events was deliberately OFF here so the tag could
+       never swallow a tap while scanning, so it stays small, sits in the
+       corner, and does nothing but open that one screen. */
+    t.style.cssText=pill.concat(["position:static","pointer-events:auto","cursor:pointer",
+      "white-space:nowrap","-webkit-tap-highlight-color:transparent","touch-action:manipulation"]).join(";");
+    t.setAttribute("role","button");
+    t.setAttribute("aria-label","App version");
+    t.title="App version";
+    t.onclick=function(){try{if(typeof showAppVersion==="function")showAppVersion();}catch(e){}};
     var u=document.createElement("button");
     u.id="handUpdBtn";
     u.type="button";
