@@ -13,7 +13,33 @@ Kiosk mode fights the installer.
    pick your original launcher.
    (Some builds: Settings → **Home** → choose launcher.)
 
-## v1.45 (current — WildApp.apk)  ⚠ built on v1.44 · versionCode 41
+## v1.46 (current — WildApp.apk)  ⚠ replaces v1.45 · versionCode 42
+
+Everything in v1.45, plus a **⟳ Update** button in the top bar, next to
+"Handheld Scanner". Tap it any time to check right now instead of waiting for
+the automatic check. It tells you what happened:
+
+- **Up to date** — nothing new
+- **Update ready** — something was downloaded; the green banner restarts the
+  app to apply it
+- **New version** — a new APK is out (that one still needs installing)
+- **No signal** — couldn't reach GitHub, so it isn't claiming anything
+
+The same wording now appears on **Check now** in Manage corrections → App
+version.
+
+Also fixed while adding it: an update that had been downloaded but not yet
+restarted into was counted as already running, so a second check could say
+"up to date" while the update was still waiting.
+
+**If you haven't installed v1.45 yet, install this one instead — it replaces
+it.** Same key, installs over the top. Hold **BACK 10 seconds → "Leave"**
+first, then upload this `WildApp.apk` to the repo and set `version.txt` to
+**`42`** (and `content.json` → `{"code": 42, "data": 42}`).
+
+---
+
+## v1.45 (WildApp.apk)  ⚠ built on v1.44 · versionCode 41
 
 **Automatic updates.** From this build on, most updates arrive on their own —
 no APK, no installer, no leaving the kiosk.
