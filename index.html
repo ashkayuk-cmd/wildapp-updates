@@ -547,9 +547,6 @@ M497 751 c-62 -5 -82 -10 -93 -25 -22 -30 -18 -82 9 -107 20 -20 30 -21 132
 c-47 -3 -93 -9 -102 -13 -20 -9 -39 -60 -31 -84 16 -46 32 -52 130 -52 123 0
 163 20 163 79 0 24 -35 68 -57 72 -10 2 -56 2 -103 -2z M798 118 c-38 -10 -38
 -10 -38 -64 l0 -54 40 0 40 0 0 65 c0 36 -1 65 -2 64 -2 -1 -20 -6 -40 -11z"/></g></svg>Handheld Scanner</h1>
-    <!-- Force an update check from anywhere, without digging into the
-         corrections screen. (v1.46) -->
-    <button id="handUpdBtn" type="button" style="flex:0 0 auto;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:12px;font-weight:800;border-radius:10px;padding:7px 11px;margin-left:8px;cursor:pointer;white-space:nowrap">⟳ Update</button>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
@@ -644,11 +641,11 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=43;
+const THIS_BUILD_NUM=46;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.47";
+const BUILD_NAME="v1.50";
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
 const LIVE_DATA_KEY="wildLiveData_v1";    // {b:build, rows:n, gz:base64 gzipped JSON}
 const LIVE_PENDING_KEY="wildLivePending_v1";
@@ -4810,7 +4807,11 @@ function renderHandheld(raw,fromScanner){
     {pc:"W21HQ", has:"north wharf",                  walk:"FIRM",              addr:"The Premier League, 57 North Wharf Road, W2 1HQ"},
     {pc:"W21HQ", num:"57",                           walk:"FIRM",              addr:"The Premier League, 57 North Wharf Road, W2 1HQ"},
     {pc:"W26QH", num:"22", has:"cleveland",          walk:"16 WESTBOURNE TCE", addr:"22 Cleveland Terrace, W2 6QH"},
-    {pc:"W21PN", num:["1","1-2","2"], has:"junction", walk:"FIRM",             addr:"1-2 Junction Mews, W2 1PN (firm)"},
+    // W2 1PN is Junction Mews and nothing else (all 24 records), so the
+    // street word is NOT required here (v1.50): the label's QR often carries
+    // just the number and the postcode, and demanding "junction" made this
+    // rule — and the 12 / 1-2 picker below — miss those scans entirely.
+    {pc:"W21PN", num:["1","1-2","2"],                 walk:"FIRM",             addr:"1-2 Junction Mews, W2 1PN (firm)"},
     {pc:"W24DB", has:"porchester",                   walk:"28 KGS",            addr:"Porchester Gardens, W2 4DB"},
     {pc:"W23SS",                                     walk:"23 INVERNESS",      addr:"W2 3SS (Queensborough Terrace)"}
   ];
@@ -4855,9 +4856,11 @@ function renderHandheld(raw,fromScanner){
   // The house-number extractor can't tell them apart — a "1-2"/"1 2" scan snaps
   // to FIRM via the override above, but a glued "12" is ambiguous. Rather than
   // silently deliver to No.12, show BOTH and let the user pick. Scoped to
-  // Junction Mews (W2 1PN) only, matching the standing data rule.
-  if(pcNoSpace==="W21PN" && hn==="12" &&
-     (raw||"").toLowerCase().replace(/[\s\u00a0\u0000-\u001f]+/g,"").indexOf("junction")>=0){
+  // Junction Mews (W2 1PN) only, matching the standing data rule. From v1.50
+  // the street word is NOT required: W2 1PN is Junction Mews and nothing else,
+  // and the QR on these labels often carries only the number and the postcode,
+  // so insisting on "junction" let a plain "12 W2 1PN" scan through silently.
+  if(pcNoSpace==="W21PN" && hn==="12"){
     if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}outcomeTone("picker");logScan(raw,"🔌 Junction Mews — 1-2 (firm) or 12 — asked");}
     const opts=[
       {walk:"FIRM",        addr:"1-2 Junction Mews, W2 1PN (firm)"},
@@ -4865,9 +4868,9 @@ function renderHandheld(raw,fromScanner){
     ];
     box.style.justifyContent="flex-start";
     box.innerHTML=`<div style="width:100%;text-align:left">
-      <div style="font-size:13px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.08em">Which one? · W2 1PN</div>
+      <div style="font-size:13px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.08em">⚠ Barcode error · W2 1PN</div>
       <div style="margin-top:8px;padding:11px 14px;background:#fff8e1;border:1px solid #f9a825;border-left:5px solid #f9a825;border-radius:12px">
-        <div style="font-size:13px;color:#5f4300;line-height:1.5">The barcode shows <b>12</b>. That's usually the <b>1-2</b> firm range with the hyphen dropped — but it could be house <b>12</b>. Tap the right one.</div>
+        <div style="font-size:13px;color:#5f4300;line-height:1.5">The QR code on this label is <b>wrong</b>. The firm at <b>1-2</b> Junction Mews gets typed into the barcode as <b>12</b> (and sometimes <b>1 2</b>) — which is exactly the same as house number <b>12</b>. The barcode can't tell them apart, so pick the right one.</div>
       </div>
       ${opts.map((o,i)=>`<button class="handJmPick" data-i="${i}" style="width:100%;text-align:left;margin-top:10px;padding:16px 18px;background:var(--sur);border:none;border-left:6px solid var(--pri);border-radius:14px;box-shadow:var(--shad);cursor:pointer">
         <div style="font-size:30px;font-weight:900;color:var(--pri);line-height:1.05">${o.walk}</div>
@@ -8273,7 +8276,7 @@ document.addEventListener("visibilitychange",()=>{
     if(document.getElementById("wildResetBtn"))return;
     var btn=document.createElement("button");
     btn.id="wildResetBtn";
-    btn.setAttribute("aria-label","Reset scanner");
+    btn.setAttribute("aria-label","Reset app");
     btn.textContent="⟳ RESET";
     btn.style.cssText=[
       "position:fixed","top:8px","right:8px","z-index:2147483647",
@@ -8285,7 +8288,11 @@ document.addEventListener("visibilitychange",()=>{
       "opacity:.92","user-select:none"
     ].join(";");
     var busy=false;
-    function flash(txt){var o=btn.textContent;btn.textContent=txt;setTimeout(function(){btn.textContent=o;},1100);}
+    // The label is two lines ("RESET" with "APP" under it), so a flash must
+    // replace the FIRST line only — writing btn.textContent would wipe the
+    // stacked spans and leave a one-line button behind.
+    function labelLine(){return document.getElementById("wildResetL1")||btn;}
+    function flash(txt){var el=labelLine();var o=el.textContent;el.textContent=txt;setTimeout(function(){el.textContent=o;},1100);}
     // Any tap = full app restart. On this device only a full process restart
     // clears a stuck scan engine, so RESET always does the hard restart.
     function fullRestart(){
@@ -8299,6 +8306,31 @@ document.addEventListener("visibilitychange",()=>{
     btn.addEventListener("click",function(e){e.preventDefault();fullRestart();});
     btn.addEventListener("touchend",function(e){e.preventDefault();fullRestart();});
     (document.body||document.documentElement).appendChild(btn);
+    /* ── Two-line label: "⟳ RESET" with "APP" underneath (v1.50) ──────────
+       Same size and shape as the old one-line button: measure the box while
+       it still holds the single line, freeze THAT width and height, then
+       stack the two lines inside it. Measured, not guessed — so the pill can
+       never grow or shrink, and the .qrbar reserve below (which reads
+       offsetWidth) keeps reserving exactly the same room as before. */
+    try{
+      var w0=btn.offsetWidth,h0=btn.offsetHeight;
+      if(w0&&h0){
+        btn.style.boxSizing="border-box";
+        btn.style.width=w0+"px";
+        btn.style.height=h0+"px";
+        btn.style.padding="0";
+      }else{
+        btn.style.padding="4px 12px";   // no layout available (never on device)
+      }
+      btn.style.display="flex";
+      btn.style.flexDirection="column";
+      btn.style.alignItems="center";
+      btn.style.justifyContent="center";
+      btn.style.lineHeight="1.02";
+      btn.style.whiteSpace="nowrap";
+      btn.innerHTML='<span id="wildResetL1" style="font-size:12px">⟳ RESET</span>'+
+                    '<span id="wildResetL2" style="font-size:11px;letter-spacing:.06em">APP</span>';
+    }catch(e){}
     // RESET is position:fixed at the top-right, so it floats OVER the title bar
     // and covered the ⟳ Update button sitting there (v1.47). Reserve exactly as
     // much room on the right of the bar as RESET actually occupies — measured,
@@ -8355,7 +8387,31 @@ document.addEventListener("visibilitychange",()=>{
       "background:rgba(255,255,255,.86)","border:1px solid rgba(0,0,0,.14)",
       "border-radius:8px","padding:2px 8px","pointer-events:none",
       "letter-spacing:.04em","box-shadow:0 1px 3px rgba(0,0,0,.18)"].join(";");
-    (document.body||document.documentElement).appendChild(t);
+    // v1.49: the ⟳ Update button now sits in the bottom-left corner alongside
+    // this pill instead of in the title bar (where the fixed RESET button kept
+    // landing on top of it). Both live in one fixed row so they can never
+    // overlap each other, and the button copies the pill's own styling — same
+    // size, same box — differing only where it has to: it takes taps
+    // (pointer-events) and shows it can be pressed.
+    var row=document.createElement("div");
+    row.id="wildTagRow";
+    row.style.cssText=["position:fixed","bottom:6px","left:8px","z-index:2147483647",
+      "display:flex","align-items:center","gap:6px","pointer-events:none"].join(";");
+    var pill=["font-size:11px","font-weight:800","font-family:inherit","color:#33383d",
+      "background:rgba(255,255,255,.86)","border:1px solid rgba(0,0,0,.14)",
+      "border-radius:8px","padding:2px 8px","letter-spacing:.04em",
+      "box-shadow:0 1px 3px rgba(0,0,0,.18)"];
+    t.style.cssText=pill.concat(["position:static","pointer-events:none"]).join(";");
+    var u=document.createElement("button");
+    u.id="handUpdBtn";
+    u.type="button";
+    u.textContent="⟳ Update";
+    u.style.cssText=pill.concat(["position:static","pointer-events:auto","cursor:pointer",
+      "white-space:nowrap","-webkit-tap-highlight-color:transparent","touch-action:manipulation"]).join(";");
+    row.appendChild(t);
+    row.appendChild(u);
+    (document.body||document.documentElement).appendChild(row);
+    try{wireUpdateButton();}catch(e){}
   })();
 
   /* ── OVER-THE-AIR UPDATE CHECK (Option B: notify + one-tap install) ──────
