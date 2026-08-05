@@ -13,7 +13,69 @@ Kiosk mode fights the installer.
    pick your original launcher.
    (Some builds: Settings → **Home** → choose launcher.)
 
-## v1.44 (current — WildApp.apk)  ⚠ built on v1.43 · versionCode 40
+## v1.45 (current — WildApp.apk)  ⚠ built on v1.44 · versionCode 41
+
+**Automatic updates.** From this build on, most updates arrive on their own —
+no APK, no installer, no leaving the kiosk.
+
+**1. It checks properly now.** The old check ran once at launch, on a PDA that
+never restarts. It now checks at startup, every three hours, and whenever the
+screen wakes after half an hour or more.
+
+**2. The app and the address data update over the air.** Both are fetched from
+the same GitHub repo as the APK, cached on the device (compressed, works
+offline afterwards) and used from the next restart. The compiled part of the
+app hasn't changed since build 37 — v1.42, v1.43 and v1.44 were all app-file
+changes — so from now on updates like those will just appear.
+
+Nothing is ever swapped in mid-round. A downloaded update sits in the cache
+until you tap the banner or the app is next started.
+
+**3. If an update ever goes wrong**, it can't strand you:
+
+- A downloaded copy has to pass a sanity check before it's kept, and again
+  before it's booted (right size, really this app, not a 404 page).
+- A flag is set before a downloaded copy starts and cleared once it has
+  started. If one ever fails to start, the next launch throws it away and
+  falls back to the version inside the APK.
+- **Manage corrections → App version → "Use built-in version"** does the same
+  thing on demand, and there's a **Check now** button next to it. Your
+  corrections and scan history are never touched by any of this.
+
+The version tag at the bottom of the screen shows which build is actually
+running, marked *(live)* when it's a downloaded one.
+
+### How to publish an update from now on
+
+For an **app or data update** (no install for you):
+
+1. Put the new `index.html` and/or `wild_data.json` in
+   `ashkayuk-cmd/wildapp-updates`.
+2. Edit `content.json` there:
+   `{"code": 42, "data": 41}` — raise `code` for a new app file, `data` for
+   new addresses.
+
+That's it. The PDA picks it up within a few hours, or straight away with
+**Check now**.
+
+For a **native change** (rare — the wrapper, the scanner, the BACK key), it's
+still an APK: upload `WildApp.apk` and set `version.txt`, same as always.
+
+### Inside the APK
+
+`assets/index.html` is now a small loader (4 KB); the app itself moved to
+`assets/app.html`. The loader is deliberately tiny and dependency-free — it's
+the piece that has to keep working. The native code is untouched and
+byte-identical.
+
+**Install:** same key, installs over the top. Hold **BACK 10 seconds →
+"Leave"** first.
+
+**To publish this one:** upload `WildApp.apk` and set `version.txt` to **`41`**.
+
+---
+
+## v1.44 (WildApp.apk)  ⚠ built on v1.43 · versionCode 40
 
 **Fixes the "SOUTH CONCIERGE" scan showing walk 6 instead of walk 29.**
 
