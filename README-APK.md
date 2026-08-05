@@ -13,7 +13,57 @@ Kiosk mode fights the installer.
    pick your original launcher.
    (Some builds: Settings → **Home** → choose launcher.)
 
-## v1.42 (current — WildApp.apk)  ⚠ built on v1.41 · versionCode 38
+## v1.43 (current — WildApp.apk)  ⚠ built on v1.42 · versionCode 39
+
+Two fixes to the correction flow, plus one bug found along the way.
+
+**1. BACK works on the "Saved" screen.**
+That confirmation page was the only screen in the app that cleared its
+"a sub-screen is open" marker, so the BACK key had nothing to close and did
+nothing. It's now a normal sub-screen: BACK returns to the scan — which
+re-runs it, so you land on the corrected result. There's also a
+**← Back to the scan** button and a *Manage my corrections* link on it.
+
+Same dead end is fixed after picking a walk off a **Possible walks** list:
+that result now carries the raw block and the fix button like any other, and
+BACK goes back to the list.
+
+**2. More options when you change a walk.**
+- The **"Apply … to"** chooser now appears **every time**. Before, a label
+  with a house number saved instantly with no choice at all. Options:
+  **Just this address** · **Every "5" in W2 1LZ** (when the label has a
+  number) · **Every address in W2 1LZ**.
+- New **address & postcode editor** — 📍 *Change the address or postcode
+  too…*. Type the right address and postcode, or tap one of the real
+  addresses the round already knows for that postcode. Also reachable
+  without touching the walk, via *📍 Address or postcode wrong? Fix that
+  instead* on the walk picker.
+- The fix stays keyed on the postcode the **label** carries (that's what the
+  next label will have), while showing the postcode you entered. The
+  corrections list and the backup text now show both.
+
+**3. Bug found while in there:** "Just this address" was keyed on the whole
+barcode payload — which includes the per-item tracking number. So a fix only
+ever matched *that one parcel*; the next parcel to the same door looked like
+a new address and the correction silently stopped applying. It now keys on an
+address fingerprint (address letters with all spacing stripped, plus the
+number and the Mailmark DPS; tracking numbers, postcodes and item IDs
+removed), so a door fixed once stays fixed. Corrections saved by v1.39–v1.42
+are still read, so nothing already saved is lost.
+
+Data unchanged (24,147 records, byte-identical to v1.42), and the compiled
+code is byte-identical to v1.41/v1.42, so the hardware BACK fix behaves
+exactly as before.
+
+**Install:** same key, installs over the top. Hold **BACK 10 seconds →
+"Leave"** first.
+
+**To publish the OTA update (both steps):** upload this `WildApp.apk` to
+`ashkayuk-cmd/wildapp-updates` **and** set `version.txt` to **`39`**.
+
+---
+
+## v1.42 (WildApp.apk)  ⚠ built on v1.41 · versionCode 38
 
 Data update — three corrections, keeping the working hardware-BACK fix from v1.41 (the app's compiled code is byte-identical to v1.41, so BACK behaves exactly as before).
 
