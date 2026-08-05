@@ -13,7 +13,29 @@ Kiosk mode fights the installer.
    pick your original launcher.
    (Some builds: Settings → **Home** → choose launcher.)
 
-## v1.48 (current — WildApp.apk)  · versionCode 44 · DATA UPDATE
+## v1.49 (current — WildApp.apk)  · versionCode 45
+
+**⟳ Update moved to the bottom.** It now sits in the bottom-left corner,
+immediately right of the version pill, in the same box and the same size —
+`v1.49 · build 45` `⟳ Update`. Both live in one row, so nothing can land on
+top of it. The red RESET button stays in the opposite (top-right) corner.
+
+**Oak Tree Lodge → 35 CLEVELAND.** Your corrected sheet moves all 21 flats at
+Oak Tree Lodge 49-50, Leinster Gardens, so W2 3AT is back to a single walk:
+all 24 addresses on 35 CLEVELAND. A bare W2 3AT label gives one answer again
+instead of asking which walk.
+
+Everything else in the data is unchanged from v1.48 (24,147 addresses; Leinster
+House 44-46 on 35 CLEVELAND, Hilton London Paddington on 12 WESTCLIFFE,
+Hilton London Metropole FIRM).
+
+**Install:** same key, installs over the top. Hold **BACK 10 seconds →
+"Leave"** first, then upload this `WildApp.apk` to the repo and set
+`version.txt` to **`45`**.
+
+---
+
+## v1.48 (WildApp.apk)  · versionCode 44 · DATA UPDATE
 
 Rebuilt from the `wild_data.xlsx` you sent, and it also carries the v1.47 fix
 (the ⟳ Update button no longer sits under the red RESET button), so this one
