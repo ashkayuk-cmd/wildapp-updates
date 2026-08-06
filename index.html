@@ -641,11 +641,11 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=47;
+const THIS_BUILD_NUM=50;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.51";
+const BUILD_NAME="v1.54";
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
 const LIVE_DATA_KEY="wildLiveData_v1";    // {b:build, rows:n, gz:base64 gzipped JSON}
 const LIVE_PENDING_KEY="wildLivePending_v1";
@@ -4212,6 +4212,23 @@ function commitHandFix(walk,scope){
   if(mg)mg.onclick=()=>showHandManage();
 }
 // Manage screen: list saved corrections, delete individually.
+/* One saved correction, rendered the same way wherever it appears (the
+   manage screen and the App version screen). Returns the inner block only —
+   the caller supplies the row wrapper and any buttons. */
+let handMgFrom="";   // "version" when the manage screen was opened from App version
+function overrideRowInner(r){
+  const pcFmt=r.pc&&r.pc.length>3?r.pc.slice(0,-3)+" "+r.pc.slice(-3):(r.pc||"");
+  return `<div style="flex:1;min-width:0">
+      <div style="font-size:18px;font-weight:900;color:var(--pri);line-height:1.05">${r.walk}</div>
+      <div style="font-size:12px;color:var(--sub);margin-top:2px;word-break:break-word">${r.hn?escHtml(r.hn)+" · ":""}${pcFmt}${r.pcShown?" → "+escHtml(r.pcShown):""}${r.addr?" — "+escHtml(r.addr):""}</div>
+      <div style="font-size:10.5px;font-weight:800;margin-top:2px;letter-spacing:.03em;color:${r.scope==="address"?"var(--pri)":(!r.hn?"#8a5300":"var(--sub)")}">${r.scope==="address"?"THIS ADDRESS ONLY":(!r.hn?"WHOLE POSTCODE":"THIS HOUSE NUMBER")}</div>
+    </div>`;
+}
+function overrideKeysNewestFirst(m){
+  return Object.keys(m).sort((a,b)=>(m[b].when||0)-(m[a].when||0));
+}
+const OV_ROW_WRAP='display:flex;align-items:center;gap:10px;margin-top:8px;padding:12px 14px;background:var(--sur);border-radius:12px;box-shadow:var(--shad)';
+
 function showHandManage(){
   const box=document.getElementById("handResult");
   try{box.dataset.sub="manage";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
@@ -4225,15 +4242,9 @@ function showHandManage(){
       <button id="handMgBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
     </div>`;
   }else{
-    const rows=keys.sort((a,b)=>(m[b].when||0)-(m[a].when||0)).map(k=>{
-      const r=m[k];
-      const pcFmt=r.pc&&r.pc.length>3?r.pc.slice(0,-3)+" "+r.pc.slice(-3):(r.pc||"");
-      return `<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:12px 14px;background:var(--sur);border-radius:12px;box-shadow:var(--shad)">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:18px;font-weight:900;color:var(--pri);line-height:1.05">${r.walk}</div>
-          <div style="font-size:12px;color:var(--sub);margin-top:2px;word-break:break-word">${r.hn?escHtml(r.hn)+" · ":""}${pcFmt}${r.pcShown?" → "+escHtml(r.pcShown):""}${r.addr?" — "+escHtml(r.addr):""}</div>
-          <div style="font-size:10.5px;font-weight:800;margin-top:2px;letter-spacing:.03em;color:${r.scope==="address"?"var(--pri)":(!r.hn?"#8a5300":"var(--sub)")}">${r.scope==="address"?"THIS ADDRESS ONLY":(!r.hn?"WHOLE POSTCODE":"THIS HOUSE NUMBER")}</div>
-        </div>
+    const rows=overrideKeysNewestFirst(m).map(k=>{
+      return `<div style="${OV_ROW_WRAP}">
+        ${overrideRowInner(m[k])}
         <button class="handMgDel" data-k="${encodeURIComponent(k)}" style="padding:8px 12px;background:transparent;border:1px solid #e53935;border-radius:10px;font-size:12px;font-weight:800;color:#e53935;cursor:pointer">Delete</button>
       </div>`;
     }).join("");
@@ -4253,7 +4264,12 @@ function showHandManage(){
     if(git)git.onclick=()=>showGithubUpload();
   }
   const back=document.getElementById("handMgBack");
-  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}};
+  // Opened from the App version screen? Go back THERE, not to the scan.
+  if(back)back.onclick=()=>{
+    if(handMgFrom==="version"){handMgFrom="";showAppVersion();return;}
+    if(handLastRaw)renderHandheld(handLastRaw,false);
+    else{box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}
+  };
 }
 
 /* ── APP VERSION SCREEN (v1.51) ────────────────────────────────────────────
@@ -4266,6 +4282,19 @@ function showAppVersion(){
   const box=document.getElementById("handResult");
   if(!box)return;
   try{box.dataset.sub="version";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  /* The saved walk corrections live on this screen too (v1.54) — tapping the
+     version pill is where Ash looks for them. Read-only here, newest first
+     and capped, with a button through to the full manage screen for deleting,
+     backing up and uploading. */
+  const ovs=userOverrides(), ovKeys=overrideKeysNewestFirst(ovs), OV_SHOWN=6;
+  const corrHtml=`<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--div)">
+      <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Walk corrections${ovKeys.length?" ("+ovKeys.length+")":""}</div>`+
+    (ovKeys.length
+      ? ovKeys.slice(0,OV_SHOWN).map(k=>`<div style="${OV_ROW_WRAP}">${overrideRowInner(ovs[k])}</div>`).join("")+
+        (ovKeys.length>OV_SHOWN?`<div style="font-size:12px;color:var(--sub);margin-top:8px">…and ${ovKeys.length-OV_SHOWN} more</div>`:"")+
+        `<button id="handVerManage" style="margin-top:12px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">Manage corrections (delete, back up, upload)</button>`
+      : `<div style="font-size:13px;color:var(--sub);margin-top:10px;line-height:1.5">None saved yet. When a scan shows the wrong walk, tap “Wrong walk?” on the result to fix it.</div>`)+
+    `</div>`;
   box.style.justifyContent="flex-start";
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">App version</div>
@@ -4274,6 +4303,7 @@ function showAppVersion(){
       <button id="handLiveCheck" style="flex:1;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">Check now</button>
       <button id="handLiveRevert" style="flex:1;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:#8a5300;cursor:pointer">Use built-in version</button>
     </div>
+    ${corrHtml}
     <button id="handVerBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
   </div>`;
   const info=document.getElementById("handLiveInfo");
@@ -4303,6 +4333,8 @@ function showAppVersion(){
     try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the built-in version ("+THIS_BUILD_NUM+").");}catch(e){}
     liveApplyNow();
   };
+  const mg=document.getElementById("handVerManage");
+  if(mg)mg.onclick=()=>{handMgFrom="version";showHandManage();};
   const back=document.getElementById("handVerBack");
   if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}};
 }
@@ -8596,7 +8628,18 @@ document.addEventListener("visibilitychange",()=>{
       //    recent, all-walks, backup, github) — go back to the scan result.
       var hr=document.getElementById("handResult");
       if(hr && hr.dataset && hr.dataset.sub){
+        var sub=hr.dataset.sub;
         delete hr.dataset.sub;
+        // Manage opened FROM the App version screen goes back there (v1.54),
+        // so the hardware key retraces the same path as the on-screen Back.
+        try{
+          if(sub==="manage" && typeof handMgFrom!=="undefined" && handMgFrom==="version" &&
+             typeof showAppVersion==="function"){
+            handMgFrom="";
+            showAppVersion();
+            return true;
+          }
+        }catch(e){}
         try{
           if(typeof handLastRaw!=="undefined" && handLastRaw && typeof renderHandheld==="function"){
             renderHandheld(handLastRaw,false);
@@ -8657,6 +8700,63 @@ document.addEventListener("visibilitychange",()=>{
     return false;
   }
   window.__wildBack=wildBack;
+
+  /* ── HOME key → the app's home screen (v1.52) ──────────────────────────
+     The native layer calls this when Android hands the app a HOME intent —
+     the PDA's middle key, with Wild App set as the device's Home app.
+     BACK closes ONE thing; HOME clears everything and puts the scanning
+     screen back to how it looks when the app has just started. Saved
+     corrections, scan history and the downloaded-update state are all
+     untouched — this only changes what's on screen. */
+  var HAND_IDLE_HTML="";
+  try{
+    var _hr0=document.getElementById("handResult");
+    if(_hr0) HAND_IDLE_HTML=_hr0.innerHTML;   // the idle "Scan a barcode" panel
+  }catch(e){}
+  function wildHome(){
+    try{
+      // 1) Drop the handheld sub-screen marker FIRST, so the loop below goes
+      //    straight to closing sheets/overlays instead of re-rendering the
+      //    last scan (which we're about to clear anyway).
+      var hr=document.getElementById("handResult");
+      if(hr && hr.dataset){ try{ delete hr.dataset.sub; }catch(e){} }
+      // 2) Close every stacked surface: modals, bottom sheets, the detail
+      //    sheet, the camera panel, an expanded walk row.
+      for(var i=0;i<12;i++){ if(!wildBack()) break; }
+      // 3) The scanning screen is the home page, so make sure it's showing.
+      try{
+        if(typeof handPanelOpen==="function" && !handPanelOpen() &&
+           typeof openHand==="function") openHand();
+      }catch(e){}
+      // 4) Back to the idle screen, scrolled to the top.
+      if(hr){
+        hr.style.justifyContent="center";
+        hr.innerHTML=HAND_IDLE_HTML||'<div style="color:var(--sub)">Ready to scan.</div>';
+      }
+      var hb=document.getElementById("handBody");
+      if(hb) hb.scrollTop=0;
+      try{ window.scrollTo(0,0); }catch(e){}
+    }catch(e){}
+    return true;
+  }
+  window.__wildHome=wildHome;
+
+  /* ── Tap the title to go home (v1.53) ─────────────────────────────────
+     With the app pinned to the screen the middle HOME key never reaches us,
+     so the title bar is the way back: tap "Handheld Scanner" and the screen
+     resets exactly as a HOME press used to. Wired on the handheld bar only,
+     and it closes over wildHome directly so it works even if something else
+     overwrites window.__wildHome. */
+  try{
+    var _t=document.querySelector("#handPanel .qrbar h1");
+    if(_t){
+      _t.style.cursor="pointer";
+      _t.setAttribute("role","button");
+      _t.setAttribute("aria-label","Back to the home screen");
+      _t.title="Back to the home screen";
+      _t.addEventListener("click",function(){ try{ wildHome(); }catch(e){} });
+    }
+  }catch(e){}
 
   window.addEventListener("popstate",function(){
     var closed=false;
