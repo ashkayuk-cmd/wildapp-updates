@@ -653,10 +653,8 @@ async function checkForUpdate(reason){
   // Something already downloaded and waiting for a restart counts as found —
   // otherwise a second tap would wrongly say "up to date".
   if(liveCodeBuild()>runningBuild()){
-    liveBanner("App update ready (build "+liveCodeBuild()+")","Tap to restart and apply.",()=>{liveApplyNow();});
     found="code";
   }else if(liveDataBuild()>(window.__WILD_DATA_BUILD__|0||THIS_BUILD_NUM)){
-    liveBanner("New addresses ready","Tap to restart and apply.",()=>{liveApplyNow();});
     found="data";
   }
   const base=WILD_UPDATE_BASE.replace(/\/+$/,"");
@@ -682,7 +680,6 @@ async function checkForUpdate(reason){
       const html=await liveFetchText(base+"/"+(man.index||"index.html"));
       if(liveHtmlLooksSane(html)&&window.pako){
         localStorage.setItem(LIVE_CODE_KEY,JSON.stringify({b:codeWant,gz:uint8ToB64(pako.gzip(html)),when:Date.now()}));
-        liveBanner("App update ready (build "+codeWant+")","Tap to restart and apply.",()=>{liveApplyNow();});
         found="code";
       }
     }catch(e){}
@@ -695,7 +692,6 @@ async function checkForUpdate(reason){
       if(Array.isArray(rows)&&rows.length>1000&&rows[0]&&rows[0].d&&window.pako){
         for(const e of rows)for(const k in e)if(typeof e[k]==="string"&&e[k].indexOf("\r")>=0)e[k]=e[k].replace(/\r/g,"");
         localStorage.setItem(LIVE_DATA_KEY,JSON.stringify({b:dataWant,rows:rows.length,gz:uint8ToB64(pako.gzip(JSON.stringify(rows))),when:Date.now()}));
-        liveBanner("New addresses ready ("+rows.length.toLocaleString()+" rows)","Tap to restart and apply.",()=>{liveApplyNow();});
         found=found||"data";
       }
     }catch(e){}
