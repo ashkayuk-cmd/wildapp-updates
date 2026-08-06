@@ -641,11 +641,11 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=50;
+const THIS_BUILD_NUM=51;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.54";
+const BUILD_NAME="v1.55";
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
 const LIVE_DATA_KEY="wildLiveData_v1";    // {b:build, rows:n, gz:base64 gzipped JSON}
 const LIVE_PENDING_KEY="wildLivePending_v1";
@@ -758,24 +758,60 @@ async function checkForUpdate(reason){
 }
 // The ⟳ Update button in the top bar: check right now, and say plainly what
 // happened. An update that's found raises the banner; the button just reports.
+/* The bottom-left button has two states (v1.55):
+     • idle  — "⟳ Update", a tap CHECKS for one
+     • ready — "⬆ Update app now", green, and it STAYS that way; a tap now
+               applies the update instead of checking again.
+   Any check that finds something flips it to ready — the tap on the button,
+   "Check now" on the App version screen, and the automatic boot/timer/wake
+   checks — so the call to action is there even if the banner was dismissed. */
+const UPD_IDLE_LABEL="⟳ Update";
+const UPD_READY_LABEL="⬆ Update app now";
+function updBtnIdle(b){
+  b=b||document.getElementById("handUpdBtn");
+  if(!b)return;
+  b._ready=null;
+  b.textContent=UPD_IDLE_LABEL;
+  b.style.background=b._bg0||"";
+  b.style.color=b._fg0||"";
+}
+function updBtnReady(kind){
+  const b=document.getElementById("handUpdBtn");
+  if(!b)return;
+  b._ready=kind||"code";
+  b._busy=false;
+  b.style.opacity="1";
+  b.textContent=UPD_READY_LABEL;
+  b.style.background="var(--pri,#0a7)";
+  b.style.color="#fff";
+}
+function applyUpdateNow(kind){
+  // A newer APK still has to be downloaded and installed by hand; downloaded
+  // app/address updates only need the restart.
+  if(kind==="apk"){
+    if(window.__wildStartApkDownload)window.__wildStartApkDownload();
+    return;
+  }
+  try{liveApplyNow();}catch(e){}
+}
 function wireUpdateButton(){
   const b=document.getElementById("handUpdBtn");
   if(!b||b._wired)return;
   b._wired=true;
+  b._bg0=b.style.background;   // remember the pill colours to go back to
+  b._fg0=b.style.color;
   b.onclick=async ()=>{
+    if(b._ready){applyUpdateNow(b._ready);return;}
     if(b._busy)return;
     b._busy=true;
-    const label=b.textContent;
     b.textContent="Checking…";
     b.style.opacity=".7";
     let res=null;
     try{res=await checkForUpdate("button");}catch(e){}
     b.style.opacity="1";
-    if(!res||res.offline)b.textContent="No signal";
-    else if(res.found==="apk")b.textContent="New version";
-    else if(res.found)b.textContent="Update ready";
-    else b.textContent="Up to date";
-    setTimeout(()=>{b.textContent=label;b._busy=false;},3000);
+    if(res&&res.found){updBtnReady(res.found);return;}   // stays until applied
+    b.textContent=(!res||res.offline)?"No signal":"Up to date";
+    setTimeout(()=>{if(!b._ready)updBtnIdle(b);b._busy=false;},3000);
   };
 }
 function liveApplyNow(){
@@ -806,12 +842,17 @@ function liveBanner(title,sub,onTap){
 function startUpdateChecks(){
   const EVERY=3*60*60*1000, WAKE_GAP=30*60*1000;
   wireUpdateButton();
-  setTimeout(()=>{checkForUpdate("boot");},4000);          // let the scan screen come up first
-  setInterval(()=>{checkForUpdate("timer");},EVERY);
+  // Every automatic check reports back to the button, so a waiting update is
+  // visible in the corner without the person tapping anything.
+  const run=(why)=>Promise.resolve(checkForUpdate(why))
+    .then((r)=>{if(r&&r.found)updBtnReady(r.found);})
+    .catch(()=>{});
+  setTimeout(()=>{run("boot");},4000);          // let the scan screen come up first
+  setInterval(()=>{run("timer");},EVERY);
   document.addEventListener("visibilitychange",()=>{
     if(document.hidden)return;
     let last=0;try{last=parseInt(localStorage.getItem(LIVE_LAST_KEY)||"0",10)||0;}catch(e){}
-    if(Date.now()-last>WAKE_GAP)checkForUpdate("wake");
+    if(Date.now()-last>WAKE_GAP)run("wake");
   });
 }
 
@@ -4322,6 +4363,7 @@ function showAppVersion(){
     chk.textContent="Checking…";
     Promise.resolve(checkForUpdate("manual")).then((res)=>{
       chk.textContent=(!res||res.offline)?"No signal":(res.found?"Update ready":"Up to date");
+      if(res&&res.found)updBtnReady(res.found);
       setTimeout(()=>showAppVersion(),1200);
     });
   };
@@ -8486,6 +8528,15 @@ document.addEventListener("visibilitychange",()=>{
     if(navigator.onLine===false) return;
     var vURL=UPDATE_BASE.replace(/\/+$/,"")+"/version.txt";
     var aURL=UPDATE_BASE.replace(/\/+$/,"")+"/WildApp.apk";
+    // Hand the APK URL to the system: try a new window first (lets the native
+    // layer route it to the browser/installer), and only navigate directly if
+    // that was blocked — doing both downloads the file TWICE.
+    function startApkDownload(){
+      var w=null;
+      try{ w=window.open(aURL,"_blank"); }catch(err){}
+      if(!w){ try{ location.href=aURL; }catch(err){} }
+    }
+    window.__wildStartApkDownload=startApkDownload;
     function showBanner(latest){
       if(document.getElementById("wildUpdateBar")) return;
       var bar=document.createElement("div");
@@ -8501,14 +8552,7 @@ document.addEventListener("visibilitychange",()=>{
                     '<span id="wildUpdateX" style="padding:0 8px;opacity:.8">✕</span>';
       bar.addEventListener("click",function(e){
         if(e.target&&e.target.id==="wildUpdateX"){bar.remove();return;}
-        // Hand the APK URL to the system: try a new window first (lets the
-        // native layer route it to the browser/installer), then fall back to
-        // navigating directly.
-        // Single download only: try a new window first; only navigate
-        // directly if that was blocked (returned null), else we get TWO files.
-        var w=null;
-        try{ w=window.open(aURL,"_blank"); }catch(err){}
-        if(!w){ try{ location.href=aURL; }catch(err){} }
+        startApkDownload();
       });
       (document.body||document.documentElement).appendChild(bar);
       // Also reflect it on the bottom version tag, so the newer build is still
