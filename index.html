@@ -587,11 +587,11 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=53;
+const THIS_BUILD_NUM=54;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.57";
+const BUILD_NAME="v1.58";
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
 const LIVE_DATA_KEY="wildLiveData_v1";    // {b:build, rows:n, gz:base64 gzipped JSON}
 const LIVE_PENDING_KEY="wildLivePending_v1";
@@ -666,7 +666,11 @@ async function checkForUpdate(reason){
     const latest=parseInt(String(txt).replace(/[^0-9]/g,""),10);
     if(isFinite(latest)&&latest>THIS_BUILD_NUM){
       found=found||"apk";
-      if(window.__wildShowUpdateBar)window.__wildShowUpdateBar(latest);
+      // v1.58: no top banner — the bottom-left pill (flipped by
+      // window.__wildFlagApkUpdate below) and the ⟳ button are the only
+      // signal now. A top box that sits behind the camera view was never
+      // actually visible on the handheld.
+      if(window.__wildFlagApkUpdate)window.__wildFlagApkUpdate(latest);
     }
   }catch(e){}
   // (b) over-the-air content
@@ -8702,26 +8706,13 @@ document.addEventListener("visibilitychange",()=>{
       if(!w){ try{ location.href=aURL; }catch(err){} }
     }
     window.__wildStartApkDownload=startApkDownload;
-    function showBanner(latest){
-      if(document.getElementById("wildUpdateBar")) return;
-      var bar=document.createElement("div");
-      bar.id="wildUpdateBar";
-      bar.style.cssText=[
-        "position:fixed","top:0","left:0","right:0","z-index:2147483646",
-        "background:var(--pri,#0a7)","color:#fff","padding:12px 14px",
-        "font-family:inherit","font-size:14px","font-weight:800",
-        "display:flex","align-items:center","justify-content:space-between",
-        "box-shadow:0 2px 8px rgba(0,0,0,.25)","cursor:pointer"
-      ].join(";");
-      bar.innerHTML='<span>⬇ Update available (build '+latest+') — tap to install</span>'+
-                    '<span id="wildUpdateX" style="padding:0 8px;opacity:.8">✕</span>';
-      bar.addEventListener("click",function(e){
-        if(e.target&&e.target.id==="wildUpdateX"){bar.remove();return;}
-        startApkDownload();
-      });
-      (document.body||document.documentElement).appendChild(bar);
-      // Also reflect it on the bottom version tag, so the newer build is still
-      // visible after the banner is dismissed or missed (v1.37).
+    // v1.58: an actual new APK build (native change, needs a real install —
+    // not the OTA content path) used to pop a bar across the top of the
+    // screen. On the handheld that bar sits BEHIND the camera view and was
+    // never actually visible — Ash asked for it gone, since the bottom-left
+    // pill + ⟳ Update button already say the same thing and ARE visible.
+    // flagApkUpdate now only recolours the pill; no DOM banner is created.
+    function flagApkUpdate(latest){
       try{
         var tg=document.getElementById("wildBuildTag");
         if(tg){
@@ -8732,10 +8723,10 @@ document.addEventListener("visibilitychange",()=>{
         }
       }catch(err){}
     }
-    // The APK banner is now driven by the live-update layer, which checks at
-    // boot, every few hours, and whenever the screen wakes after a gap —
-    // instead of once at launch on a PDA that is never restarted. (v1.45)
-    window.__wildShowUpdateBar=showBanner;
+    // Tapping the ⟳ Update button when it's flipped ready for an "apk" kind
+    // still downloads the real APK via startApkDownload (applyUpdateNow).
+    window.__wildShowUpdateBar=flagApkUpdate;   // old name kept, nothing else calls it
+    window.__wildFlagApkUpdate=flagApkUpdate;
     try{ startUpdateChecks(); }catch(e){ /* ignore */ }
   })();
 
