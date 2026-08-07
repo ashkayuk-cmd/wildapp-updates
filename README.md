@@ -1,56 +1,87 @@
-# Wild App — v1.53 (build 49)
+# Wild App — v1.60 (build 56)
 
-The recents key can no longer take you out of the app.
+Signed with your own `wild-signing.keystore`, so it installs **over** the app you
+have now. Your saved corrections and scan history are kept.
 
-## Install it (in this order)
+This APK replaces the `index.html` I sent earlier today — **don't upload that
+file**, everything in it is baked into this build.
 
-1. On the PDA, **hold BACK for 10 seconds** → tap **Leave**.
-2. Open **WildApp.apk** and install. Installs over the top — corrections and
-   scan history are kept.
-3. In `ashkayuk-cmd/wildapp-updates`: upload this APK as **WildApp.apk** and set
-   **version.txt** to **49**.
+---
 
-## First launch — one prompt to accept
+## Install it
 
-The app now pins itself to the screen. The first time it does this, Android asks
-something like **"Pin screen?"** — accept it. After that:
+1. **Get out of the app first** — hold the **BACK** key for 10 seconds, then tap
+   **Leave**. (The kiosk fights the installer, and on the current build this is
+   also what releases the screen pin.)
+2. Open the downloaded `WildApp.apk` and install.
+3. Launch it. The bottom-left pill should read **v1.60 · build 56**.
 
-- **Recents (square)** does nothing. No minimise, no bounce back.
-- **HOME (middle)** also does nothing — that's the trade-off, Android blocks both.
-- **BACK** still works exactly as before, including the 10-second hold.
+## Then put it in the repo
 
-**If nothing changes**, screen pinning is switched off on the device:
-Settings → Security → **Screen pinning** → on, then restart the app.
+- Upload the file to `ashkayuk-cmd/wildapp-updates` as **`WildApp.apk`**.
+- Set **`version.txt`** to **`56`**.
+- Leave `content.json` alone — it says build 54, which this build correctly
+  ignores.
 
-## Getting home without the HOME key
+---
 
-**Tap "Handheld Scanner" at the top of the screen.** That does what the HOME key
-did in v1.52: closes any sheet or picker and puts you back on the idle
-"Scan a barcode" screen. Nothing is lost — corrections, history and downloaded
-updates are untouched.
+## What changed
 
-## Installing updates from now on
+**1. Screen pinning is gone.**
+The "Screen is pinned" behaviour came from a native call (`startLockTask`) added
+in build 49. That call is removed. The first time you open the new build it also
+runs `stopLockTask` once, so if the PDA is still pinned when you install, it
+unpins itself.
 
-Unchanged: **hold BACK 10 seconds → Leave**. That turns kiosk mode off *and*
-releases the pin, so you can reach Settings and the installer as usual. The pin
-comes back on the next launch (or when you turn kiosk mode back on).
+*Worth knowing:* pinning was the thing that blocked the **recents** button. With
+it gone, pressing recents can once again minimise the app for a moment before it
+pulls itself back — the behaviour you had on build 48. Tell me if that becomes
+annoying and I'll look at other options.
 
-Downloading an update from the app also releases the pin automatically.
+**2. The sleep screen is completely black.**
+After 8 minutes idle it used to go 98% black with a sleep face and "Asleep — tap
+or pull the trigger". Now there's nothing on it at all. Tap the screen or pull
+the trigger to wake, same as before.
 
-## Why not the Zebra route
+**3. "Also possible" walk cards are blue.**
+They were amber. They now use the same blue as the main walk. The *"Postcode
+doesn't match this address"* warning banner is still amber — that one is a real
+warning, so I left it. Say the word if you want it blue too.
 
-I said I'd try disabling just the recents button through Zebra's MX settings so
-HOME would keep working. I've left that out: it needs exact MX setting names I
-can't verify from here, and as far as I can tell MX only offers hide-the-whole-
-navigation-bar, which kills HOME anyway. Guessing would have shipped an APK that
-silently did nothing. Pinning is the mechanism that actually works, so that's
-what this build uses.
+**4. The Lancaster Hall label now shows walk 17.**
+Your barcode reads `35 CRAVEN TERRACE LANCASTER HALL HO` with postcode `W33EL`,
+and the mailing house's own `GL51 9FL` on the end — which is the one the app was
+picking up, so it stopped at "Not in W2".
 
-## Checks run before delivery
+The rescue added in v1.57 was supposed to catch this, but it asked the fuzzy
+matcher which address to check, and on a real label the barcode header and
+tracking number drown out the address — it picked *"The Cow, 89 Westbourne Park
+Road"* and gave up. It now searches for the address that actually shares the most
+distinctive words with the label, which lands on Lancaster Hall Hotel.
 
-169: 50 on the package (only the four intended files changed, address data
-byte-identical, versionCode 49, both signatures verify against your keystore,
-same certificate as build 45, pin code present and released in all the right
-places) and 119 in the browser tests, including 4 new ones for the tap-the-title
-shortcut. None of this can prove the pinning behaves on the device — that part is
-untested, as agreed.
+So the screen now shows **17 LANCASTER** big, with the address under it and a blue
+note explaining the walk came from the printed address because the label's
+postcode isn't in W2. **Fix it** is on that screen if it's ever wrong.
+
+If a label's address could fit two or three walks, you still get the tappable
+list instead — it only answers outright when there's one clear answer.
+
+---
+
+## Checked before delivery
+
+- **Signature**: same certificate as your installed app
+  (`2C:3A:BB:7A:B7:00:AF:19…`), v1 + v2 + v3, zip-aligned.
+- **Only four files differ** from the build you're running: the code file, the
+  manifest (versionCode 49 → 56), and the two app HTML files. The address data,
+  the spreadsheet, the libraries and the icon are byte-for-byte identical —
+  **24,147 addresses**, Lancaster Hall still on 17 LANCASTER.
+- **No `startLockTask` call left anywhere** in the app.
+- **101 behaviour tests** run against the app *as packaged inside this APK*,
+  including your real barcode, the 8-minute sleep timer fired for real, and
+  144 out-of-area labels (none of which invents a W2 walk).
+- If you'd already applied an over-the-air update, that cached copy is older than
+  this build and is correctly ignored — and after installing, the app won't
+  falsely claim another update is waiting.
+
+`WildApp.apk` — 1,082,289 bytes, sha256 `8d149947f43fd664…`
