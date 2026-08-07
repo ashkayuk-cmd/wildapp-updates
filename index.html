@@ -587,7 +587,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=59;
+const THIS_BUILD_NUM=60;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -596,7 +596,31 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.63";
+const BUILD_NAME="v1.64";
+// ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
+// These stamps are written into this file by the build script whenever
+// anything is published, so nothing in the repo has to be edited by hand
+// any more. The update check downloads THIS file and reads them straight
+// out of it: the file says which build it is, which addresses sit beside
+// it and which APK sits beside it.
+//
+// Before v1.64 the same job was done by version.txt and content.json,
+// which had to be edited by hand after every upload — and a forgotten
+// edit meant the new file simply never arrived on the PDA. Those two
+// files are no longer read by anything here; they are left in the repo
+// only so a much older copy of the app can still find its way forward.
+const REPO_INDEX_FILE="index.html";       // the app, published as index.html
+const REPO_DATA_FILE="wild_data.json";    // the addresses
+const REPO_APK_FILE="WildApp.apk";        // the installable app
+const REPO_DATA_BUILD=58;                 // build of the wild_data.json beside this file
+const REPO_APK_BUILD=57;                  // build of the WildApp.apk beside this file
+// Fingerprint + row count of that wild_data.json. A data file that was
+// NOT re-uploaded with this one (or that arrived truncated) fails these
+// and is thrown away, instead of quietly putting older addresses back.
+const REPO_DATA_HASH="8ddd7c56";
+const REPO_DATA_ROWS=24147;
+const APK_BUILD_KEY="wildApkBuild_v1";    // versionCode of the APK on this device
+const REPO_APK_SEEN_KEY="wildRepoApk_v1"; // newest APK build seen in the repo
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
 const LIVE_DATA_KEY="wildLiveData_v1";    // {b:build, rows:n, gz:base64 gzipped JSON}
 const LIVE_PENDING_KEY="wildLivePending_v1";
@@ -613,13 +637,81 @@ function liveRead(key){
 function liveCodeBuild(){const r=liveRead(LIVE_CODE_KEY);return r?r.b:0;}
 function liveDataBuild(){const r=liveRead(LIVE_DATA_KEY);return r?r.b:0;}
 // The build actually running: the loader tells us when it booted a live copy.
+function isLiveCopy(){return !!(window.__WILD_LIVE_BUILD__|0);}
 function runningBuild(){
-  // The loader sets this global in the SAME document it writes the live copy
-  // into, so its absence means the built-in app is running. Do NOT infer it
-  // from the cache: a copy that has been downloaded but not yet restarted into
-  // would then be reported as running, and the app would tell you it was up to
-  // date while the update was still waiting.
-  return (window.__WILD_LIVE_BUILD__|0)||THIS_BUILD_NUM;
+  // The running document knows its own build: THIS_BUILD_NUM is the stamp of
+  // whichever copy is executing — the one baked into the APK, or the
+  // downloaded one the loader wrote into this page. (v1.64: this used to
+  // return the loader's global, which reports the build the cache was
+  // LABELLED with. An older downloader labelled the cache from content.json,
+  // so a mislabelled copy could re-download itself on every launch. Its own
+  // stamp cannot be wrong.) Do NOT infer it from the cache either: a copy
+  // downloaded but not yet restarted into would be reported as running, and
+  // the app would say it was up to date while the update sat waiting.
+  return THIS_BUILD_NUM;
+}
+// The addresses actually in use: a downloaded set if one is loaded, otherwise
+// the set baked into the APK beside the running code.
+function dataBuildInUse(){return (window.__WILD_DATA_BUILD__|0)||BAKED_DATA_BUILD;}
+// Small, fast, dependency-free content fingerprint (FNV-1a, 32 bit). Not a
+// security check — it is here to catch a file that wasn't re-uploaded next to
+// the one that was, and downloads that arrived short.
+function wildHash(str){
+  let h=0x811c9dc5;
+  for(let i=0;i<str.length;i++){
+    h^=str.charCodeAt(i)&0xff;
+    h=(h+((h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24)))>>>0;
+  }
+  return ("0000000"+h.toString(16)).slice(-8);
+}
+// The stamps, read out of a copy of the app fetched from the repo. Every one
+// of these is optional in the sense that a 0 simply means "don't act": a page
+// that isn't the app (a 404, a truncated download) yields zeros and is
+// ignored rather than trusted.
+function readRepoStamps(html){
+  const num=(re)=>{const m=re.exec(html);return m?(parseInt(m[1],10)||0):0;};
+  const str=(re)=>{const m=re.exec(html);return m?m[1]:"";};
+  return {
+    code:num(/const\s+THIS_BUILD_NUM\s*=\s*(\d+)/),
+    data:num(/const\s+REPO_DATA_BUILD\s*=\s*(\d+)/),
+    apk :num(/const\s+REPO_APK_BUILD\s*=\s*(\d+)/),
+    rows:num(/const\s+REPO_DATA_ROWS\s*=\s*(\d+)/),
+    hash:str(/const\s+REPO_DATA_HASH\s*=\s*"([0-9a-f]*)"/)
+  };
+}
+// Which APK is installed on this device? If this copy came out of the APK it
+// IS the APK's build. A downloaded copy asks the device instead of guessing:
+// app.html is the built-in app, served straight from the APK's own assets, so
+// no network is involved. The answer can't change without a restart, so it is
+// worked out once per launch.
+let _apkBuildCache=0;
+function apkBuildStored(){
+  try{return parseInt(localStorage.getItem(APK_BUILD_KEY)||"0",10)||0;}catch(e){return 0;}
+}
+function apkBuildRemember(n){
+  n=parseInt(n,10)||0;
+  if(n>0){
+    _apkBuildCache=n;
+    try{if(apkBuildStored()!==n)localStorage.setItem(APK_BUILD_KEY,String(n));}catch(e){}
+  }
+  return n;
+}
+async function installedApkBuild(){
+  if(_apkBuildCache)return _apkBuildCache;
+  if(!isLiveCopy())return apkBuildRemember(THIS_BUILD_NUM);
+  try{
+    const r=await fetch("app.html",{cache:"no-store"});
+    if(r.ok){
+      const m=/const\s+THIS_BUILD_NUM\s*=\s*(\d+)/.exec(await r.text());
+      if(m&&parseInt(m[1],10))return apkBuildRemember(m[1]);
+    }
+  }catch(e){}
+  const known=apkBuildStored();
+  return known?apkBuildRemember(known):apkBuildRemember(REPO_APK_BUILD);
+}
+// Same answer without waiting, for anything that just needs to show it.
+function installedApkBuildNow(){
+  return _apkBuildCache||apkBuildStored()||(isLiveCopy()?REPO_APK_BUILD:THIS_BUILD_NUM);
 }
 function liveClearCode(){
   try{localStorage.removeItem(LIVE_CODE_KEY);localStorage.removeItem(LIVE_PENDING_KEY);}catch(e){}
@@ -645,8 +737,12 @@ function liveHtmlLooksSane(html){
   if(html.indexOf("WILD-BOOT"+"-START")>=0)return false;  // must be the app, not the loader
   return true;
 }
-async function liveFetchText(url){
-  const r=await fetch(url,{cache:"no-store"});
+async function liveFetchText(url,fresh){
+  // A check the person asked for always goes to the network. The automatic
+  // ones may be answered from the browser's own HTTP cache: GitHub allows
+  // five minutes and then revalidates, which costs a few hundred bytes when
+  // the file hasn't changed instead of downloading the whole app again.
+  const r=await fetch(url,{cache:fresh?"no-store":"default"});
   if(!r.ok)throw new Error("HTTP "+r.status);
   return await r.text();
 }
@@ -654,54 +750,68 @@ async function liveFetchText(url){
 // always needs your taps) plus the over-the-air code and data.
 async function checkForUpdate(reason){
   if(navigator.onLine===false)return {offline:true,found:null};
+  // A tap means "tell me the truth now"; the automatic ones may use the cache.
+  const fresh=(reason==="button"||reason==="manual");
   let found=null, reached=false;
+  const apkHave=await installedApkBuild();
   // Something already downloaded and waiting for a restart counts as found —
   // otherwise a second tap would wrongly say "up to date".
   if(liveCodeBuild()>runningBuild()){
     found="code";
-  }else if(liveDataBuild()>(window.__WILD_DATA_BUILD__|0||BAKED_DATA_BUILD)){
+  }else if(liveDataBuild()>dataBuildInUse()){
     found="data";
+  }else{
+    // An APK isn't downloaded in advance, so a new one that was already seen
+    // is remembered instead — it must still be reported while it isn't installed.
+    let seen=0;try{seen=parseInt(localStorage.getItem(REPO_APK_SEEN_KEY)||"0",10)||0;}catch(e){}
+    if(seen>apkHave){
+      found="apk";
+      if(window.__wildFlagApkUpdate)window.__wildFlagApkUpdate(seen);
+    }
   }
   const base=WILD_UPDATE_BASE.replace(/\/+$/,"");
   try{localStorage.setItem(LIVE_LAST_KEY,String(Date.now()));}catch(e){}
-  // (a) APK build — unchanged behaviour, just checked more often
-  try{
-    const txt=await liveFetchText(base+"/version.txt");
-    reached=true;
-    const latest=parseInt(String(txt).replace(/[^0-9]/g,""),10);
-    if(isFinite(latest)&&latest>THIS_BUILD_NUM){
-      found=found||"apk";
-      // v1.58: no top banner — the bottom-left pill (flipped by
-      // window.__wildFlagApkUpdate below) and the ⟳ button are the only
-      // signal now. A top box that sits behind the camera view was never
-      // actually visible on the handheld.
-      if(window.__wildFlagApkUpdate)window.__wildFlagApkUpdate(latest);
-    }
-  }catch(e){}
-  // (b) over-the-air content
-  let man=null;
-  try{man=JSON.parse(await liveFetchText(base+"/content.json"));reached=true;}
+  // ONE fetch answers everything (v1.64): the copy of the app published in the
+  // repo carries its own build number and says what is published beside it.
+  let html=null;
+  try{html=await liveFetchText(base+"/"+REPO_INDEX_FILE,fresh);reached=true;}
   catch(e){return {offline:!reached,found:found};}
-  if(!man||typeof man!=="object")return {offline:false,found:found};
-  const codeWant=parseInt(man.code,10)||0;
-  if(codeWant>runningBuild()&&codeWant>liveCodeBuild()){
+  const st=readRepoStamps(html);
+  // (a) a newer APK. Installing one always needs your taps, so this only
+  // flags it: the bottom-left pill turns amber and the ⟳ button offers it.
+  if(st.apk>0){
+    try{localStorage.setItem(REPO_APK_SEEN_KEY,String(st.apk));}catch(e){}
+    if(st.apk>apkHave){
+      found=found||"apk";
+      if(window.__wildFlagApkUpdate)window.__wildFlagApkUpdate(st.apk);
+    }
+  }
+  // (b) the app itself. The file we already have in hand IS the update, so
+  // there is nothing else to fetch.
+  if(st.code>runningBuild()&&st.code>liveCodeBuild()&&liveHtmlLooksSane(html)&&window.pako){
     try{
-      const html=await liveFetchText(base+"/"+(man.index||"index.html"));
-      if(liveHtmlLooksSane(html)&&window.pako){
-        localStorage.setItem(LIVE_CODE_KEY,JSON.stringify({b:codeWant,gz:uint8ToB64(pako.gzip(html)),when:Date.now()}));
-        found="code";
-      }
+      localStorage.setItem(LIVE_CODE_KEY,JSON.stringify({b:st.code,gz:uint8ToB64(pako.gzip(html)),when:Date.now()}));
+      found="code";
     }catch(e){}
   }
-  const dataWant=parseInt(man.data,10)||0;
-  if(dataWant>liveDataBuild()&&dataWant>BAKED_DATA_BUILD){
+  // (c) the addresses. Compared against the set baked into the APK, never
+  // against the code build — a downloaded app with a higher number used to
+  // shadow newer downloaded DATA and quietly revert address fixes (v1.63).
+  if(st.data>liveDataBuild()&&st.data>BAKED_DATA_BUILD){
     try{
-      const txt=await liveFetchText(base+"/"+(man.dataFile||"wild_data.json"));
-      const rows=JSON.parse(txt);
-      if(Array.isArray(rows)&&rows.length>1000&&rows[0]&&rows[0].d&&window.pako){
-        for(const e of rows)for(const k in e)if(typeof e[k]==="string"&&e[k].indexOf("\r")>=0)e[k]=e[k].replace(/\r/g,"");
-        localStorage.setItem(LIVE_DATA_KEY,JSON.stringify({b:dataWant,rows:rows.length,gz:uint8ToB64(pako.gzip(JSON.stringify(rows))),when:Date.now()}));
-        found=found||"data";
+      const txt=await liveFetchText(base+"/"+REPO_DATA_FILE,fresh);
+      // The stamps describe the data file that was published WITH this app
+      // file. If the two don't match, the addresses in the repo aren't the
+      // ones this build expects — most likely only one of them was uploaded —
+      // so they are left alone rather than replacing a good set with an old one.
+      if(!st.hash||wildHash(txt)===st.hash){
+        const rows=JSON.parse(txt);
+        if(Array.isArray(rows)&&rows.length>1000&&rows[0]&&rows[0].d&&window.pako
+           &&(!st.rows||rows.length===st.rows)){
+          for(const e of rows)for(const k in e)if(typeof e[k]==="string"&&e[k].indexOf("\r")>=0)e[k]=e[k].replace(/\r/g,"");
+          localStorage.setItem(LIVE_DATA_KEY,JSON.stringify({b:st.data,rows:rows.length,gz:uint8ToB64(pako.gzip(JSON.stringify(rows))),when:Date.now()}));
+          found=found||"data";
+        }
       }
     }catch(e){}
   }
@@ -4605,7 +4715,13 @@ function showAppVersion(){
   if(info){
     const lc=liveCodeBuild(), ld=liveDataBuild(), run=runningBuild();
     let note="";try{note=localStorage.getItem(LIVE_NOTE_KEY)||"";}catch(e){}
-    const bits=[BUILD_NAME+" · running build <b>"+run+"</b>"+(run!==THIS_BUILD_NUM?" (downloaded)":" (built in)")];
+    const bits=[BUILD_NAME+" · running build <b>"+run+"</b>"+(isLiveCopy()?" (downloaded)":" (built in)")];
+    // v1.64: the installed APK and the running app are two different things —
+    // the app updates itself over the air, the APK only changes when one is
+    // installed by hand. Saying both makes "do I need to install anything?"
+    // answerable without guessing.
+    const ab=installedApkBuildNow();
+    if(ab)bits.push("Installed app (APK): build <b>"+ab+"</b>.");
     if(lc>run)bits.push("Build <b>"+lc+"</b> downloaded — restart to apply.");
     if(ld>BAKED_DATA_BUILD)bits.push("Addresses: downloaded set <b>"+ld+"</b> in use.");
     if(note)bits.push('<span style="color:#8a5300">'+escHtml(note)+"</span>");
@@ -9008,9 +9124,9 @@ document.addEventListener("visibilitychange",()=>{
     if(document.getElementById("wildBuildTag"))return;
     var t=document.createElement("div");
     t.id="wildBuildTag";
-    // Show the version AND the integer build number — the build number is the
-    // one that has to match version.txt in the update repo, so having it on
-    // screen makes "which build is this PDA on?" answerable at a glance.
+    // Show the version AND the integer build number, so "which build is this
+    // PDA on?" is answerable at a glance — a silent failed install, or a
+    // WebView serving a stale page, is otherwise invisible.
     t.textContent=BUILD+" · build "+runningBuild()+(runningBuild()!==BUILD_NUM?" (live)":"");
     // v1.37: was 11px rgba(0,0,0,.35) — invisible against the DARK camera
     // screen, so it couldn't be read on the one screen you're usually on.
@@ -9067,20 +9183,22 @@ document.addEventListener("visibilitychange",()=>{
      Completely optional and offline-safe: any network error is swallowed and
      the app behaves exactly as before. Nothing here can break scanning.
 
-     TO ENABLE: set UPDATE_BASE to a folder URL that serves raw files, holding
-        version.txt   (one line, e.g.  25   — an integer build number)
-        WildApp.apk   (the latest signed APK)
-     GitHub raw / releases or any plain web host works. Google Drive/Dropbox
-     do NOT (they return an HTML page, not the raw file). Leave UPDATE_BASE
-     empty to keep the checker dormant. */
+     v1.64: there is no version file any more. UPDATE_BASE is a folder URL
+     serving raw files and holding
+        index.html      (the app — it declares its own build and what's beside it)
+        wild_data.json  (the addresses)
+        WildApp.apk     (the latest signed APK)
+     Publishing is now just re-uploading whichever of those changed; nothing
+     in the repo is edited by hand. GitHub raw or any plain web host works.
+     Google Drive/Dropbox do NOT (they return an HTML page, not the raw file).
+     Leave UPDATE_BASE empty to keep the checker dormant. */
   (function(){
     var THIS_BUILD=THIS_BUILD_NUM;     // integer; == versionCode
     var UPDATE_BASE=WILD_UPDATE_BASE;  // declared once, near the top
     if(!UPDATE_BASE) return;           // dormant until a host URL is set
     // Only check when we appear to be online.
     if(navigator.onLine===false) return;
-    var vURL=UPDATE_BASE.replace(/\/+$/,"")+"/version.txt";
-    var aURL=UPDATE_BASE.replace(/\/+$/,"")+"/WildApp.apk";
+    var aURL=UPDATE_BASE.replace(/\/+$/,"")+"/"+REPO_APK_FILE;
     // Hand the APK URL to the system: try a new window first (lets the native
     // layer route it to the browser/installer), and only navigate directly if
     // that was blocked — doing both downloads the file TWICE.
