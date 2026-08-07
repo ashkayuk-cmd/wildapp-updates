@@ -1,87 +1,65 @@
-# Wild App — v1.60 (build 56)
+# Wild App — v1.61 (build 57)
 
-Signed with your own `wild-signing.keystore`, so it installs **over** the app you
-have now. Your saved corrections and scan history are kept.
-
-This APK replaces the `index.html` I sent earlier today — **don't upload that
-file**, everything in it is baked into this build.
+Same key as always, so it installs over v1.60 and keeps your corrections and
+history. One change only.
 
 ---
 
 ## Install it
 
-1. **Get out of the app first** — hold the **BACK** key for 10 seconds, then tap
-   **Leave**. (The kiosk fights the installer, and on the current build this is
-   also what releases the screen pin.)
+1. Hold **BACK** for 10 seconds → **Leave**.
 2. Open the downloaded `WildApp.apk` and install.
-3. Launch it. The bottom-left pill should read **v1.60 · build 56**.
-
-## Then put it in the repo
-
-- Upload the file to `ashkayuk-cmd/wildapp-updates` as **`WildApp.apk`**.
-- Set **`version.txt`** to **`56`**.
-- Leave `content.json` alone — it says build 54, which this build correctly
-  ignores.
+3. Launch it — the bottom-left pill should read **v1.61 · build 57**.
+4. Upload it to the repo as **`WildApp.apk`** and set **`version.txt`** to **`57`**.
+   Leave `content.json` alone.
 
 ---
 
-## What changed
+## The flashing nav bar and notification bar
 
-**1. Screen pinning is gone.**
-The "Screen is pinned" behaviour came from a native call (`startLockTask`) added
-in build 49. That call is removed. The first time you open the new build it also
-runs `stopLockTask` once, so if the PDA is still pinned when you install, it
-unpins itself.
+`onResume()` was calling `requestAdmin()` — every single time the app came back
+to the foreground. If Android's device-admin permission isn't granted, that
+method opens the system **"Activate device administrator?"** screen. The kiosk
+then broadcasts close-dialogs and drags itself back to the front within 80 ms,
+so the system screen never gets to settle: what you see is its status bar and
+nav bar flashing at the top and bottom of the screen.
 
-*Worth knowing:* pinning was the thing that blocked the **recents** button. With
-it gone, pressing recents can once again minimise the app for a moment before it
-pulls itself back — the behaviour you had on build 48. Tell me if that becomes
-annoying and I'll look at other options.
+It was there all along and invisible, because screen pinning blocked the app
+from launching other activities. Take the pin away in v1.60 and the launch goes
+through.
 
-**2. The sleep screen is completely black.**
-After 8 minutes idle it used to go 98% black with a sleep face and "Asleep — tap
-or pull the trigger". Now there's nothing on it at all. Tap the screen or pull
-the trigger to wake, same as before.
+**The fix:** that call is removed from `onResume`. The app never asks for device
+admin again. Nothing else in the resume path changed — the scanner still resumes
+and the screen-off timer is still armed.
 
-**3. "Also possible" walk cards are blue.**
-They were amber. They now use the same blue as the main walk. The *"Postcode
-doesn't match this address"* warning banner is still amber — that one is a real
-warning, so I left it. Say the word if you want it blue too.
+I also removed the leftover `stopLockTask` call from the same method. It was
+there to unpin the screen once after updating from v1.60, which has already
+happened on your PDA, so it now runs for no reason.
 
-**4. The Lancaster Hall label now shows walk 17.**
-Your barcode reads `35 CRAVEN TERRACE LANCASTER HALL HO` with postcode `W33EL`,
-and the mailing house's own `GL51 9FL` on the end — which is the one the app was
-picking up, so it stopped at "Not in W2".
+### If you ever want the 3-minute screen-off
 
-The rescue added in v1.57 was supposed to catch this, but it asked the fuzzy
-matcher which address to check, and on a real label the barcode header and
-tracking number drown out the address — it picked *"The Cow, 89 Westbourne Park
-Road"* and gave up. It now searches for the address that actually shares the most
-distinctive words with the label, which lands on Lancaster Hall Hotel.
-
-So the screen now shows **17 LANCASTER** big, with the address under it and a blue
-note explaining the walk came from the printed address because the label's
-postcode isn't in W2. **Fix it** is on that screen if it's ever wrong.
-
-If a label's address could fit two or three walks, you still get the tappable
-list instead — it only answers outright when there's one clear answer.
+That permission exists for one feature: switching the PDA screen off after 3
+minutes idle. It still works — you'd just grant it yourself, once, in
+**Settings → Security → Device admin apps → Wild App**, instead of the app
+nagging you for it. Until then the app's own black screen at 8 minutes carries
+on as it does now.
 
 ---
 
 ## Checked before delivery
 
-- **Signature**: same certificate as your installed app
-  (`2C:3A:BB:7A:B7:00:AF:19…`), v1 + v2 + v3, zip-aligned.
-- **Only four files differ** from the build you're running: the code file, the
-  manifest (versionCode 49 → 56), and the two app HTML files. The address data,
-  the spreadsheet, the libraries and the icon are byte-for-byte identical —
-  **24,147 addresses**, Lancaster Hall still on 17 LANCASTER.
-- **No `startLockTask` call left anywhere** in the app.
-- **101 behaviour tests** run against the app *as packaged inside this APK*,
-  including your real barcode, the 8-minute sleep timer fired for real, and
-  144 out-of-area labels (none of which invents a W2 walk).
-- If you'd already applied an over-the-air update, that cached copy is older than
-  this build and is correctly ignored — and after installing, the app won't
-  falsely claim another update is waiting.
+- **Signature**: same certificate (`2C:3A:BB:7A:B7:00:AF:19…`), v1 + v2 + v3,
+  zip-aligned.
+- **Only four files differ** from v1.60: the code file, the manifest
+  (versionCode 56 → 57) and the two app HTML files (version stamps only). The
+  addresses, spreadsheet, libraries and icon are byte-for-byte identical —
+  24,147 addresses.
+- **Nothing calls `requestAdmin` anywhere** in the app any more, and `onResume`
+  is the same length as before — the calls were replaced in place, so no other
+  code moved.
+- **110 tests** re-run against the app as packaged inside this APK: your
+  Lancaster Hall barcode, the sleep screen, the everyday scans, and checks that
+  the app won't wrongly claim an update afterwards — with `version.txt` at 56
+  *or* 57, so it behaves either way while you're mid-upload.
 
-`WildApp.apk` — 1,082,289 bytes, sha256 `8d149947f43fd664…`
+`WildApp.apk` — 1,082,289 bytes, sha256 `2f6be48a81c0751d…`

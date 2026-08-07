@@ -587,11 +587,16 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=54;
+const THIS_BUILD_NUM=59;
+// The APK build whose baked wild_data.json sits next to this file. The
+// data gate below compares against THIS, not the code build: a downloaded
+// app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
+// DATA (58 is not > 59), quietly reverting address fixes.
+const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.58";
+const BUILD_NAME="v1.63";
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
 const LIVE_DATA_KEY="wildLiveData_v1";    // {b:build, rows:n, gz:base64 gzipped JSON}
 const LIVE_PENDING_KEY="wildLivePending_v1";
@@ -654,7 +659,7 @@ async function checkForUpdate(reason){
   // otherwise a second tap would wrongly say "up to date".
   if(liveCodeBuild()>runningBuild()){
     found="code";
-  }else if(liveDataBuild()>(window.__WILD_DATA_BUILD__|0||THIS_BUILD_NUM)){
+  }else if(liveDataBuild()>(window.__WILD_DATA_BUILD__|0||BAKED_DATA_BUILD)){
     found="data";
   }
   const base=WILD_UPDATE_BASE.replace(/\/+$/,"");
@@ -689,7 +694,7 @@ async function checkForUpdate(reason){
     }catch(e){}
   }
   const dataWant=parseInt(man.data,10)||0;
-  if(dataWant>liveDataBuild()&&dataWant>THIS_BUILD_NUM){
+  if(dataWant>liveDataBuild()&&dataWant>BAKED_DATA_BUILD){
     try{
       const txt=await liveFetchText(base+"/"+(man.dataFile||"wild_data.json"));
       const rows=JSON.parse(txt);
@@ -825,7 +830,7 @@ async function fetchExcelDataset(){
   // the cached copy just falls through to the baked one. (v1.45)
   try{
     const rec=liveRead(LIVE_DATA_KEY);
-    if(rec&&rec.gz&&rec.b>THIS_BUILD_NUM&&window.pako){
+    if(rec&&rec.gz&&rec.b>BAKED_DATA_BUILD&&window.pako){
       const rows=JSON.parse(gunzipToString(rec.gz));
       if(Array.isArray(rows)&&rows.length){
         for(const e of rows)for(const k in e)if(typeof e[k]==="string"&&e[k].indexOf("\r")>=0)e[k]=e[k].replace(/\r/g,"");
@@ -1780,6 +1785,8 @@ window.WildMoves = (() => {
 /* ============ end WildMoves ============ */
 
 function finishBoot(){
+  // Addresses added by hand join the round before anything is derived from it.
+  try{mergeUserAddrs();}catch(e){}
   // allData already reflects every move/edit/deletion/folder assignment made
   // so far this session (they're applied directly and permanently as they
   // happen) — just make sure the derived postcode/building fields are
@@ -3959,7 +3966,7 @@ function showHandFixPicker(fresh){
   if(!box||!handLastPc){return;}
   // Opening the flow from a result clears any half-finished address/postcode
   // edit from a previous correction (fresh!==false).
-  if(fresh!==false){handFixAddr=null;handFixPc=null;}
+  if(fresh!==false){handFixAddr=null;handFixPc=null;handAddrSrc="pc";handAddrQuery="";handAddrNote="";}
   const pcFmt=handLastPc.length>3?handLastPc.slice(0,-3)+" "+handLastPc.slice(-3):handLastPc;
   const walks=walksForPostcode(handLastPc);
   const cur=getUserOverride(handLastPc,handLastHn,handLastRaw);
@@ -4086,6 +4093,176 @@ function showHandFixScope(walk){
 // The correction is still SAVED against the postcode that was SCANNED, because
 // that's what the next label will carry; the corrected postcode is what gets
 // SHOWN. Nothing is written until a scope is chosen on the previous screen.
+
+/* ── ADDRESS SEARCH, LABEL TEXT AND HAND-ADDED ADDRESSES (v1.63) ────────────
+   The address editor used to offer only the addresses filed under the postcode
+   that was SCANNED — no help at all when the postcode is itself the thing
+   that's wrong. These back its four new options: search the whole round, list
+   the other doors on the same street, take the address printed on the label,
+   and add a door the round has never heard of. */
+let handSearchIdx=null, handSearchIdxFor=-1;
+function handBuildSearchIndex(){
+  if(typeof allData==="undefined"||!allData)return [];
+  if(handSearchIdx&&handSearchIdxFor===allData.length)return handSearchIdx;
+  handSearchIdx=allData.map(d=>((d.d||"")+" "+(d.s||"")+" "+(d.r||"")).toLowerCase());
+  handSearchIdxFor=allData.length;
+  return handSearchIdx;
+}
+// Every typed word must appear somewhere in the address, street or walk. The
+// total is counted even past the display limit, so the list can be honest
+// about how much it isn't showing.
+function handSearchAll(q,limit){
+  const terms=String(q||"").toLowerCase().split(/\s+/).filter(Boolean);
+  if(!terms.length)return {rows:[],total:0};
+  const idx=handBuildSearchIndex(), rows=[]; let total=0;
+  for(let i=0;i<idx.length;i++){
+    const t=idx[i]; let ok=true;
+    for(let k=0;k<terms.length;k++){if(t.indexOf(terms[k])<0){ok=false;break;}}
+    if(!ok)continue;
+    total++;
+    if(rows.length<limit)rows.push(allData[i]);
+  }
+  return {rows,total};
+}
+function handFilterRows(rows,q,limit){
+  const terms=String(q||"").toLowerCase().split(/\s+/).filter(Boolean);
+  const out=[]; let total=0;
+  for(let i=0;i<rows.length;i++){
+    const d=rows[i], t=((d.d||"")+" "+(d.s||"")+" "+(d.r||"")).toLowerCase();
+    let ok=true;
+    for(let k=0;k<terms.length;k++){if(t.indexOf(terms[k])<0){ok=false;break;}}
+    if(!ok)continue;
+    total++;
+    if(out.length<limit)out.push(d);
+  }
+  return {rows:out,total};
+}
+// The record behind the address on screen, when the round holds it.
+function handCurrentRecord(){
+  const a=String(handFixAddr||handLastAddr||"").trim().toLowerCase();
+  if(!a||typeof allData==="undefined"||!allData)return null;
+  return allData.find(d=>String(d.d||"").trim().toLowerCase()===a)||
+         allData.find(d=>String(displayAddrText(d.d)||"").trim().toLowerCase()===a)||null;
+}
+// Which street this correction is about: the matched record's, else the street
+// most of the scanned postcode sits on.
+function handCurrentStreet(){
+  const rec=handCurrentRecord();
+  if(rec&&rec.s)return rec.s;
+  const at=recordsAtPostcode(handLastPc), c=Object.create(null);
+  let best=null,bn=0;
+  at.forEach(d=>{const st=d.s||"";if(!st)return;c[st]=(c[st]||0)+1;if(c[st]>bn){bn=c[st];best=st;}});
+  return best;
+}
+function handStreetRecords(street){
+  if(!street||typeof allData==="undefined"||!allData)return [];
+  const st=String(street).toLowerCase();
+  const rows=allData.filter(d=>String(d.s||"").toLowerCase()===st);
+  // Doors at the scanned postcode first — they're the likeliest answer.
+  return rows.sort((a,b)=>{
+    const ap=(getPostcode(a.d)||"").replace(/\s+/g,"").toUpperCase()===handLastPc?0:1;
+    const bp=(getPostcode(b.d)||"").replace(/\s+/g,"").toUpperCase()===handLastPc?0:1;
+    if(ap!==bp)return ap-bp;
+    return String(a.d).localeCompare(String(b.d),undefined,{numeric:true});
+  });
+}
+// The address text actually printed in the barcode. Mailmark carries it between
+// the tracking number and the postcode; anything else gets ids, postcodes and
+// the sender tail stripped out of it.
+function labelAddressText(raw){
+  const up=String(raw||"").toUpperCase().replace(/\s+/g," ").trim();
+  if(!up)return null;
+  let s=null;
+  try{const mm=parseMailmark(raw,handLastPc||null);if(mm&&mm.addr)s=mm.addr;}catch(e){}
+  if(!s){
+    let t=up;
+    const cut=t.search(/\d?ZGB\b/); if(cut>0)t=t.slice(0,cut);
+    t=t.replace(/\b[A-Z]{2}\d{9}[A-Z]{2}\b/g," ").replace(/^JGB\b/," ");
+    t=t.replace(/\b[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}\b/g," ");
+    t=t.replace(/\b\d{5,}\b/g," ");
+    s=t;
+  }
+  s=String(s).replace(/[^A-Z0-9 ,.'&\-\/]/g," ").replace(/\s+/g," ").trim();
+  if(!/[A-Z]{3,}/.test(s))return null;
+  if(s.length>90)s=s.slice(0,90).trim();
+  return s;
+}
+/* ── Addresses added by hand ────────────────────────────────────────────────
+   Kept on the device, merged into the round at boot, and from then on they
+   search, pick and resolve exactly like a built-in address. Deleting one takes
+   it back out again. */
+const USER_ADDR_KEY="wildUserAddr_v1";
+function userAddrList(){
+  try{const a=JSON.parse(localStorage.getItem(USER_ADDR_KEY)||"[]");return Array.isArray(a)?a:[];}
+  catch(e){return [];}
+}
+function saveUserAddrList(list){
+  try{localStorage.setItem(USER_ADDR_KEY,JSON.stringify(list.slice(-300)));}catch(e){}
+}
+function handKnowsAddress(text){
+  const a=String(text||"").trim().toLowerCase();
+  if(!a||typeof allData==="undefined"||!allData)return false;
+  return allData.some(d=>String(d.d||"").trim().toLowerCase()===a);
+}
+// Anything built over allData is stale the moment a row is added or removed.
+function handDropDataIndexes(){
+  handSearchIdx=null;handSearchIdxFor=-1;
+  try{knownPostcodeSet._cache=null;knownPostcodeSet._for=null;}catch(e){}
+  try{tokenStreetCount=null;}catch(e){}
+}
+function mergeUserAddrs(){
+  if(typeof allData==="undefined"||!allData)return 0;
+  const have=new Set(allData.map(d=>String(d.d||"").trim().toLowerCase()));
+  let n=0;
+  userAddrList().forEach(u=>{
+    if(!u||!u.d)return;
+    const k=String(u.d).trim().toLowerCase();
+    if(have.has(k))return;
+    const e={s:u.s||"",d:u.d,r:u.r||"",_userAdded:true};
+    try{e._pc=getPostcode(e.d);e._bldg=bldgOf(e);}catch(err){}
+    allData.push(e);have.add(k);n++;
+  });
+  if(n)handDropDataIndexes();
+  return n;
+}
+function addUserAddress(addr,pcShown,street,walk){
+  let d=String(addr||"").trim().replace(/[,\s]+$/,"");
+  if(!d)return null;
+  const pc=String(pcShown||"").trim().toUpperCase();
+  // Keep the dataset's own shape: "…, Street, POSTCODE".
+  if(pc&&d.toUpperCase().replace(/\s+/g,"").indexOf(pc.replace(/\s+/g,""))<0)d=d+", "+pc;
+  if(handKnowsAddress(d))return d;
+  const list=userAddrList();
+  list.push({d:d,s:street||"",r:walk||"",when:Date.now()});
+  saveUserAddrList(list);
+  mergeUserAddrs();
+  return d;
+}
+function deleteUserAddress(d){
+  const k=String(d||"").trim().toLowerCase();
+  saveUserAddrList(userAddrList().filter(u=>String(u.d||"").trim().toLowerCase()!==k));
+  if(typeof allData!=="undefined"&&allData){
+    for(let i=allData.length-1;i>=0;i--){
+      const e=allData[i];
+      if(e&&e._userAdded&&String(e.d||"").trim().toLowerCase()===k)allData.splice(i,1);
+    }
+  }
+  handDropDataIndexes();
+}
+// Street guessed from typed text: the part just before the postcode.
+function streetFromTyped(text){
+  const parts=String(text||"").split(",").map(x=>x.trim()).filter(Boolean);
+  if(parts.length<2)return null;
+  const last=parts[parts.length-1];
+  const isPc=/^[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}$/i.test(last);
+  const cand=isPc?parts[parts.length-2]:last;
+  if(!cand||!/[A-Za-z]{3,}/.test(cand))return null;
+  return cand.replace(/^\d+[a-z]?(?:\s*-\s*\d+[a-z]?)?[\s,]+/i,"").trim()||null;
+}
+// Which list the editor is showing, what's typed in its filter, and the one-off
+// note printed at the top after something is added.
+let handAddrSrc="pc", handAddrQuery="", handAddrNote="";
+
 function showHandAddrEdit(walk){
   const box=document.getElementById("handResult");
   if(!box||!handLastPc)return;
@@ -4093,55 +4270,169 @@ function showHandAddrEdit(walk){
   const pcFmt=handLastPc.length>3?handLastPc.slice(0,-3)+" "+handLastPc.slice(-3):handLastPc;
   const curAddr=handFixAddr||handLastAddr||"";
   const curPc=handFixPc||pcFmt;
-  const known=(typeof allData!=="undefined"&&allData)?allData.filter(d=>getPostcode(d.d).toUpperCase().replace(/\s+/g,"")===handLastPc):[];
-  const renderKnown=(filter)=>{
-    const f=(filter||"").trim().toLowerCase();
-    const shown=(f?known.filter(d=>(d.d+" "+(d.s||"")).toLowerCase().includes(f)):known).slice(0,40);
-    if(!shown.length)return `<div style="color:var(--sub);font-size:12px;margin-top:10px">${known.length?"No address here matches that.":"No addresses on file for "+pcFmt+"."}</div>`;
-    return shown.map(d=>`<button class="handKnownPick" data-a="${encodeURIComponent(d.d)}" style="display:block;width:100%;text-align:left;margin-top:6px;padding:10px 12px;background:var(--sur);border:none;border-left:5px solid var(--pri);border-radius:10px;box-shadow:var(--shad);cursor:pointer">
-      <div style="font-size:13px;font-weight:700;color:var(--txt);line-height:1.35;word-break:break-word">${escHtml(typeof displayAddrText==="function"?displayAddrText(d.d):d.d)}</div>
-      <div style="font-size:11px;color:var(--sub);margin-top:2px">${escHtml(d.r||"—")}</div>
-    </button>`).join("");
+  const LIMIT=40;
+  const known=recordsAtPostcode(handLastPc);
+  const street=handCurrentStreet();
+  const streetRows=street?handStreetRecords(street):[];
+  const labelAddr=labelAddressText(handLastRaw);
+  const showLabel=labelAddr&&labelAddr.toLowerCase()!==String(curAddr).toLowerCase();
+  const note=handAddrNote; handAddrNote="";
+  if(handAddrSrc==="street"&&!streetRows.length)handAddrSrc="pc";
+
+  const chip=(id,label,on)=>`<button id="${id}" style="flex:1;min-width:0;padding:9px 6px;background:${on?"var(--pri)":"transparent"};border:1px solid ${on?"var(--pri)":"var(--div)"};border-radius:10px;font-size:11.5px;font-weight:800;color:${on?"#fff":"var(--txt)"};cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</button>`;
+
+  const rowsFor=(q)=>{
+    if(handAddrSrc==="all"){
+      if(String(q||"").trim().length<2)
+        return {rows:[],total:0,hint:"Type at least 2 letters to search all "+((typeof allData!=="undefined"&&allData?allData.length:0).toLocaleString())+" addresses in the round."};
+      return handSearchAll(q,LIMIT);
+    }
+    if(handAddrSrc==="street")return handFilterRows(streetRows,q,LIMIT);
+    return handFilterRows(known,q,LIMIT);
   };
+  const renderList=(q)=>{
+    const r=rowsFor(q);
+    if(r.hint)return `<div style="color:var(--sub);font-size:12px;margin-top:10px;line-height:1.45">${escHtml(r.hint)}</div>`;
+    if(!r.rows.length)return `<div style="color:var(--sub);font-size:12px;margin-top:10px">Nothing here matches that.</div>`;
+    const more=r.total>r.rows.length?`<div style="font-size:11px;color:var(--sub);margin-top:8px">Showing ${r.rows.length} of ${r.total} — type more to narrow it down.</div>`:"";
+    return r.rows.map(d=>{
+      const rpc=getPostcode(d.d)||"";
+      const tail=[d.r||"—",rpc&&rpc!==pcFmt?rpc:"",d._userAdded?"added by you":""].filter(Boolean).join(" · ");
+      return `<button class="handKnownPick" data-a="${encodeURIComponent(d.d)}" style="display:block;width:100%;text-align:left;margin-top:6px;padding:10px 12px;background:var(--sur);border:none;border-left:5px solid ${d._userAdded?"#2e7d32":"var(--pri)"};border-radius:10px;box-shadow:var(--shad);cursor:pointer">
+      <div style="font-size:13px;font-weight:700;color:var(--txt);line-height:1.35;word-break:break-word">${escHtml(typeof displayAddrText==="function"?displayAddrText(d.d):d.d)}</div>
+      <div style="font-size:11px;color:var(--sub);margin-top:2px">${escHtml(tail)}</div>
+    </button>`;
+    }).join("")+more;
+  };
+
   box.style.justifyContent="flex-start";
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Address &amp; postcode</div>
     <div style="font-size:12px;color:var(--sub);margin-top:3px;line-height:1.45">What this scan should show. The fix is still stored against the scanned postcode <b>${pcFmt}</b>, so it still catches the next label.</div>
+    ${note?`<div style="margin-top:10px;padding:10px 12px;background:#e8f5e9;border:1px solid #2e7d32;border-radius:10px;font-size:12px;color:#1b5e20;line-height:1.5">${escHtml(note)}</div>`:""}
+    ${showLabel?`<button id="handEditLabel" style="display:block;width:100%;text-align:left;margin-top:12px;padding:12px 14px;background:var(--sur);border:none;border-left:6px solid var(--pri);border-radius:12px;box-shadow:var(--shad);cursor:pointer">
+      <div style="font-size:12px;font-weight:800;color:var(--pri)">🏷️ Use the address on the label</div>
+      <div style="font-size:13px;font-weight:700;color:var(--txt);margin-top:3px;line-height:1.35;word-break:break-word">${escHtml(labelAddr)}</div>
+    </button>`:""}
     <div style="font-size:11px;font-weight:800;color:var(--sub);margin-top:12px;letter-spacing:.06em;text-transform:uppercase">Address</div>
     <input id="handEditAddr" value="${escHtml(curAddr)}" placeholder="e.g. Flat 5, 12 Praed Street" autocomplete="off" autocapitalize="words" spellcheck="false" style="width:100%;margin-top:5px;padding:11px 13px;font-size:15px;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt)">
     <div style="font-size:11px;font-weight:800;color:var(--sub);margin-top:12px;letter-spacing:.06em;text-transform:uppercase">Postcode</div>
     <input id="handEditPc" value="${escHtml(curPc)}" placeholder="${pcFmt}" autocomplete="off" autocapitalize="characters" spellcheck="false" style="width:100%;margin-top:5px;padding:11px 13px;font-size:15px;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt)">
+    <div id="handEditWalkNote"></div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button id="handEditSave" style="flex:1;padding:12px;background:var(--pri);border:none;border-radius:12px;font-size:13px;font-weight:800;color:#fff;cursor:pointer">Use this</button>
       <button id="handEditClear" style="flex:1;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Reset</button>
     </div>
-    <div style="font-size:11px;font-weight:800;color:var(--sub);margin-top:16px;letter-spacing:.06em;text-transform:uppercase">Or pick a known address in ${pcFmt} <span style="font-weight:400">· ${known.length}</span></div>
-    <input id="handKnownFilter" placeholder="Filter addresses…" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;margin-top:6px;padding:10px 12px;font-size:14px;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt)">
-    <div id="handKnownList">${renderKnown("")}</div>
+    <button id="handEditAdd" style="margin-top:8px;width:100%;text-align:left;padding:12px 14px;background:transparent;border:1px dashed #2e7d32;border-radius:12px;cursor:pointer">
+      <div style="font-size:13px;font-weight:800;color:#2e7d32">➕ Add this as a new address</div>
+      <div style="font-size:11px;font-weight:600;color:var(--sub);margin-top:3px">For a door the round has never heard of. Saved on this device and found by future scans.</div>
+    </button>
+    <div style="font-size:11px;font-weight:800;color:var(--sub);margin-top:18px;letter-spacing:.06em;text-transform:uppercase">Or pick a real address</div>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      ${chip("handSrcPc",pcFmt+" ("+known.length+")",handAddrSrc==="pc")}
+      ${street?chip("handSrcStreet",escHtml(street)+" ("+streetRows.length+")",handAddrSrc==="street"):""}
+      ${chip("handSrcAll","Whole round",handAddrSrc==="all")}
+    </div>
+    <input id="handKnownFilter" value="${escHtml(handAddrQuery)}" placeholder="${handAddrSrc==="all"?"Search every address…":"Filter addresses…"}" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;margin-top:8px;padding:10px 12px;font-size:14px;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt)">
+    <div id="handKnownList">${renderList(handAddrQuery)}</div>
     <button id="handEditBack" style="margin-top:14px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
   </div>`;
+
+  const addrIn=document.getElementById("handEditAddr");
+  const pcIn=document.getElementById("handEditPc");
   const list=document.getElementById("handKnownList");
+  const walkNote=document.getElementById("handEditWalkNote");
+
+  // Picking a real address fills both boxes. If that address is on a DIFFERENT
+  // walk — which is the usual case once you search outside the scanned postcode
+  // — say so and offer to switch, rather than quietly saving the old walk
+  // against the new address.
+  const offerWalk=(w,addr)=>{
+    if(!walkNote)return;
+    if(!w||w===walk){walkNote.innerHTML="";return;}
+    walkNote.innerHTML=`<div style="margin-top:10px;padding:10px 12px;background:#fff8e1;border:1px solid #f9a825;border-radius:10px">
+      <div style="font-size:12px;color:#8a5300;line-height:1.45">That address is on <b>${escHtml(w)}</b>, not ${escHtml(walk)}.</div>
+      <button id="handEditWalkSwap" style="margin-top:8px;width:100%;padding:10px;background:var(--pri);border:none;border-radius:10px;font-size:12.5px;font-weight:800;color:#fff;cursor:pointer">Use ${escHtml(w)} instead</button>
+    </div>`;
+    const sw=document.getElementById("handEditWalkSwap");
+    if(sw)sw.onclick=()=>{
+      handFixAddr=addr||(addrIn?addrIn.value.trim():"")||null;
+      let p=(pcIn?pcIn.value:"").trim().toUpperCase().replace(/\s+/g,"");
+      if(p.length>3)p=p.slice(0,-3)+" "+p.slice(-3);
+      handFixPc=(p&&p!==pcFmt)?p:null;
+      showHandAddrEdit(w);
+    };
+  };
   const bindKnown=()=>{list.querySelectorAll(".handKnownPick").forEach(b=>{
     b.onclick=()=>{
-      const a=document.getElementById("handEditAddr");
-      if(a)a.value=decodeURIComponent(b.dataset.a);
-      try{a.scrollIntoView({block:"center"});}catch(e){}
+      const rec=(typeof allData!=="undefined"&&allData)?allData.find(d=>d.d===decodeURIComponent(b.dataset.a)):null;
+      const a=decodeURIComponent(b.dataset.a);
+      if(addrIn)addrIn.value=a;
+      const rpc=rec?(getPostcode(rec.d)||""):"";
+      if(pcIn&&rpc)pcIn.value=rpc;
+      handFixAddr=a;
+      handFixPc=(rpc&&rpc.replace(/\s+/g,"").toUpperCase()!==handLastPc)?rpc:null;
+      offerWalk(rec&&rec.r,a);
+      try{addrIn.scrollIntoView({block:"center"});}catch(e){}
     };
   });};
   bindKnown();
+
+  const setSrc=(v)=>{handAddrSrc=v;showHandAddrEdit(walk);};
+  const cpc=document.getElementById("handSrcPc"); if(cpc)cpc.onclick=()=>setSrc("pc");
+  const cst=document.getElementById("handSrcStreet"); if(cst)cst.onclick=()=>setSrc("street");
+  const cal=document.getElementById("handSrcAll"); if(cal)cal.onclick=()=>setSrc("all");
+
   const filt=document.getElementById("handKnownFilter");
-  if(filt)filt.oninput=()=>{list.innerHTML=renderKnown(filt.value);bindKnown();};
+  if(filt){
+    let t=null;
+    filt.oninput=()=>{
+      handAddrQuery=filt.value;
+      clearTimeout(t);
+      // Searching the whole round touches every address, so wait for a pause in
+      // typing rather than scanning on every keystroke.
+      t=setTimeout(()=>{list.innerHTML=renderList(handAddrQuery);bindKnown();},handAddrSrc==="all"?160:0);
+    };
+  }
+
+  const lab=document.getElementById("handEditLabel");
+  if(lab)lab.onclick=()=>{
+    if(addrIn)addrIn.value=labelAddr;
+    handFixAddr=labelAddr;
+    if(walkNote)walkNote.innerHTML="";
+    try{addrIn.scrollIntoView({block:"center"});}catch(e){}
+  };
+
+  const readPc=()=>{
+    let p=(pcIn?pcIn.value:"").trim().toUpperCase().replace(/\s+/g,"");
+    if(p.length>3)p=p.slice(0,-3)+" "+p.slice(-3);
+    return p;
+  };
   const save=document.getElementById("handEditSave");
   if(save)save.onclick=()=>{
-    const a=(document.getElementById("handEditAddr").value||"").trim();
-    let p=(document.getElementById("handEditPc").value||"").trim().toUpperCase().replace(/\s+/g,"");
-    if(p.length>3)p=p.slice(0,-3)+" "+p.slice(-3);
+    const a=(addrIn?addrIn.value:"").trim();
+    const p=readPc();
     handFixAddr=a||null;
     handFixPc=(p&&p!==pcFmt)?p:null;
     showHandFixScope(walk);
   };
+  const add=document.getElementById("handEditAdd");
+  if(add)add.onclick=()=>{
+    const a=(addrIn?addrIn.value:"").trim();
+    const p=readPc()||pcFmt;
+    if(!a){handAddrNote="Type the address first, then add it.";showHandAddrEdit(walk);return;}
+    if(handKnowsAddress(a)){
+      handFixAddr=a;handFixPc=(p&&p!==pcFmt)?p:null;
+      handAddrNote="The round already has that address — it's ready to use.";
+      showHandAddrEdit(walk);return;
+    }
+    const saved=addUserAddress(a,p,streetFromTyped(a)||street||"",walk);
+    handFixAddr=saved;handFixPc=(p&&p!==pcFmt)?p:null;
+    handAddrNote="➕ Added to the round on this device: "+saved+" · "+walk;
+    showHandAddrEdit(walk);
+  };
   const clr=document.getElementById("handEditClear");
-  if(clr)clr.onclick=()=>{handFixAddr=null;handFixPc=null;showHandAddrEdit(walk);};
+  if(clr)clr.onclick=()=>{handFixAddr=null;handFixPc=null;handAddrQuery="";showHandAddrEdit(walk);};
   const back=document.getElementById("handEditBack");
   if(back)back.onclick=()=>showHandFixScope(walk);
 }
@@ -4221,11 +4512,24 @@ function showHandManage(){
   try{box.dataset.sub="manage";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   const m=userOverrides();
   const keys=Object.keys(m);
+  // Addresses added by hand are corrections too — same screen, same delete.
+  const addedList=userAddrList();
+  const addedHtml=addedList.length?`<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--div)">
+      <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Addresses I added (${addedList.length})</div>
+      ${addedList.slice().reverse().map(u=>`<div style="${OV_ROW_WRAP}">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--txt);line-height:1.35;word-break:break-word">${escHtml(u.d)}</div>
+          <div style="font-size:12px;color:var(--pri);font-weight:800;margin-top:2px">${escHtml(u.r||"—")}</div>
+        </div>
+        <button class="handAddrDel" data-a="${encodeURIComponent(u.d)}" style="padding:8px 12px;background:transparent;border:1px solid #e53935;border-radius:10px;font-size:12px;font-weight:800;color:#e53935;cursor:pointer">Delete</button>
+      </div>`).join("")}
+    </div>`:"";
   box.style.justifyContent="flex-start";
   if(!keys.length){
     box.innerHTML=`<div style="width:100%;text-align:left">
       <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">My corrections</div>
       <div style="font-size:13px;color:var(--sub);margin-top:10px">None saved yet. When a scan shows the wrong walk, tap “Wrong walk?” to fix it.</div>
+      ${addedHtml}
       <button id="handMgBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
     </div>`;
   }else{
@@ -4238,6 +4542,7 @@ function showHandManage(){
     box.innerHTML=`<div style="width:100%;text-align:left">
       <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">My corrections (${keys.length})</div>
       ${rows}
+      ${addedHtml}
       <button id="handMgExport" style="margin-top:14px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">📤 Back up / copy all corrections</button>
       <button id="handMgGit" style="margin-top:8px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">⬆ Upload corrections to GitHub</button>
       <button id="handMgBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
@@ -4250,6 +4555,9 @@ function showHandManage(){
     const git=document.getElementById("handMgGit");
     if(git)git.onclick=()=>showGithubUpload();
   }
+  box.querySelectorAll(".handAddrDel").forEach(b=>{
+    b.onclick=()=>{deleteUserAddress(decodeURIComponent(b.dataset.a));showHandManage();};
+  });
   const back=document.getElementById("handMgBack");
   // Opened from the App version screen? Go back THERE, not to the scan.
   if(back)back.onclick=()=>{
@@ -4299,7 +4607,7 @@ function showAppVersion(){
     let note="";try{note=localStorage.getItem(LIVE_NOTE_KEY)||"";}catch(e){}
     const bits=[BUILD_NAME+" · running build <b>"+run+"</b>"+(run!==THIS_BUILD_NUM?" (downloaded)":" (built in)")];
     if(lc>run)bits.push("Build <b>"+lc+"</b> downloaded — restart to apply.");
-    if(ld>THIS_BUILD_NUM)bits.push("Addresses: downloaded set <b>"+ld+"</b> in use.");
+    if(ld>BAKED_DATA_BUILD)bits.push("Addresses: downloaded set <b>"+ld+"</b> in use.");
     if(note)bits.push('<span style="color:#8a5300">'+escHtml(note)+"</span>");
     info.innerHTML=bits.join("<br>");
     if(note){try{localStorage.removeItem(LIVE_NOTE_KEY);}catch(e){}}
@@ -4383,7 +4691,11 @@ function showHandRecent(){
 function overridesAsText(){
   const m=userOverrides();
   const keys=Object.keys(m);
-  if(!keys.length)return "No corrections saved.";
+  const added=userAddrList();
+  const addedBlock=added.length?"\n\nAddresses I added ("+added.length+")\n"+
+    "address  |  walk\n----------------------------------------------------------------\n"+
+    added.slice().reverse().map(u=>u.d+"  |  "+(u.r||"")).join("\n"):"";
+  if(!keys.length)return added.length?("Wild App — my corrections\n\nNo walk corrections saved."+addedBlock):"No corrections saved.";
   const lines=keys.sort((a,b)=>(m[b].when||0)-(m[a].when||0)).map(k=>{
     const r=m[k];
     const pcFmt=r.pc&&r.pc.length>3?r.pc.slice(0,-3)+" "+r.pc.slice(-3):(r.pc||"");
@@ -4397,7 +4709,7 @@ function overridesAsText(){
   return "Wild App — my walk corrections ("+keys.length+") — "+stamp+"\n"+
          "postcode  |  flat/number  |  correct walk  |  applies to  |  address\n"+
          "----------------------------------------------------------------\n"+
-         lines.join("\n");
+         lines.join("\n")+addedBlock;
 }
 function showExportOverrides(){
   const box=document.getElementById("handResult");
@@ -4596,14 +4908,45 @@ function recWordsOn(rec,rawSq){
 // than a confident wrong walk.
 function w2AddressOnLabel(raw,hn){
   if(typeof allData==="undefined"||!allData||!allData.length)return null;
-  let best=null;
-  try{best=findBestAddressMatch(raw);}catch(e){return null;}
-  if(!best||!best.record)return null;
   const rawSq=String(raw||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
-  const mine=recWordsOn(best.record,rawSq);
+  if(!rawSq)return null;
+  // The place-name gate below reads tokenStreetCount, which is built lazily.
+  // v1.57 got it for free because it called findBestAddressMatch first; now
+  // that we don't, build it here or EVERY word looks like a non-place name and
+  // the function silently returns null. (Idempotent — returns at once if built.)
+  try{buildTokenIndex();}catch(e){}
+  // v1.59 — FIND THE CANDIDATE THE SAME WAY WE JUDGE IT.
+  // v1.57 asked findBestAddressMatch for the candidate and then tested THAT
+  // record. On a real Zebra label the Mailmark header, the tracking number and
+  // the mailing house's own postcode swamp the TF-IDF score, so the top pick
+  // was junk ("The Cow, 89 Westbourne Park Road" for a label reading
+  // "35 CRAVEN TERRACE LANCASTER HALL HO") and the evidence test then failed
+  // on the wrong record — the screen said only "Not in W2". Sweep for the
+  // records showing the MOST distinctive words on the label instead: it is the
+  // same measure the gates below use, and about six times cheaper than the
+  // fuzzy matcher. The gates are unchanged, so nothing that used to be
+  // rejected becomes acceptable.
+  // Words are matched against a whitespace-squashed label (Mailmark injects
+  // stray spaces inside words), so one matched word can sit INSIDE another:
+  // "b Bourne House 13-15, Westbourne Grove" scores BOURNE *and* WESTBOURNE on
+  // a label that only says WESTBOURNE, and would outscore the address the
+  // label actually names. A word wholly contained in another matched word of
+  // the same record is not independent evidence — drop it before counting.
+  const evidence=rec=>{
+    const w=recWordsOn(rec,rawSq);
+    return w.filter(x=>!w.some(y=>y!==x&&y.indexOf(x)>=0));
+  };
+  let bestN=0,recs=[];
+  for(const d of allData){
+    const n=evidence(d).length;
+    if(n>bestN){bestN=n;recs=[d];}
+    else if(bestN&&n===bestN)recs.push(d);
+  }
+  if(!bestN||!recs.length)return null;
+  const best={record:recs[0]};
+  const mine=evidence(best.record);
   const hnUp=(hn||"").toString().toUpperCase();
-  const recNums=normRangeText(best.record.d).match(/\d+[A-Z]?(?:-\d+[A-Z]?)?/g)||[];
-  const numAgrees=!!hnUp&&recNums.indexOf(hnUp)>=0;
+  const numAgrees=!!hnUp&&recs.some(r=>((normRangeText(r.d).match(/\d+[A-Z]?(?:-\d+[A-Z]?)?/g)||[]).indexOf(hnUp)>=0));
   // TWO place names minimum. One is not enough: a Leeds "3 CHURCH STREET"
   // label matched W2's own Church Street on CHURCH + STREET + the number and
   // wrongly claimed 5 HALL PLACE. Common street names exist in every town, so
@@ -4611,11 +4954,10 @@ function w2AddressOnLabel(raw,hn){
   const places=mine.filter(tokenIsPlaceName);
   if(places.length<2)return null;
   if(!(mine.length>=3||numAgrees))return null;
-  // Anything else in the round the same words explain just as well: offer them
+  // Anything else in the round the same words explain just as well is already
+  // in `recs` (the sweep keeps every record tied at the top count): offer them
   // all rather than picking one. If the words fit lots of different walks the
   // evidence isn't discriminating — say nothing rather than guess.
-  const equals=allData.filter(d=>recWordsOn(d,rawSq).length>=mine.length);
-  const recs=equals.length?equals:[best.record];
   const walks=[...new Set(recs.map(r=>r.r).filter(Boolean))];
   if(!walks.length||walks.length>3)return null;
   return {record:best.record,records:recs,walks:walks};
@@ -4912,6 +5254,45 @@ function renderHandheld(raw,fromScanner){
       const fromPc=senderPostcodeOf(raw);
       const fromRecs=(fromPc&&(!w2Addr||fromPc!==pcNoSpace))?recordsAtPostcode(fromPc):[];
       const fromWalks=[...new Set(fromRecs.map(r=>r.r).filter(Boolean))];
+      // ── ONE CLEAR W2 ADDRESS → ANSWER WITH THE WALK (v1.59) ──────────
+      // Ash: "scanning the QR doesn't show walk 17 — it says postcode not in
+      // W2 but the address shows walk 17." When the label's address text names
+      // exactly ONE walk on the round, that IS the answer, so show it the way
+      // any other scan is shown — big walk, address, "Wrong walk?" — with a
+      // note underneath saying where it came from and why the label's postcode
+      // was ignored. Two or three possible walks still get the tappable list
+      // below, because then there's a real choice to make.
+      if(w2Addr&&w2Addr.walks.length===1){
+        const w2w=w2Addr.walks[0], w2rs=w2Addr.records||[];
+        const w2grp=([...new Set(w2rs.map(r=>r._bldg||r.s).filter(Boolean))][0])||(w2rs[0]&&w2rs[0].d)||"";
+        const w2addr=displayAddrText(w2rs.length===1?(w2rs[0].d||""):w2grp);
+        let fromCard="",fromBy={};
+        if(fromWalks.length){
+          groupByWalk(fromRecs,fromBy);
+          fromCard=handOptionCard("📮 Coming from · "+fmtPc(fromPc),"var(--pri)",
+            fromWalks,fromBy,"That's the return address on the label, not where it's going.");
+        }
+        if(fromScanner){
+          try{if(navigator.vibrate)navigator.vibrate([30,40,30]);}catch(e){}
+          outcomeTone("building");
+          logScan(raw,"Handheld — "+w2w+" · from the label's address ("+pcFmt+" not in W2)");
+        }
+        handLastWalk=w2w; handLastAddr=w2addr;
+        box.style.justifyContent="flex-start";
+        box.innerHTML=`
+          <div style="font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.12em;text-transform:uppercase">Walk</div>
+          <div id="handWalkBig">${escHtml(w2w)}</div>
+          <div style="font-size:16px;color:var(--txt);line-height:1.4;max-width:92%">${w2addr}</div>
+          <div style="margin-top:12px;padding:11px 14px;background:var(--chip);border:1px solid var(--pri);border-left:5px solid var(--pri);border-radius:12px;max-width:94%;text-align:left">
+            <div style="font-size:13px;font-weight:800;color:var(--pri2)">📍 Walk taken from the address on the label</div>
+            <div style="font-size:13px;color:var(--txt);margin-top:4px;line-height:1.5">The postcode on this label is <b>${pcFmt}</b>, which isn't on your round — it's usually the sender's or the mailing house's own. The address printed in the barcode is on your round, so the walk comes from that. If it looks wrong, use Fix it below.</div>
+          </div>
+          ${fromCard}${rawResultBlock(raw)}`;
+        if(fromCard)wireHandAltPicks(raw,fromBy);
+        wireHandFixButtons(raw);
+        if(fromScanner&&handSpeakEnabled)speakText(w2w);
+        return;
+      }
       let byWalk={},cards="";
       if(w2Addr&&w2Addr.walks.length){
         groupByWalk(w2Addr.records,byWalk);
@@ -5292,7 +5673,10 @@ function renderHandheld(raw,fromScanner){
       </div>`:"";
     // Alternatives (computed above) shown as tappable options under the result.
     const altBy=handAlt?groupByWalk(handAlt.records,{}):null;
-    const altCard=handAlt?handOptionCard(handAlt.title,"#f9a825",handAlt.walks,altBy,handAlt.note):"";
+    // v1.59: these option cards are BLUE (var(--pri)) like the main walk, not
+    // amber — Ash asked for the "also possible" walks to read the same way the
+    // walk above them does, so a possible walk doesn't look like a warning.
+    const altCard=handAlt?handOptionCard(handAlt.title,"var(--pri)",handAlt.walks,altBy,handAlt.note):"";
     box.innerHTML=`
       <div style="font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.12em;text-transform:uppercase">Walk</div>
       <div id="handWalkBig">${walk}</div>
@@ -8731,7 +9115,9 @@ document.addEventListener("visibilitychange",()=>{
   })();
 
   // ---- Idle sleep (v1.32). After 8 minutes with no interaction the screen
-  // goes to a near-black dim overlay to save the PDA battery on the round.
+  // goes COMPLETELY black to save the PDA battery on the round (v1.59: Ash
+  // asked for totally black — the cover used to be 98% opaque with a sleep face and a
+  // line of text, so the backlight still showed a grey glow and a message).
   // ANY touch, key, or a hardware-trigger scan wakes it instantly. Waking is
   // just dismissing the cover — the scan that woke it still gets handled, so a
   // trigger-pull both wakes the screen AND scans in one action. The camera
@@ -8745,12 +9131,10 @@ document.addEventListener("visibilitychange",()=>{
     c.style.cssText=[
       "position:fixed","inset:0","z-index:2147483000",
       "background:#000","opacity:0","transition:opacity .4s",
-      "display:flex","align-items:center","justify-content:center",
-      "flex-direction:column","color:#3a3a3a","font-family:inherit",
-      "text-align:center","pointer-events:none"
+      "display:block","pointer-events:none"
     ].join(";");
-    c.innerHTML='<div style="font-size:40px;opacity:.5">😴</div>'+
-      '<div style="font-size:15px;font-weight:700;margin-top:10px;opacity:.6">Asleep — tap or pull the trigger</div>';
+    // Nothing drawn on it at all: a fully black screen, no glow, no text.
+    c.innerHTML="";
     (document.body||document.documentElement).appendChild(c);
     idleCover=c; return c;
   }
@@ -8758,9 +9142,9 @@ document.addEventListener("visibilitychange",()=>{
     if(isAsleep)return;
     isAsleep=true;
     var c=buildIdleCover();
-    c.style.display="flex";
-    // rAF so the transition runs from opacity 0.
-    requestAnimationFrame(function(){ c.style.opacity="0.98"; });
+    c.style.display="block";
+    // rAF so the transition runs from opacity 0. Fully opaque (v1.59).
+    requestAnimationFrame(function(){ c.style.opacity="1"; });
   }
   function wakeUp(){
     if(!isAsleep){resetIdle();return false;}
@@ -8768,6 +9152,9 @@ document.addEventListener("visibilitychange",()=>{
     if(idleCover){
       idleCover.style.opacity="0";
       setTimeout(function(){ if(idleCover&&!isAsleep)idleCover.style.display="none"; },420);
+      // Belt and braces: if the fade is interrupted the cover must not be left
+      // black-and-visible over a live screen.
+      try{ idleCover.style.pointerEvents="none"; }catch(e){}
     }
     resetIdle();
     return true; // signals "this event only woke the screen"
