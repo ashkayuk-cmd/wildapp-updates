@@ -591,7 +591,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=63;
+const THIS_BUILD_NUM=66;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -600,7 +600,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.67";
+const BUILD_NAME="v1.70";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -616,13 +616,13 @@ const BUILD_NAME="v1.67";
 const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
-const REPO_DATA_BUILD=58;                 // build of the wild_data.json beside this file
+const REPO_DATA_BUILD=66;                 // build of the wild_data.json beside this file
 const REPO_APK_BUILD=62;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
-const REPO_DATA_HASH="8ddd7c56";
-const REPO_DATA_ROWS=24147;
+const REPO_DATA_HASH="cd7dc0cd";
+const REPO_DATA_ROWS=24146;
 const APK_BUILD_KEY="wildApkBuild_v1";    // versionCode of the APK on this device
 const REPO_APK_SEEN_KEY="wildRepoApk_v1"; // newest APK build seen in the repo
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
