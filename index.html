@@ -591,7 +591,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=66;
+const THIS_BUILD_NUM=67;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -600,7 +600,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.70";
+const BUILD_NAME="v1.71";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -616,13 +616,13 @@ const BUILD_NAME="v1.70";
 const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
-const REPO_DATA_BUILD=66;                 // build of the wild_data.json beside this file
+const REPO_DATA_BUILD=67;                 // build of the wild_data.json beside this file
 const REPO_APK_BUILD=62;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
-const REPO_DATA_HASH="cd7dc0cd";
-const REPO_DATA_ROWS=24146;
+const REPO_DATA_HASH="bdf6705e";
+const REPO_DATA_ROWS=24145;
 const APK_BUILD_KEY="wildApkBuild_v1";    // versionCode of the APK on this device
 const REPO_APK_SEEN_KEY="wildRepoApk_v1"; // newest APK build seen in the repo
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
@@ -5346,6 +5346,63 @@ function altWalksForNumber(raw,pcNoSpace,hn){
   if(!walks.length)return null;
   return {records:hits.filter(r=>walks.indexOf(r.r)>=0),walks:walks};
 }
+// ── BUILDING NAMED ON THE LABEL BEATS A WRONG POSTCODE (v1.71) ─────────────
+// findBestAddressMatch scores a record by how much of ITSELF the label
+// explains, so a short record the label happens to cover completely ("11,
+// Talbot Square, W2 1TR" — TALBOT, SQUARE, the postcode) scores 1.0 and beats
+// a long record the label names precisely but only partly ("Paddington Citi
+// View, Lillian Penson, 15-25, Talbot Square" — LILLIAN and PENSON aren't
+// printed). That is the right behaviour for ranking flats, and the wrong
+// behaviour for deciding whether the printed POSTCODE is wrong.
+//
+// So judge that question on evidence instead, the way w2AddressOnLabel does:
+// a word the round confines to a street or two, printed on the label, that
+// NOTHING at the scanned postcode can explain, pointing at records that agree
+// on one walk and one (different) postcode — and carrying the label's own
+// house number if it has one. On the real Lillian Penson label the deciding
+// word is CITI: one street in the whole round, absent from every W2 1TR
+// record, and the number 15-25 exists only where CITI does.
+//
+// Every guard here is a veto, and the fallback is the old behaviour (the
+// scanned postcode's walk, with this one offered underneath), so the cost of
+// being wrong is an "also possible" card rather than a wrong walk.
+function namedRecordOnLabel(raw,pcNoSpace,hn){
+  if(!pcNoSpace||typeof allData==="undefined"||!allData)return null;
+  buildTokenIndex();
+  if(!knownVocabulary||!tokenStreetCount)return null;
+  // Rare, real place-name words the label carries (tokenize has already
+  // repaired fused postcodes and split words, so CITI and TALBOT exist here).
+  const rare=[...new Set(tokenize(raw))].filter(t=>/^[A-Z]{4,}$/.test(t)
+    && knownVocabulary.has(t)
+    && (tokenStreetCount.get(t)||99)<=2);
+  if(!rare.length)return null;
+  // Only words the SCANNED postcode cannot account for are evidence against it.
+  const here=recordsAtPostcode(pcNoSpace);
+  if(!here.length)return null;
+  const hereText=here.map(r=>((r.d||"")+" "+(r.s||"")).toUpperCase());
+  const unique=rare.filter(w=>!hereText.some(t=>t.indexOf(w)>=0));
+  if(!unique.length)return null;
+  // Records carrying EVERY one of those words.
+  let hits=allData.filter(r=>{
+    const t=((r.d||"")+" "+(r.s||"")).toUpperCase();
+    return unique.every(w=>t.indexOf(w)>=0);
+  });
+  if(!hits.length)return null;
+  // A number on the label must be a number the record actually has, and it
+  // must not be a number the scanned postcode also has (then it decides
+  // nothing and the ordinary path is safer).
+  if(hn){
+    const esc=normRangeText(hn).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    const re=new RegExp("\\b"+esc+"\\b");
+    if(here.some(r=>re.test(normRangeText(r.d))))return null;
+    hits=hits.filter(r=>re.test(normRangeText(r.d)));
+    if(!hits.length)return null;
+  }
+  const walks=[...new Set(hits.map(r=>r.r).filter(Boolean))];
+  const pcs=[...new Set(hits.map(r=>getPostcode(r.d).toUpperCase().replace(/\s+/g,"")).filter(Boolean))];
+  if(walks.length!==1||pcs.length!==1||!pcs[0]||pcs[0]===pcNoSpace)return null;
+  return {record:hits[0],records:hits,walk:walks[0],pc:pcs[0],words:unique};
+}
 // v1.67: an "also possible" walk is the app telling you it is NOT sure — a
 // second walk the same label could belong to. Ash asked for those to read as
 // a warning, so they are red rather than the blue of the walk above them.
@@ -5692,17 +5749,25 @@ function renderHandheld(raw,fromScanner){
   // Some codes carry NO deliverable address at all — a bare 1D courier
   // tracking number like "YR581784168GB". These have no postcode and no
   // address text, so the fuzzy resolver below would otherwise "register" them
-  // to a random closest walk. Since v1.34 a live scan of one of these is
-  // REGISTERED and reported as "No postcode found" (buzz, tone and a history
-  // entry) instead of being silently swallowed, so a mis-aimed scan gives
-  // feedback rather than nothing — aim at the address code and scan again. Only the exact 2-letters/9-digits/2-letters shape is
-  // matched, so any real address payload passes straight through to the
-  // resolver below, even a bare building-name QR with no postcode.
+  // to a random closest walk. A live scan of one is IGNORED OUTRIGHT (v1.71):
+  // no sound, no buzz, no history entry and no change on screen, so the
+  // scanner just keeps hunting for the address code. Only the exact
+  // 2-letters/9-digits/2-letters shape is matched, so any real address payload
+  // passes straight through to the resolver below, even a bare building-name
+  // QR with no postcode. (v1.34-v1.70 announced these as "No postcode found";
+  // Ash asked for silence instead — on the round the tracking code is simply
+  // the wrong barcode on the same label, not a mis-aim worth reporting.)
   if(_isTrackingCode){
     if(fromScanner){
-      // Live scan of a bare tracking barcode: register it and say so, rather
-      // than silently swallowing it (v1.34) — a pure S10 code has no address.
-      renderNoPostcode(raw,true,true);
+      // v1.71 (Ash): a live scan of a bare tracking code must be a TRUE no-op
+      // — no buzz, no tone, no history entry, and NOTHING written to the
+      // screen. The scanner simply keeps looking for the address code, and
+      // whatever result is already on screen stays there and stays usable.
+      // Restore the snapshot taken at the top of this function, because the
+      // Back and "Wrong walk?" buttons read these at click time and would
+      // otherwise now be pointing at the tracking code.
+      handLastRaw=_prevHandRaw; handLastPc=_prevHandPc;
+      handLastHn=_prevHandHn;   handLastAddr=_prevHandAddr;
       return;
     }
     // Not a live scan — a history replay or typed lookup the user asked to see.
@@ -5867,13 +5932,26 @@ function renderHandheld(raw,fromScanner){
   // address for the walk and flag the mismatch, rather than resolving against
   // the scanned (wrong) postcode's unrelated addresses. Agreement → falls
   // through to the normal path with no warning.
-  let handPcMismatch=null;
+  let handPcMismatch=null,pcMismatchRec=null;
   if(pcNoSpace && /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pcNoSpace) && match && match.confidence>=0.8
      && addressBeatsPostcode(match,raw,pcNoSpace,hn)){
     const recPc=(getPostcode(match.record.d)||"").toUpperCase().replace(/\s+/g,"");
     if(recPc && recPc!==pcNoSpace){
       const f=p=>p.length>3?p.slice(0,-3)+" "+p.slice(-3):p;
       handPcMismatch={scanned:f(pcNoSpace),correct:f(recPc)};
+      pcMismatchRec=match.record;
+    }
+  }
+  // Second route to the same verdict (v1.71): the label NAMES a building the
+  // scanned postcode doesn't contain. See namedRecordOnLabel — this catches
+  // the case the confidence test above structurally cannot, because the
+  // best-scoring record is a short one sitting at the wrong postcode.
+  if(!handPcMismatch && pcNoSpace && /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pcNoSpace)){
+    const named=namedRecordOnLabel(raw,pcNoSpace,hn);
+    if(named){
+      const f=p=>p.length>3?p.slice(0,-3)+" "+p.slice(-3):p;
+      handPcMismatch={scanned:f(pcNoSpace),correct:f(named.pc)};
+      pcMismatchRec=named.record;
     }
   }
 
@@ -5889,7 +5967,7 @@ function renderHandheld(raw,fromScanner){
   let handAlt=null;
   if(handPcMismatch){
     const pcRecs=recordsAtPostcode(pcNoSpace);
-    const otherWalks=[...new Set(pcRecs.map(r=>r.r).filter(w=>w&&w!==match.record.r))];
+    const otherWalks=[...new Set(pcRecs.map(r=>r.r).filter(w=>w&&w!==pcMismatchRec.r))];
     if(otherWalks.length)handAlt={
       title:"⚠ Or, by the label's postcode · "+fmtPc(pcNoSpace),
       note:"The label's postcode and its address point at different walks. Tap one to use it instead.",
@@ -5907,9 +5985,9 @@ function renderHandheld(raw,fromScanner){
   // On a confirmed postcode/address mismatch, resolve from the ADDRESS record,
   // not the scanned postcode's candidate list.
   if(handPcMismatch){
-    records=allData.filter(d=>d.d===match.record.d);
-    if(!records.length)records=[match.record];
-    exact=match.record;
+    records=allData.filter(d=>d.d===pcMismatchRec.d);
+    if(!records.length)records=[pcMismatchRec];
+    exact=pcMismatchRec;
   } else if(pcNoSpace){
     const cands=allData.filter(d=>getPostcode(d.d).toUpperCase().replace(/\s+/g,"")===pcNoSpace);
     if(cands.length){
@@ -8259,6 +8337,90 @@ function normRangeText(s){
     .replace(/(\d[A-Z]?)\s*[\/&]\s*(\d)/g,"$1-$2")
     .replace(/(\d[A-Z]?)\s*-\s*(\d)/g,"$1-$2");
 }
+// ── SCAN-TEXT REPAIR (v1.71) ────────────────────────────────────────────
+// Zebra/Mailmark payloads damage words in two specific, repeatable ways, and
+// both of them destroy exactly the words that identify a building:
+//
+//   (a) the postcode is JAMMED onto the end of the word before it, with no
+//       separator — "…PADDINGTON CITIW21TR" — so "CITI" (a word that appears
+//       on ONE street in the whole round) tokenises as the junk word "CITIW";
+//   (b) a stray space is injected INSIDE a word — "15 25 TA LBOT SQUARE" —
+//       so "TALBOT" never exists as a token at all, only "LBOT".
+//
+// extractPostcodeToken already survives (a) via findFusedPostcode, so the
+// POSTCODE was always read correctly; what was lost was the address text, and
+// with it any chance of the address out-voting a wrong printed postcode. A
+// real label for Lillian Penson Hall (15-25 Talbot Square, W2 1TT) printed
+// with W2 1TR resolved to 14 SUSSEX GARDENS because the only two words that
+// prove otherwise — CITI and TALBOT — were both mangled.
+//
+// Both repairs are validated against data the round actually holds (the known
+// postcode set, the token vocabulary), so neither can invent a word.
+let __scanRepairOff=false;
+function defuseFusedPostcode(up){
+  // Insert the missing space in front of a postcode that is glued to the end
+  // of the preceding word. The candidate is only cut when the tail is a
+  // postcode the dataset REALLY contains and a letter sits immediately before
+  // it, so ordinary codes ("GVS58691743GB", "TW140XD") are left alone.
+  let known=null;
+  try{known=knownPostcodeSet();}catch(e){}
+  if(!known||!known.size)return up;
+  const cuts=[];
+  const re=/\d[A-Z]{2}/g;
+  let m;
+  while((m=re.exec(up))){
+    const end=m.index+3;
+    for(let ow=4;ow>=2;ow--){          // outward code is 2-4 chars
+      const st=m.index-ow;
+      if(st<1)continue;
+      if(!known.has(up.slice(st,end)))continue;
+      if(/[A-Z]/.test(up.charAt(st-1)))cuts.push(st);
+      break;
+    }
+  }
+  if(!cuts.length)return up;
+  let out="",prev=0;
+  cuts.forEach(c=>{out+=up.slice(prev,c)+" ";prev=c;});
+  return out+up.slice(prev);
+}
+function rejoinSplitWords(up){
+  // Rejoin words a stray space has broken in half. Only ADJACENT runs of
+  // letters separated by spaces alone are considered, the join must be a word
+  // the round actually uses, and at least one piece must be junk on its own
+  // (under 3 letters, or absent from the vocabulary) — so two genuine
+  // neighbours like "HALL PLACE" can never be welded together.
+  const res={add:[],drop:new Set()};
+  buildTokenIndex();
+  if(!knownVocabulary||!knownVocabulary.size)return res;
+  const parts=up.split(/([^A-Z]+)/);
+  // parts alternates word, separator, word, … — collect runs of words whose
+  // separators are pure spaces.
+  let group=[];
+  const flush=()=>{
+    for(let i=0;i<group.length;i++){
+      // Longest join first: "BISHO P S BRIDGE" must become BISHOPS, not stop
+      // at the shorter BISHOP.
+      for(let n=Math.min(4,group.length-i);n>=2;n--){
+        const seg=group.slice(i,i+n);
+        const joined=seg.join("");
+        if(joined.length<4||joined.length>24)continue;
+        if(!knownVocabulary.has(joined))continue;
+        const broken=seg.some(w=>w.length<3||!knownVocabulary.has(w));
+        if(!broken)continue;
+        res.add.push(joined);
+        seg.forEach(w=>{if(w.length>=3&&!knownVocabulary.has(w))res.drop.add(w);});
+        i+=n-1;break;
+      }
+    }
+    group=[];
+  };
+  for(let i=0;i<parts.length;i++){
+    if(i%2===0){ if(parts[i])group.push(parts[i]); }
+    else if(!/^ {1,3}$/.test(parts[i])) flush();
+  }
+  flush();
+  return res;
+}
 function tokenize(str){
   // Pull out alpha "words" of 3+ letters — building names, street names,
   // estate names all show up as tokens here, unlike the old street-only
@@ -8266,8 +8428,18 @@ function tokenize(str){
   // "FLAT" is excluded outright: it's in ~51% of all records, carries no
   // real identifying signal, and should never be used as evidence toward
   // a match — especially a "closest guess" when there's no exact match.
-  const words=(str||"").toUpperCase().match(/[A-Z]{3,}/g)||[];
-  const filtered=words.filter(w=>!TOKEN_STOPWORDS.has(w));
+  let src=(str||"").toUpperCase();
+  // Repair scan damage before tokenising (see above). Skipped while the token
+  // index is being built — the repairs read the vocabulary that pass creates,
+  // and record text is clean anyway, so both are no-ops there.
+  let joins={add:[],drop:new Set()};
+  if(!__scanRepairOff){
+    src=defuseFusedPostcode(src);
+    joins=rejoinSplitWords(src);
+  }
+  const words=src.match(/[A-Z]{3,}/g)||[];
+  const filtered=words.filter(w=>!TOKEN_STOPWORDS.has(w)&&!joins.drop.has(w));
+  joins.add.forEach(w=>{if(!TOKEN_STOPWORDS.has(w))filtered.push(w);});
   // Also fold in the postcode as its own token, so barcodes with no street
   // text at all still have something to match on. It flows through the
   // exact same rarity-weighting machinery as any other token — a postcode
@@ -8282,6 +8454,7 @@ function tokenize(str){
 let tokenStreetCount=null,totalStreetCount=0,knownVocabulary=null;
 function buildTokenIndex(){
   if(tokenStreetCount)return;
+  __scanRepairOff=true;
   tokenStreetCount=new Map();
   const streetsPerToken=new Map();
   const allStreets=new Set();
@@ -8296,6 +8469,7 @@ function buildTokenIndex(){
   });
   totalStreetCount=allStreets.size||1;
   streetsPerToken.forEach((set,t)=>tokenStreetCount.set(t,set.size));
+  __scanRepairOff=false;
 }
 function tokenWeight(token){
   // A word confined to a single street (a building/estate name like
@@ -8572,6 +8746,10 @@ function handleQRResult(raw,fromCamera,typed){
   // postcode — so it is NOT ignored; nor is an ambiguous shared-name payload
   // (it deserves the pick-list).
   if(fromCamera && !typed){
+    // Exact UPU S10 shape (two letters, nine digits, two letters) — an item
+    // tracking number, never a delivery point. Checked outright (v1.71) so it
+    // is ignored even if the fuzzy matcher would have found something in it.
+    if(typeof raw==="string" && /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/i.test(raw.replace(/\s+/g,"")))return;
     const _pcTok=extractPostcodeToken(raw);
     if(!_pcTok){
       const _m=findBestAddressMatch(raw);
