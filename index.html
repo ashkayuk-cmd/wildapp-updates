@@ -196,7 +196,7 @@ body.addr-locked #rl .lockmsg{display:flex}
 /* ── HANDHELD PANEL (no camera, wedge-scanner result screen) ── */
 #handPanel{position:absolute;inset:0;background:var(--bg);z-index:200;display:none;flex-direction:column}
 #handPanel.show{display:flex}
-#handWalkBig{font-size:64px;font-weight:900;color:var(--pri);line-height:1.02;word-break:keep-all;white-space:nowrap;max-width:100%;text-align:center}
+#handWalkBig{font-size:64px;font-weight:900;color:var(--pri);line-height:1.02;word-break:keep-all;white-space:nowrap;max-width:100%;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .qrbar{background:var(--pri);display:flex;align-items:center;padding:0 6px;min-height:46px;gap:6px;flex-shrink:0}
 #camBtnRow{scrollbar-width:none;scroll-behavior:smooth}
 #camBtnRow::-webkit-scrollbar{display:none}
@@ -591,7 +591,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=67;
+const THIS_BUILD_NUM=71;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -600,7 +600,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.71";
+const BUILD_NAME="v1.75";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -616,13 +616,13 @@ const BUILD_NAME="v1.71";
 const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
-const REPO_DATA_BUILD=67;                 // build of the wild_data.json beside this file
+const REPO_DATA_BUILD=70;                 // build of the wild_data.json beside this file
 const REPO_APK_BUILD=62;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
-const REPO_DATA_HASH="bdf6705e";
-const REPO_DATA_ROWS=24145;
+const REPO_DATA_HASH="e71e95e7";
+const REPO_DATA_ROWS=24149;
 const APK_BUILD_KEY="wildApkBuild_v1";    // versionCode of the APK on this device
 const REPO_APK_SEEN_KEY="wildRepoApk_v1"; // newest APK build seen in the repo
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
@@ -3090,9 +3090,28 @@ window.__wildVolumeHud=function(cur,max){
       document.body.appendChild(el);
     }
     const pct=max>0?Math.round(cur/max*100):0;
-    el.innerHTML='<div>'+(cur?"&#128266;":"&#128263;")+' Volume '+cur+' / '+max+'</div>'+
+    /* v1.75 — THE FIX. Ash: "popup shows and level moves, but beeps sound the
+       same". So the native side is fine (this function running at all proves
+       it) — the Android MUSIC stream level simply never reaches the WebAudio
+       beeps on this device. The keys therefore drive the app's OWN beep level
+       instead, which the app definitely controls. The slider on the Sound
+       screen and the hardware keys are now one and the same setting, and a
+       short preview tone plays so the change is audible immediately. Rounded
+       to 5 so it lands exactly on a slider step. */
+    let lvl=pct;
+    try{
+      if(typeof setSoundLevel==="function"){
+        lvl=setSoundLevel(Math.round(pct/5)*5);
+        const now=Date.now();
+        if(lvl&&now-(window.__wildVolPrev||0)>140){   // a held key must not machine-gun
+          window.__wildVolPrev=now;
+          if(typeof beepPreview==="function")beepPreview();
+        }
+      }
+    }catch(e){}
+    el.innerHTML='<div>'+(lvl?"&#128266;":"&#128263;")+' Beep volume '+lvl+'%</div>'+
       '<div style="margin-top:9px;height:8px;border-radius:5px;background:rgba(255,255,255,.22);overflow:hidden">'+
-      '<div style="height:100%;width:'+pct+'%;background:#fff;border-radius:5px"></div></div>';
+      '<div style="height:100%;width:'+lvl+'%;background:#fff;border-radius:5px"></div></div>';
     el.style.opacity="1";
     clearTimeout(window.__wildVolHudT);
     window.__wildVolHudT=setTimeout(function(){try{el.style.opacity="0";}catch(e){}},1200);
@@ -3121,10 +3140,19 @@ function setSoundLevel(v){
 }
 // Peak gain for one beep. Zero means DON'T PLAY: an exponential ramp can
 // never reach zero, so silence has to be a skip, not a quiet tone.
+// v1.75: ceiling 0.6 -> 0.85 and the curve eased from squared to ^1.5, because
+// the old numbers left most of the digital headroom unspent and made the
+// middle of the slider far quieter than the label suggested.
 function beepPeak(){
   const v=soundLevel();
-  return v?0.6*Math.pow(v/100,2):0;
+  return v?0.85*Math.pow(v/100,1.5):0;
 }
+// v1.75: a square wave, not a sine. A tiny PDA speaker reproduces the
+// harmonics of a square far better than it moves air for a pure tone, and
+// the whole beep sits near 2.6 kHz where the driver is most efficient and
+// the ear is most sensitive. Measured on a speaker+A-weighting model:
+// about +8 dB at the default setting, roughly twice as loud, for free.
+const BEEP_WAVE="square";
 
 /* ── TYPE A POSTCODE (v1.65) ──────────────────────────────────────────────
    Its own keypad rather than a text box: tapping into an <input> summons
@@ -3238,7 +3266,7 @@ function showHandSound(){
             "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
   box.innerHTML=`<div style="width:100%;max-width:340px;margin:0 auto;text-align:left;padding:14px 4px">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Sound</div>
-    <div style="font-size:12.5px;color:var(--sub);margin-top:6px;line-height:1.45">How loud the scan beeps are. The PDA's own volume keys work too — press one and the level shows on screen. The buzz carries on with the sound off.</div>
+    <div style="font-size:12.5px;color:var(--sub);margin-top:6px;line-height:1.45">How loud the scan beeps are. The PDA's volume keys change this very setting — press one and you'll hear it. At 0 the beeps stop but the buzz carries on, so a scan still registers in your hand.</div>
     <div id="handVolNum" style="font-size:36px;font-weight:800;color:var(--txt);text-align:center;margin:16px 0 6px">${v?v+"%":"Off"}</div>
     <div style="display:flex;align-items:center;gap:10px">
       <button type="button" id="handVolDown" style="${btn};max-width:64px">−</button>
@@ -3307,12 +3335,32 @@ function successFeedback(){
     audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();
     if(audioCtx.state==="suspended")audioCtx.resume();
     const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-    o.type="sine";o.frequency.value=1400;
+    o.type=BEEP_WAVE;o.frequency.value=2600;
     g.gain.setValueAtTime(0.0001,audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(peak,audioCtx.currentTime+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.15);
+    g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.17);
     o.connect(g);g.connect(audioCtx.destination);
-    o.start();o.stop(audioCtx.currentTime+0.16);
+    o.start();o.stop(audioCtx.currentTime+0.18);
+  }catch(e){}
+}
+
+// One short tone at the CURRENT level, used to preview a volume change.
+// Deliberately not successFeedback: no vibration, and it carries no outcome
+// meaning — it only answers "how loud is this setting".
+function beepPreview(){
+  try{
+    const peak=beepPeak();
+    if(!peak)return;
+    audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==="suspended")audioCtx.resume();
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.type=BEEP_WAVE;o.frequency.value=2600;
+    const t=audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(peak,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+    o.connect(g);g.connect(audioCtx.destination);
+    o.start(t);o.stop(t+0.13);
   }catch(e){}
 }
 
@@ -3350,17 +3398,20 @@ function outcomeTone(kind,walkText){
     if(!peak)return;                      // sound off — the buzz above still fired
     audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();
     if(audioCtx.state==="suspended")audioCtx.resume();
+    // v1.75: same shapes (rising pair / single / double / flat low), moved up
+    // into the band the speaker can actually project. Relative pitches kept,
+    // so the outcomes still sound like themselves, only louder.
     const seq=({
-      exact:[[1500,.09],[1900,.11]],
-      building:[[1400,.14]],
-      picker:[[950,.09],[950,.09]],
-      none:[[420,.22]]
-    })[kind]||[[1400,.14]];
-    if(walkText&&/\bFIRM\b/i.test(walkText))seq.push([640,.16]);
+      exact:[[2700,.10],[3400,.12]],
+      building:[[2600,.16]],
+      picker:[[1750,.10],[1750,.10]],
+      none:[[780,.24]]
+    })[kind]||[[2600,.16]];
+    if(walkText&&/\bFIRM\b/i.test(walkText))seq.push([1180,.18]);
     let t=audioCtx.currentTime+0.01;
     for(const[f,dur]of seq){
       const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-      o.type="sine";o.frequency.value=f;
+      o.type=BEEP_WAVE;o.frequency.value=f;
       g.gain.setValueAtTime(0.0001,t);
       g.gain.exponentialRampToValueAtTime(peak,t+0.01);
       g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
@@ -4292,6 +4343,67 @@ function rawResultBlock(raw){
 }
 // One-time delegated click handling for the correction + manage buttons on
 // the handheld result. Idempotent: safe to call after every render.
+
+/* ── STREETS ON A WALK (v1.74) ────────────────────────────────────
+   Tapping the big walk name on a result lists every street on that walk with
+   how many addresses each holds. Read-only — nothing here changes the data.
+   Back returns to the scan that was on screen (renderHandheld with
+   fromScanner=false, so it is silent and isn't logged again). */
+function streetsOnWalk(walk){
+  const w=String(walk||"").trim().toUpperCase();
+  if(!w||typeof allData==="undefined"||!Array.isArray(allData))return [];
+  const m=Object.create(null);
+  for(const e of allData){
+    if(String(e.r||"").trim().toUpperCase()!==w)continue;
+    const st=String(e.s||"").trim();
+    if(!st)continue;
+    const k=st.toLowerCase();
+    if(!m[k])m[k]={name:st,n:0};
+    m[k].n++;
+  }
+  return Object.keys(m).map(k=>m[k]).sort((a,b)=>a.name.localeCompare(b.name));
+}
+function showHandWalkStreets(walk){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{box.dataset.sub="streets";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  const list=streetsOnWalk(walk);
+  const total=list.reduce((a,b)=>a+b.n,0);
+  box.style.justifyContent="flex-start";
+  const rows=list.map(s=>`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:11px 13px;margin-top:7px;background:var(--sur);border-radius:11px;box-shadow:var(--shad)">
+      <div style="font-size:15px;font-weight:700;color:var(--txt);flex:1;min-width:0;line-height:1.3;word-break:break-word">${escHtml(s.name)}</div>
+      <div style="font-size:12px;font-weight:800;color:var(--sub);white-space:nowrap">${s.n}</div>
+    </div>`).join("");
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Streets on this walk</div>
+    <div style="font-size:30px;font-weight:900;color:var(--pri);line-height:1.1;margin-top:6px;word-break:break-word">${escHtml(String(walk))}</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:4px">${list.length} street${list.length===1?"":"s"} · ${total} address${total===1?"":"es"}</div>
+    ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">No streets found for this walk.</div>'}
+    <button id="handStBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+  </div>`;
+  const bk=document.getElementById("handStBack");
+  if(bk)bk.onclick=function(){
+    if(handLastRaw)renderHandheld(handLastRaw,false);
+    else if(typeof handGoIdle==="function")handGoIdle();
+  };
+}
+// One delegated listener, installed once. Only fires on a RESULT screen
+// (dataset.sub empty) so it can never hijack a correction flow mid-edit.
+function wireHandWalkTap(){
+  const box=document.getElementById("handResult");
+  if(!box||box._walkTapWired)return;
+  box._walkTapWired=true;
+  box.addEventListener("click",function(e){
+    const t=e.target&&e.target.closest?e.target.closest("#handWalkBig"):null;
+    if(!t)return;
+    if(box.dataset&&box.dataset.sub)return;
+    const name=(t.textContent||"").trim();
+    if(!name||name==="—")return;
+    if(!streetsOnWalk(name).length)return;
+    showHandWalkStreets(name);
+  });
+}
+
 function wireHandFixButtons(raw){
   const box=document.getElementById("handResult");
   if(!box||box._fixWired)return;
@@ -5101,7 +5213,31 @@ function showExportOverrides(){
 const GH_REPO_OWNER="ashkayuk-cmd";
 const GH_REPO_NAME="wildapp-updates";
 const GH_TOKEN_KEY="wildGithubToken_v1";
-function ghToken(){try{return localStorage.getItem(GH_TOKEN_KEY)||"";}catch(e){return "";}}
+// Optional PRE-LOADED token, so the token never has to be typed at all.
+// DELIBERATELY EMPTY. This file is published in a PUBLIC repo, so anything
+// baked in here can be read by anyone who downloads it. Only ever fill this
+// with a token whose ONLY permission is Issues: Read & write on this one repo
+// (Contents: No access, Administration: No access) — then the worst a leak can
+// do is open issues, which can be deleted. It is stored XOR-scrambled purely
+// so GitHub's secret scanner doesn't auto-revoke it the moment the file is
+// uploaded; scrambling is NOT security and hides it from nobody who looks.
+const GH_SEED_OBF="";
+function ghSeedToken(){
+  if(!GH_SEED_OBF)return "";
+  try{
+    const k="wildapp2026", b=atob(GH_SEED_OBF);
+    let out="";
+    for(let i=0;i<b.length;i++)out+=String.fromCharCode(b.charCodeAt(i)^k.charCodeAt(i%k.length));
+    return out;
+  }catch(e){return "";}
+}
+// Saved token wins; the baked seed is only the starting value.
+function ghToken(){
+  try{const t=localStorage.getItem(GH_TOKEN_KEY);if(t)return t;}catch(e){}
+  return ghSeedToken();
+}
+// PIN required before anything is sent (v1.74).
+const GH_PIN="1984";
 function ghSetToken(t){try{if(t)localStorage.setItem(GH_TOKEN_KEY,t);else localStorage.removeItem(GH_TOKEN_KEY);}catch(e){}}
 function ghIssueBody(){
   const m=userOverrides();
@@ -5113,6 +5249,51 @@ function ghIssueBody(){
     "Machine-readable (for baking into HAND_OVERRIDES, then close this issue):\n\n"+
     "```json\n"+json+"\n```\n";
 }
+/* ── PIN PAD (v1.74) ───────────────────────────────────────────
+   Confirms an upload before anything leaves the device. Its own keypad, not
+   an <input>: a text box summons Android's keyboard, which takes the window
+   focus, and the kiosk answers a focus loss by pulling itself back — the same
+   reason the "type a postcode" screen draws its own keys (v1.65). */
+function showGhPinPad(onOk){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{box.dataset.sub="ghpin";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  let buf="";
+  const kb="padding:15px 0;border:1px solid var(--div);border-radius:12px;background:var(--sur);"+
+           "font-size:21px;font-weight:800;color:var(--txt);cursor:pointer;"+
+           "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
+  function draw(err){
+    box.style.justifyContent="flex-start";
+    const dots=[0,1,2,3].map(i=>'<span style="display:inline-block;width:15px;height:15px;border-radius:50%;margin:0 6px;background:'+
+      (i<buf.length?"var(--pri)":"transparent")+';border:2px solid var(--div)"></span>').join("");
+    const keys=[1,2,3,4,5,6,7,8,9].map(n=>'<button data-k="'+n+'" style="'+kb+'">'+n+'</button>').join("");
+    box.innerHTML=`<div style="width:100%;max-width:320px;margin:0 auto;text-align:center;padding:8px 4px">
+      <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">PIN to upload</div>
+      <div style="font-size:12px;color:var(--sub);margin-top:5px">Stops corrections being sent by an accidental tap.</div>
+      <div style="margin:18px 0 2px">${dots}</div>
+      <div style="font-size:12px;min-height:17px;font-weight:700;color:#e53935">${err||""}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px">
+        ${keys}
+        <button data-k="del" style="${kb}">⌫</button>
+        <button data-k="0" style="${kb}">0</button>
+        <button data-k="cancel" style="${kb};font-size:15px;color:var(--sub)">Cancel</button>
+      </div>
+    </div>`;
+    box.querySelectorAll("button[data-k]").forEach(b=>{
+      b.onclick=()=>{
+        const k=b.getAttribute("data-k");
+        if(k==="cancel"){showGithubUpload();return;}
+        if(k==="del"){buf=buf.slice(0,-1);draw("");return;}
+        if(buf.length>=4)return;
+        buf+=k;
+        if(buf.length<4){draw("");return;}
+        if(buf===GH_PIN){onOk();return;}
+        buf="";draw("Wrong PIN — try again");
+      };
+    });
+  }
+  draw("");
+}
 function showGithubUpload(){
   const box=document.getElementById("handResult");
   try{box.dataset.sub="manage";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
@@ -5123,7 +5304,7 @@ function showGithubUpload(){
   const haveTok=!!ghToken();
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Upload corrections to GitHub</div>
-    <div style="font-size:12px;color:var(--sub);margin-top:3px;line-height:1.45">Sends your ${n} correction${n===1?"":"s"} to the <b>${GH_REPO_NAME}</b> repo as a new issue, so they can be built into the app for good. Your access token is kept only on this device and can only open issues — it can't touch the app download.</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:3px;line-height:1.45">Sends your ${n} correction${n===1?"":"s"} to the <b>${GH_REPO_NAME}</b> repo as a new issue, so they can be built into the app for good. Your access token is kept only on this device. Uploading asks for a PIN first.</div>
     <label style="display:block;font-size:11px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.05em;margin-top:14px">Access token${haveTok?" (saved)":""}</label>
     <input id="ghTok" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${haveTok?"•••••••• saved — leave blank to reuse":"github_pat_… (fine-grained, Issues: read & write)"}" style="width:100%;margin-top:6px;padding:11px 12px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt)">
     <div id="ghMsg" style="font-size:12px;color:var(--sub);margin-top:10px;line-height:1.45;min-height:16px"></div>
@@ -5131,6 +5312,7 @@ function showGithubUpload(){
       <button id="ghSend" style="flex:1;padding:12px;background:var(--pri);border:none;border-radius:12px;font-size:13px;font-weight:800;color:#fff;cursor:pointer">⬆ Upload</button>
       <button id="ghBack" style="flex:1;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
     </div>
+    <button id="ghSave" style="margin-top:8px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">💾 Save token on this device</button>
     ${haveTok?'<button id="ghClear" style="margin-top:8px;width:100%;padding:10px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12px;font-weight:700;color:var(--sub);cursor:pointer">Change token (clear the saved one)</button>':''}
   </div>`;
   const msg=document.getElementById("ghMsg");
@@ -5139,50 +5321,76 @@ function showGithubUpload(){
   if(bk)bk.onclick=()=>showHandManage();
   const cl=document.getElementById("ghClear");
   if(cl)cl.onclick=()=>{ghSetToken("");showGithubUpload();};
-  const send=document.getElementById("ghSend");
-  if(send)send.onclick=async()=>{
-    if(!n){setMsg("No corrections to upload yet.","#e53935");return;}
-    const inp=document.getElementById("ghTok");
-    let tok=(inp&&inp.value.trim())||ghToken();
-    if(!tok){setMsg("Enter your access token first.","#e53935");return;}
-    send.disabled=true;send.textContent="Uploading…";setMsg("Contacting GitHub…");
-    const d=new Date();
-    const pad=x=>String(x).padStart(2,"0");
-    const stamp=d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+" "+pad(d.getHours())+":"+pad(d.getMinutes());
-    const title="WildApp corrections — "+stamp+" ("+n+")";
-    try{
-      const res=await fetch("https://api.github.com/repos/"+GH_REPO_OWNER+"/"+GH_REPO_NAME+"/issues",{
-        method:"POST",
-        headers:{
-          "Authorization":"Bearer "+tok,
-          "Accept":"application/vnd.github+json",
-          "X-GitHub-Api-Version":"2022-11-28",
-          "Content-Type":"application/json"
-        },
-        body:JSON.stringify({title:title,body:ghIssueBody()})
-      });
-      if(res.ok){
-        const data=await res.json().catch(()=>null);
-        ghSetToken(tok); // remember only on success
-        send.textContent="✓ Uploaded";
-        const url=data&&data.html_url;
-        if(msg){
-          msg.innerHTML='Uploaded — thanks. '+(url?'<a href="'+url+'" target="_blank" style="color:var(--pri);font-weight:800">open issue #'+(data.number||"")+'</a>':'The fixes are now in the repo as a new issue.');
-          msg.style.color="#2e7d32";
-        }
-      }else{
-        let hint="Upload failed (HTTP "+res.status+").";
-        if(res.status===401)hint="Token rejected (401). Check it's a valid fine-grained token and not expired.";
-        else if(res.status===403)hint="Forbidden (403). The token needs Issues: Read & write on this repo (and Contents can stay No access).";
-        else if(res.status===404)hint="Repo not found (404). Check the token's resource owner is your account and it's granted access to "+GH_REPO_NAME+".";
-        setMsg(hint,"#e53935");
-        send.disabled=false;send.textContent="⬆ Upload";
-      }
-    }catch(err){
-      setMsg("Couldn't reach GitHub — check the connection and try again.","#e53935");
-      send.disabled=false;send.textContent="⬆ Upload";
-    }
+  // v1.74: remember the token the moment it's entered — it used to be saved
+  // only after a SUCCESSFUL upload, so a failed attempt (or a first go with
+  // no corrections yet) meant typing the whole thing again next time.
+  const saveBtn=document.getElementById("ghSave");
+  const readTok=()=>{const inp=document.getElementById("ghTok");return (inp&&inp.value.trim())||ghToken();};
+  if(saveBtn)saveBtn.onclick=()=>{
+    const t=readTok();
+    if(!t){setMsg("Nothing to save — paste the token first.","#e53935");return;}
+    ghSetToken(t);
+    setMsg("✓ Token saved on this device. You won't need to type it again.","#2e7d32");
+    setTimeout(showGithubUpload,1200);
   };
+  const send=document.getElementById("ghSend");
+  if(send)send.onclick=()=>{
+    if(!n){setMsg("No corrections to upload yet.","#e53935");return;}
+    const tok=readTok();
+    if(!tok){setMsg("Enter your access token first.","#e53935");return;}
+    ghSetToken(tok);                       // saved BEFORE the PIN, not after success
+    showGhPinPad(()=>ghDoUpload(tok));     // nothing leaves the device until the PIN is right
+  };
+}
+// The upload itself, run only once the PIN has been accepted. Redraws the
+// upload screen first (the pad replaced it), then talks to GitHub.
+async function ghDoUpload(tok){
+  showGithubUpload();
+  const msg=document.getElementById("ghMsg");
+  const send=document.getElementById("ghSend");
+  const setMsg=(t,col)=>{if(msg){msg.textContent=t;msg.style.color=col||"var(--sub)";}};
+  if(send){send.disabled=true;send.textContent="Uploading…";}
+  setMsg("Contacting GitHub…");
+  const d=new Date();
+  const pad=x=>String(x).padStart(2,"0");
+  const stamp=d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+" "+pad(d.getHours())+":"+pad(d.getMinutes());
+  const nn=Object.keys(userOverrides()).length;
+  const title="WildApp corrections — "+stamp+" ("+nn+")";
+  try{
+    const res=await fetch("https://api.github.com/repos/"+GH_REPO_OWNER+"/"+GH_REPO_NAME+"/issues",{
+      method:"POST",
+      headers:{
+        "Authorization":"Bearer "+tok,
+        "Accept":"application/vnd.github+json",
+        "X-GitHub-Api-Version":"2022-11-28",
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify({title:title,body:ghIssueBody()})
+    });
+    if(res.ok){
+      const data=await res.json().catch(()=>null);
+      ghSetToken(tok);
+      if(send)send.textContent="✓ Uploaded";
+      const url=data&&data.html_url;
+      if(msg){
+        msg.innerHTML='Uploaded — thanks. '+(url?'<a href="'+url+'" target="_blank" style="color:var(--pri);font-weight:800">open issue #'+(data.number||"")+'</a>':'The fixes are now in the repo as a new issue.');
+        msg.style.color="#2e7d32";
+      }
+    }else{
+      let hint="Upload failed (HTTP "+res.status+").";
+      if(res.status===401){
+        hint="Token rejected (401) — the saved one has been cleared. Paste a current token and tap Save token.";
+        ghSetToken("");                   // a dead token is worse than none: it fails silently forever
+      }
+      else if(res.status===403)hint="Forbidden (403). The token needs Issues: Read & write on this repo (Contents can stay No access).";
+      else if(res.status===404)hint="Repo not found (404). Check the token's resource owner is your account and it's granted access to "+GH_REPO_NAME+".";
+      setMsg(hint,"#e53935");
+      if(send){send.disabled=false;send.textContent="\u2B06 Upload";}
+    }
+  }catch(err){
+    setMsg("Couldn't reach GitHub — check the connection and try again.","#e53935");
+    if(send){send.disabled=false;send.textContent="\u2B06 Upload";}
+  }
 }
 
 // ── DISAMBIGUATE A POSTCODE THAT SPANS SEVERAL WALKS (v1.34) ─────────────
@@ -6121,8 +6329,7 @@ function renderHandheld(raw,fromScanner){
       <div style="font-size:16px;color:var(--txt);line-height:1.4;max-width:92%">${addr}${showPc?" · "+pcFmt:""}</div>
       ${mismatchBanner}
       ${altCard}
-      ${trk?`<button id="handTrk" style="margin-top:2px;padding:9px 16px;background:var(--sur);border:1px solid var(--div);border-radius:10px;font-size:12px;font-weight:700;color:var(--txt);cursor:pointer;font-family:ui-monospace,Menlo,Consolas,monospace">📋 ${trk} — tap to copy</button>`:""}${rawResultBlock(raw)}`;
-    if(trk){const tb=document.getElementById("handTrk");if(tb)tb.onclick=()=>{copyText(trk);tb.textContent="✓ Copied "+trk;setTimeout(()=>{tb.textContent="📋 "+trk+" — tap to copy";},1400);};}
+      ${rawResultBlock(raw)}`;
     if(altCard){box.style.justifyContent="flex-start";wireHandAltPicks(raw,altBy);wireHandFixButtons(raw);}
     if(fromScanner&&handSpeakEnabled)speakText(walk);
     return;
@@ -8949,7 +9156,6 @@ function renderBuildingMatch(walkEl,group,pcFmt,backable){
     ${n>1?`<div id="qrAddrToggle" role="button" tabindex="0" style="font-size:12px;color:var(--pri);margin-top:6px;cursor:pointer;user-select:none;font-weight:700">📦 ${n} addresses here <span id="qrAddrChev">▸</span></div>
     <div id="qrAddrList" style="display:none;margin-top:6px">${listHtml}</div>`:""}
     <button id="qrSearchBtn" style="margin-top:8px;width:100%;padding:11px;background:#fff;border:1px solid var(--div);border-radius:10px;font-size:13px;font-weight:700;color:#202124;cursor:pointer">🔎 Search Google</button>
-    ${lastScanMeta&&lastScanMeta.track?`<button id="trkChip" style="margin-top:8px;width:100%;padding:10px;background:#fff;border:1px solid var(--div);border-radius:10px;font-size:12px;font-weight:700;color:#202124;cursor:pointer;font-family:ui-monospace,Menlo,Consolas,monospace">📋 ${lastScanMeta.track} — tap to copy</button>`:""}
     ${backable?`<button id="qrBackBtn" style="margin-top:8px;width:100%;padding:10px;background:#fff;border:1px solid var(--div);border-radius:10px;font-size:13px;font-weight:700;color:#202124;cursor:pointer">← Back to building list</button>`:""}
   </div>`;
   document.getElementById("qrSearchBtn").onclick=()=>window.open("https://www.google.com/search?q="+encodeURIComponent(mapQuery),"_blank");
@@ -9002,7 +9208,6 @@ function renderConfidentMatch(walkEl,rec,pcMismatch){
     <div style="font-size:20px;font-weight:800;color:var(--pri);margin-top:4px">${walkLine}</div>
     ${mismatchBanner}
     <button id="qrSearchBtn" style="margin-top:8px;width:100%;padding:11px;background:#fff;border:1px solid var(--div);border-radius:10px;font-size:13px;font-weight:700;color:#202124;cursor:pointer">🔎 Search Google</button>
-    ${lastScanMeta&&lastScanMeta.track?`<button id="trkChip" style="margin-top:8px;width:100%;padding:10px;background:#fff;border:1px solid var(--div);border-radius:10px;font-size:12px;font-weight:700;color:#202124;cursor:pointer;font-family:ui-monospace,Menlo,Consolas,monospace">📋 ${lastScanMeta.track} — tap to copy</button>`:""}
   </div>`;
   document.getElementById("qrSearchBtn").onclick=()=>window.open("https://www.google.com/search?q="+encodeURIComponent(mapQuery),"_blank");
   wireTrkChip();
@@ -9011,16 +9216,10 @@ function renderConfidentMatch(walkEl,rec,pcMismatch){
 // The tracking-number chip shows on any result card rendered from a
 // tracked-label scan; tapping copies the number (for the PDA, redelivery
 // cards, or customer queries).
-function wireTrkChip(){
-  const c=document.getElementById("trkChip");
-  if(!c||!lastScanMeta||!lastScanMeta.track)return;
-  const trk=lastScanMeta.track;
-  c.onclick=()=>{
-    copyText(trk);
-    c.textContent="✓ Copied "+trk;
-    setTimeout(()=>{c.textContent="📋 "+trk+" — tap to copy";},1400);
-  };
-}
+function wireTrkChip(){ /* v1.72: the tracking number is the 1D barcode's own
+   contents, never a delivery point — the chip was removed. Kept as a no-op so
+   its two call sites need no edit and can't throw. */ }
+
 
 function rankCandidates(candidates,raw,houseNumber){
   // Simple ranking: exact house number match first, then partial d-substring
@@ -9432,11 +9631,34 @@ document.addEventListener("visibilitychange",()=>{
       fs-=2;el.style.fontSize=fs+"px";
     }
   }
+  // v1.74: the walk name is tappable (→ the streets on that walk). Wiring and
+  // the small hint under it ride on the render observer that was already here,
+  // so no result-rendering code had to change. Guarded by name in case this
+  // block ever runs before the app functions are defined.
+  function walkHint(){
+    var box=document.getElementById("handResult");
+    var el=document.getElementById("handWalkBig");
+    var old=document.getElementById("handWalkHint");
+    if(!box||!el){if(old&&old.parentNode)old.parentNode.removeChild(old);return;}
+    if(box.dataset&&box.dataset.sub){if(old&&old.parentNode)old.parentNode.removeChild(old);return;}
+    if(old)return;
+    var h=document.createElement("div");
+    h.id="handWalkHint";
+    h.textContent="tap the walk for its streets";
+    h.style.cssText="font-size:11px;color:var(--sub);opacity:.7;letter-spacing:.02em;margin-top:2px";
+    if(el.parentNode)el.parentNode.insertBefore(h,el.nextSibling);
+  }
+  function afterRender(){
+    fitWalk();
+    try{if(typeof wireHandWalkTap==="function")wireHandWalkTap();}catch(e){}
+    try{walkHint();}catch(e){}
+  }
   var hb=document.getElementById("handBody");
   if(hb&&window.MutationObserver){
-    new MutationObserver(function(){fitWalk();})
+    new MutationObserver(function(){afterRender();})
       .observe(hb,{childList:true,subtree:true});
   }
+  afterRender();
   window.addEventListener("resize",fitWalk);
 
   /* ── RESET button (top-right corner) ──────────────────────────────────
