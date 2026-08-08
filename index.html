@@ -504,6 +504,10 @@ body.addr-locked #rl .lockmsg{display:flex}
           <div style="font-size:15px;font-weight:800;color:var(--txt);margin-bottom:8px">Scan a barcode</div>
           <div style="font-size:12.5px">The scanner reads the <b>postcode</b> from the label and shows the walk. It's usually right, but <b>not 100% accurate</b> — a 2D barcode often carries the postcode with odd spacing or extra characters, sometimes the wrong postcode is printed, and one postcode can cover more than one walk. When a scan looks wrong, check the address and use <b>“Wrong walk?”</b> to set it right.</div>
         </div>
+        <div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">
+          <button type="button" onclick="try{showHandTypeIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button>
+          <button type="button" onclick="try{showHandSound()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#128266; Sound</button>
+        </div>
       </div>
     </div>
   </div>
@@ -587,7 +591,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=60;
+const THIS_BUILD_NUM=61;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -596,7 +600,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.64";
+const BUILD_NAME="v1.65";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3062,6 +3066,204 @@ async function detectCodes(bd,source,w,h,zxBoost){
   return results;
 }
 
+const HAND_IDLE_BTN="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation";
+
+/* ── SOUND LEVEL (v1.65) ──────────────────────────────────────────────────
+   The scan beeps were one fixed loudness, and the device's own volume keys
+   are the only other control — on the kiosk those don't reach the app's
+   sound, so it behaved as if it were just on or off. This is the app's OWN
+   level and it works whatever the device does: 0 silences the beeps (the
+   buzz stays, so a scan still registers in your hand), 100 is louder than
+   the old fixed level. Squared, because loudness is heard that way. */
+const SOUND_KEY="wildSoundLevel_v1";
+const SOUND_DEFAULT=70;              // ≈ the fixed level every build until now
+function soundLevel(){
+  let v=SOUND_DEFAULT;
+  try{const raw=localStorage.getItem(SOUND_KEY);if(raw!==null&&raw!=="")v=parseInt(raw,10);}catch(e){}
+  if(!isFinite(v))v=SOUND_DEFAULT;
+  return Math.max(0,Math.min(100,v));
+}
+function setSoundLevel(v){
+  v=Math.max(0,Math.min(100,parseInt(v,10)||0));
+  try{localStorage.setItem(SOUND_KEY,String(v));}catch(e){}
+  return v;
+}
+// Peak gain for one beep. Zero means DON'T PLAY: an exponential ramp can
+// never reach zero, so silence has to be a skip, not a quiet tone.
+function beepPeak(){
+  const v=soundLevel();
+  return v?0.6*Math.pow(v/100,2):0;
+}
+
+/* ── TYPE A POSTCODE (v1.65) ──────────────────────────────────────────────
+   Its own keypad rather than a text box: tapping into an <input> summons
+   Android's keyboard, which takes the window focus — and the kiosk answers
+   a focus loss by dismissing system windows and pulling itself back, so the
+   keyboard fights the app. Buttons in the page never leave the app.
+   The typed text goes through renderHandheld exactly like a scan, with
+   fromScanner=false, so it is silent, isn't logged as a scan, and every
+   result screen (walk, picker, "Wrong walk?") behaves as it always does. */
+let handTypeBuf="";
+function handTypeFmtPc(pc){
+  const p=String(pc).replace(/\s+/g,"").toUpperCase();
+  return p.length>3?p.slice(0,p.length-3)+" "+p.slice(-3):p;
+}
+// Postcodes on the round that start with what's been typed so far. Saves
+// most of the tapping, and only ever offers postcodes that really exist.
+function handTypeSuggestions(buf){
+  const q=String(buf||"").replace(/\s+/g,"").toUpperCase();
+  if(q.length<2)return [];
+  const out=[];
+  try{
+    knownPostcodeSet().forEach(function(pc){if(pc.indexOf(q)===0)out.push(pc);});
+  }catch(e){return [];}
+  out.sort();
+  return out.slice(0,8);
+}
+function handTypeSet(v){
+  handTypeBuf=String(v||"").toUpperCase().replace(/[^A-Z0-9 ]/g,"").slice(0,24);
+  handTypeRefresh();
+}
+function handTypeRefresh(){
+  const d=document.getElementById("handTypeDisp");
+  if(d){
+    d.textContent=handTypeBuf||"";
+    d.style.color=handTypeBuf?"var(--txt)":"var(--sub)";
+    if(!handTypeBuf)d.textContent="Postcode…";
+  }
+  const sg=document.getElementById("handTypeSug");
+  if(sg){
+    const list=handTypeSuggestions(handTypeBuf);
+    sg.innerHTML=list.length
+      ? list.map(pc=>'<button type="button" class="handSugBtn" data-pc="'+pc+'" style="'+
+          'padding:9px 11px;border:1px solid var(--div);border-radius:10px;background:var(--sur);'+
+          'font-size:13px;font-weight:800;color:var(--txt);cursor:pointer">'+handTypeFmtPc(pc)+'</button>').join("")
+      : "";
+    sg.querySelectorAll(".handSugBtn").forEach(b=>{
+      b.onclick=()=>{handTypeSet(b.dataset.pc);handTypeLookup();};
+    });
+  }
+  const go=document.getElementById("handTypeGo");
+  if(go)go.style.opacity=handTypeBuf?"1":".45";
+}
+function handTypeLookup(){
+  const t=handTypeBuf.trim();
+  if(!t)return;
+  try{renderHandheld(t,false);}catch(e){}
+}
+function showHandTypeIn(keep){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  if(!keep)handTypeBuf="";
+  try{box.dataset.sub="typein";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const rows=["1234567890","QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
+  const key="flex:1;min-width:0;padding:11px 0;border:1px solid var(--div);border-radius:9px;"+
+            "background:var(--sur);font-size:15px;font-weight:800;color:var(--txt);cursor:pointer;"+
+            "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
+  const pad=rows.map(r=>'<div style="display:flex;gap:5px;margin-top:5px">'+
+    r.split("").map(ch=>'<button type="button" class="handKey" data-k="'+ch+'" style="'+key+'">'+ch+'</button>').join("")+
+    '</div>').join("");
+  box.innerHTML=`<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:10px 2px 4px">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Type a postcode</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">A postcode on its own, or a number and a postcode — <b>12 W2 1PN</b>. Looks it up exactly as if it had been scanned.</div>
+    <div id="handTypeDisp" style="margin-top:10px;padding:12px;border:2px solid var(--div);border-radius:12px;
+      font-size:22px;font-weight:800;letter-spacing:.06em;text-align:center;min-height:26px;color:var(--sub)">Postcode…</div>
+    <div id="handTypeSug" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+    ${pad}
+    <div style="display:flex;gap:5px;margin-top:5px">
+      <button type="button" class="handKey" data-k=" " style="${key};flex:3">space</button>
+      <button type="button" id="handTypeDel" style="${key};flex:2">⌫</button>
+      <button type="button" id="handTypeClr" style="${key};flex:2">clear</button>
+    </div>
+    <button type="button" id="handTypeGo" style="margin-top:10px;width:100%;padding:14px;border:none;border-radius:12px;
+      background:var(--pri,#1565C0);color:#fff;font-size:15px;font-weight:800;cursor:pointer">Look up</button>
+    <button type="button" id="handTypeBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;
+      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+  </div>`;
+  box.querySelectorAll(".handKey").forEach(b=>{
+    b.onclick=()=>handTypeSet(handTypeBuf+b.dataset.k);
+  });
+  const del=document.getElementById("handTypeDel");
+  if(del)del.onclick=()=>handTypeSet(handTypeBuf.slice(0,-1));
+  const clr=document.getElementById("handTypeClr");
+  if(clr)clr.onclick=()=>handTypeSet("");
+  const go=document.getElementById("handTypeGo");
+  if(go)go.onclick=handTypeLookup;
+  const back=document.getElementById("handTypeBack");
+  if(back)back.onclick=()=>handGoIdle();
+  handTypeRefresh();
+}
+
+/* ── SOUND SCREEN (v1.65) ─────────────────────────────────────────────── */
+function showHandSound(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{box.dataset.sub="sound";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const v=soundLevel();
+  const btn="padding:14px 0;flex:1;border:1px solid var(--div);border-radius:12px;background:var(--sur);"+
+            "font-size:20px;font-weight:800;color:var(--txt);cursor:pointer;"+
+            "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
+  box.innerHTML=`<div style="width:100%;max-width:340px;margin:0 auto;text-align:left;padding:14px 4px">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Sound</div>
+    <div style="font-size:12.5px;color:var(--sub);margin-top:6px;line-height:1.45">How loud the scan beeps are. This is the app's own level — it works whether or not the device's volume keys do. The buzz carries on with the sound off.</div>
+    <div id="handVolNum" style="font-size:36px;font-weight:800;color:var(--txt);text-align:center;margin:16px 0 6px">${v?v+"%":"Off"}</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button type="button" id="handVolDown" style="${btn};max-width:64px">−</button>
+      <input id="handVol" type="range" min="0" max="100" step="5" value="${v}" style="flex:1;height:34px">
+      <button type="button" id="handVolUp" style="${btn};max-width:64px">+</button>
+    </div>
+    <button type="button" id="handVolTest" style="margin-top:14px;width:100%;padding:13px;border:none;border-radius:12px;
+      background:var(--pri,#1565C0);color:#fff;font-size:14px;font-weight:800;cursor:pointer">▶ Test beep</button>
+    <button type="button" id="handVolBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;
+      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+  </div>`;
+  const sl=document.getElementById("handVol"), num=document.getElementById("handVolNum");
+  const show=(n)=>{if(num)num.textContent=n?n+"%":"Off";};
+  const apply=(n,beep)=>{
+    const set=setSoundLevel(n);
+    if(sl)sl.value=String(set);
+    show(set);
+    // Hear it immediately — a level you can't hear is the thing being fixed.
+    if(beep&&set)try{outcomeTone("building");}catch(e){}
+  };
+  if(sl){
+    sl.oninput=()=>show(setSoundLevel(sl.value));   // stored, but no beep per pixel
+    sl.onchange=()=>apply(sl.value,true);
+  }
+  const dn=document.getElementById("handVolDown");
+  if(dn)dn.onclick=()=>apply(soundLevel()-10,true);
+  const up=document.getElementById("handVolUp");
+  if(up)up.onclick=()=>apply(soundLevel()+10,true);
+  const t=document.getElementById("handVolTest");
+  if(t)t.onclick=()=>{const n=soundLevel();if(!n){show(0);return;}try{outcomeTone("exact");}catch(e){}};
+  const back=document.getElementById("handVolBack");
+  if(back)back.onclick=()=>handGoIdle();
+}
+
+/* The idle scanning screen, in one place (v1.65) — it used to be a literal
+   repeated in six spots, so anything added to it went missing on whichever
+   route back wasn't updated. */
+function handIdleActionsHtml(){
+  return '<div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">'+
+    '<button type="button" onclick="try{showHandTypeIn()}catch(e){}" style="'+"+HAND_IDLE_BTN+"+'">⌨ Type a postcode</button>'+
+    '<button type="button" onclick="try{showHandSound()}catch(e){}" style="'+"+HAND_IDLE_BTN+"+'">🔊 Sound</button>'+
+    '</div>';
+}
+function handIdleHtml(){
+  return '<div style="color:var(--sub)">Ready to scan.'+'</div>'+handIdleActionsHtml();
+}
+// Back to the scanning screen from a sub-screen: the previous result if there
+// is one, otherwise idle. Same shape as the other Back buttons.
+function handGoIdle(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{delete box.dataset.sub;}catch(e){}
+  box.style.justifyContent="center";
+  box.innerHTML=handIdleHtml();
+}
+
 // ---- Success feedback: vibration + short beep so a scan registers without
 // looking at the screen. AudioContext is created lazily (needs a user gesture,
 // which opening the scanner tab provides). ----
@@ -3069,12 +3271,14 @@ let audioCtx=null;
 function successFeedback(){
   try{if(navigator.vibrate)navigator.vibrate(100);}catch(e){}
   try{
+    const peak=beepPeak();
+    if(!peak)return;                      // sound off — the buzz above still fired
     audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();
     if(audioCtx.state==="suspended")audioCtx.resume();
     const o=audioCtx.createOscillator(),g=audioCtx.createGain();
     o.type="sine";o.frequency.value=1400;
     g.gain.setValueAtTime(0.0001,audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.25,audioCtx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(peak,audioCtx.currentTime+0.01);
     g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.15);
     o.connect(g);g.connect(audioCtx.destination);
     o.start();o.stop(audioCtx.currentTime+0.16);
@@ -3111,6 +3315,8 @@ function outcomeTone(kind,walkText){
     }
   }catch(e){}
   try{
+    const peak=beepPeak();
+    if(!peak)return;                      // sound off — the buzz above still fired
     audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();
     if(audioCtx.state==="suspended")audioCtx.resume();
     const seq=({
@@ -3125,7 +3331,7 @@ function outcomeTone(kind,walkText){
       const o=audioCtx.createOscillator(),g=audioCtx.createGain();
       o.type="sine";o.frequency.value=f;
       g.gain.setValueAtTime(0.0001,t);
-      g.gain.exponentialRampToValueAtTime(0.25,t+0.01);
+      g.gain.exponentialRampToValueAtTime(peak,t+0.01);
       g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
       o.connect(g);g.connect(audioCtx.destination);
       o.start(t);o.stop(t+dur+0.02);
@@ -4594,7 +4800,7 @@ function commitHandFix(walk,scope){
   const bk=document.getElementById("handSavedBack");
   if(bk)bk.onclick=()=>{
     if(handLastRaw)renderHandheld(handLastRaw,false);
-    else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}
+    else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}
   };
   const mg=document.getElementById("handSavedMg");
   if(mg)mg.onclick=()=>showHandManage();
@@ -4673,7 +4879,7 @@ function showHandManage(){
   if(back)back.onclick=()=>{
     if(handMgFrom==="version"){handMgFrom="";showAppVersion();return;}
     if(handLastRaw)renderHandheld(handLastRaw,false);
-    else{box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}
+    else{box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}
   };
 }
 
@@ -4748,7 +4954,7 @@ function showAppVersion(){
   const mg=document.getElementById("handVerManage");
   if(mg)mg.onclick=()=>{handMgFrom="version";showHandManage();};
   const back=document.getElementById("handVerBack");
-  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}};
+  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}};
 }
 // Colour a logged scan by its outcome, for the Recent list's left border.
 function handOutcomeColor(res){
@@ -4800,7 +5006,7 @@ function showHandRecent(){
     });
   }
   const back=document.getElementById("handRecBack");
-  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{box.style.justifyContent="center";box.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';}};
+  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}};
 }
 // Render every saved correction as plain text — a backup Ash can keep, or send
 // on so the fixes can be built into the app permanently.
@@ -9350,7 +9556,7 @@ document.addEventListener("visibilitychange",()=>{
             renderHandheld(handLastRaw,false);
           }else{
             hr.style.justifyContent="center";
-            hr.innerHTML='<div style="color:var(--sub)">Ready to scan.</div>';
+            hr.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');
           }
         }catch(e){}
         return true;
@@ -9436,7 +9642,7 @@ document.addEventListener("visibilitychange",()=>{
       // 4) Back to the idle screen, scrolled to the top.
       if(hr){
         hr.style.justifyContent="center";
-        hr.innerHTML=HAND_IDLE_HTML||'<div style="color:var(--sub)">Ready to scan.</div>';
+        hr.innerHTML=HAND_IDLE_HTML||(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');
       }
       var hb=document.getElementById("handBody");
       if(hb) hb.scrollTop=0;
