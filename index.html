@@ -2847,9 +2847,11 @@ function zxingFormatName(res){
   }catch(e){return"";}
 }
 // Linear (1D) symbologies. Unlike QR/Data Matrix (which encode full address
-// text and go through the fuzzy matcher), a 1D label here only carries a bare
-// postcode, so a 1D read is only trustworthy when it actually yields a W2
-// postcode — otherwise it's a stray product/tracking barcode we should ignore.
+// text and go through the fuzzy matcher), a 1D label usually only carries a
+// bare code (postcode, product ID, tracking number). As of v1.73 a 1D read
+// is always picked and registered (displayed + logged + matched like a 2D
+// code) rather than being dropped when it isn't a W2 postcode — see
+// pickBestResult and the DO NOT PICK UP guard in handleQRResult.
 const LINEAR_FORMATS=new Set(["code_128","code_39","code_93","codabar","itf","ean_13","ean_8","upc_a","upc_e"]);
 function isLinearFormat(fmt){return LINEAR_FORMATS.has((fmt||"").toLowerCase());}
 function hasW2Postcode(raw){
@@ -3550,7 +3552,7 @@ async function scanPhotoFile(file){
     const pick=await runPhotoLadder(bmp);
     if(pick){
       lastRaw=""; // a deliberate photo scan must never be swallowed by the repeat-dedupe
-      acceptScan(pick.rawValue);
+      acceptScan(pick.rawValue,pick.format);
       return;
     }
     setStatus("🖼️ No code found in that photo — try a closer, straighter shot");
@@ -3886,7 +3888,7 @@ async function freezeAndScan(){
     // lets the label on screen be compared against the result below.
     if(pick){
       lastRaw=""; // a deliberate freeze-scan must never be swallowed by the repeat-dedupe
-      acceptScan(pick.rawValue);
+      acceptScan(pick.rawValue,pick.format);
       setStatus("🧊 Frozen — tap the view to resume");
     }else{
       setStatus("🧊 Nothing readable — tap to resume, get closer, tap again");
@@ -7869,9 +7871,14 @@ function enhanceDPM(canvas,ctx,moduleHint,invert){
 // mask an address code sitting right next to them. ----
 function pickBestResult(results){
   if(!results||!results.length)return null;
-  const ok=r=>r&&r.rawValue
-    &&(!isLinearFormat(r.format)||hasW2Postcode(r.rawValue))
-    &&rmOnlyAccepts(r.format,r.rawValue);
+  // v1.73: 1D/linear codes (Code128, Code39, EAN, UPC, Codabar, ITF) no
+  // longer require a dataset-verified W2 postcode just to be PICKED — any
+  // readable 1D code is now handed to handleQRResult, same as a 2D code,
+  // so it displays and is looked up/registered instead of vanishing. A 2D
+  // (address) code in the same frame still wins the pick when both are
+  // present (see the two-pass find below) — this keeps the existing
+  // anti-hijack behaviour for Amazon/marketplace 2D codes intact.
+  const ok=r=>r&&r.rawValue&&rmOnlyAccepts(r.format,r.rawValue);
   const pick=results.find(r=>ok(r)&&!isLinearFormat(r.format))||results.find(ok)||null;
   if(!pick)noteIgnoredCode(results); // RM ONLY binned a decoded 2D code → grey HUD hint
   return pick;
@@ -7896,14 +7903,14 @@ function noteIgnoredCode(results){
 // Shared success path for the live loop and the still-photo rescue, so the
 // two can never drift apart: dedupe bookkeeping, zoom reset, 5-SEC-WAIT
 // re-arm, then hand the payload to the matcher.
-function acceptScan(raw){
+function acceptScan(raw,format){
   lastRaw=raw;
   noDetectSince=Date.now();
   stillTried=false;focusNudged=false;
   if(autoZoomed===true)setCamZoom(1);
   if(autoZoomed!=="unsupported")autoZoomed=false;
   armScanDelay(); // 5 SEC WAIT on → next scan only after another countdown
-  handleQRResult(raw,true);
+  handleQRResult(raw,true,false,format);
 }
 
 // ---- Auto focus nudge. Focus drift is the most common reason a close-up
@@ -7982,7 +7989,7 @@ async function runStillRescue(bd){
         }
       }
       if(pick&&scanning&&stillTried&&pick.rawValue!==lastRaw){
-        acceptScan(pick.rawValue);
+        acceptScan(pick.rawValue,pick.format);
         return;
       }
     }
@@ -8284,7 +8291,7 @@ function startScanLoop(){
         // codes are skipped rather than wasting the frame.
         const pick=pickBestResult(results);
         if(pick && pick.rawValue!==lastRaw){
-          acceptScan(pick.rawValue);
+          acceptScan(pick.rawValue,pick.format);
         }else if(!results.length || !pick){
           // Nothing usable this frame (or only rejected non-W2 1D reads):
           // keep the stuck-timer running so focus / zoom / photo / OCR
@@ -8941,7 +8948,7 @@ function openScanHistory(){
   });
 }
 
-function handleQRResult(raw,fromCamera,typed){
+function handleQRResult(raw,fromCamera,typed,format){
   try{if(window.__wildNoteActivity)window.__wildNoteActivity();}catch(e){}
   // ── "DO NOT PICK UP" — ignore bare item/tracking barcodes (v1.32) ───────
   // Checked FIRST, before any flash/beep/vibrate/screen write, so an ignored
@@ -8952,7 +8959,13 @@ function handleQRResult(raw,fromCamera,typed){
   // name-only building QR still resolves — it has a confident match without a
   // postcode — so it is NOT ignored; nor is an ambiguous shared-name payload
   // (it deserves the pick-list).
-  if(fromCamera && !typed){
+  // v1.73: this guard now only applies to non-linear (2D) formats. A 1D
+  // barcode (Code128/39/93, Codabar, ITF, EAN, UPC) is always registered —
+  // it displays, runs through the same walk/address matcher as a 2D code,
+  // and logs to scan history either way, falling through to the normal
+  // "no exact match" screen (renderClosestOptions) instead of vanishing
+  // silently when it isn't a delivery point.
+  if(fromCamera && !typed && !isLinearFormat(format)){
     // Exact UPU S10 shape (two letters, nine digits, two letters) — an item
     // tracking number, never a delivery point. Checked outright (v1.71) so it
     // is ignored even if the fuzzy matcher would have found something in it.
