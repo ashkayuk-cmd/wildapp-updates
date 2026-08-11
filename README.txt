@@ -1,85 +1,74 @@
-WILD APP — v1.75 / build 71
-===========================
-Content-only release. NO APK, nothing to install.
-REPLACES the v1.74 files from earlier — if you haven't uploaded those yet,
-just upload these instead.
+WILD APP — v1.78 / build 74   (APK — install this)
+==================================================
 
-UPLOAD BOTH FILES to  github.com/ashkayuk-cmd/wildapp-updates  (main):
+INSTALL
+-------
+1. On the PDA, HOLD THE BACK BUTTON for 10 seconds -> tap "Leave".
+2. Open WildApp.apk and install. Same signing key, so it goes over the top —
+   your corrections, added addresses and scan history all survive.
+3. Then upload the same WildApp.apk to
+   github.com/ashkayuk-cmd/wildapp-updates, replacing the old one.
 
-    index.html          <- the app          (build 71)
-    wild_data.json      <- the address data (24,149 rows — unchanged since v1.74)
-
-Edit nothing else. version.txt and content.json are dead files.
-
-Then on the PDA:  tap  ⟳ Update  (bottom-left)  ->  it turns green
-                  ->  tap it again to apply.
-
-
-1. YOUR NEW wild_data.xlsx IS IN  (24,145 -> 24,149 rows)
-   * concierge 139 / 149 / 159 Queensway (W2 4BJ) -> 29 HATHERLEY
-   * "Concierge 6, Hermitage Street" -> "6, Hermitage Street" (walk 6, unchanged)
-   * new "65, Alfred Road, W2 5EU" -> FIRM
-   No walk changes, nothing reverted, workbook and data in sync.
-   BONUS: "SOUTH CONCIERGE ... QUEENSWAY" now lands on 29 HATHERLEY outright
-   instead of 29 with a red "also possible 24 QUEENSWAY" under it.
-
-2. TAP THE WALK -> ALL STREETS ON THAT WALK
-   Tap the big walk name on any result: every street on that walk, A-Z, with
-   an address count each. Back returns to the scan. Read-only. Won't fire
-   while you're mid-correction.
-
-3. VOLUME — FIXED, AND THE BEEP IS ABOUT TWICE AS LOUD
-   You said the popup moves but the beeps don't change. That means the native
-   side is fine and Android's media volume simply never reaches the app's
-   beeps on this device. So:
-   * THE VOLUME KEYS NOW SET THE APP'S OWN BEEP LEVEL. The keys and the
-     slider on the Sound screen are one and the same setting. A short preview
-     tone plays as you press, so you hear the level immediately. The popup now
-     reads "Beep volume 55%". Holding a key doesn't stack tones.
-   * Device volume at 0 = beeps off, buzz still on, same as the slider at 0.
-   * THE BEEP ITSELF IS LOUDER: square wave instead of sine, moved to ~2.6 kHz
-     where a small speaker actually projects, and it now uses the headroom the
-     old settings left unspent (peak 0.29 -> 0.50 at the default). Modelled
-     through a speaker + ear-sensitivity curve: about +8 dB at the default
-     setting and +7 to +12 dB across the range — roughly twice as loud.
-   * The four outcomes still sound different from each other, and FIRM still
-     gets its low tail. They're all just higher and harder now.
-   If it's STILL not loud enough, say so — 100% on the slider has more in it
-   than the old build's maximum, so try the keys at full first.
-
-4. GITHUB UPLOAD: PIN + THE TOKEN STOPS DISAPPEARING
-   * Upload now asks for PIN 1984, on its own keypad (a text box summons
-     Android's keyboard, which the kiosk fights).
-   * Found why you kept retyping it: the token was ONLY saved after a
-     SUCCESSFUL upload. It's now saved the moment you tap Upload, there's a
-     "Save token on this device" button, and a rejected token gets cleared
-     with a message instead of failing silently forever.
-   * The token is NOT baked in yet — on purpose. See below.
-
-5. Carried forward from v1.72 (never uploaded): the "tap to copy" tracking
-   number chip is gone from all three result cards.
+Nothing else to upload. This APK already carries v1.77 (the W2 1PN firm
+option and the shared-street tags), so the index.html I sent yesterday is
+included — if you never uploaded it, it doesn't matter now.
 
 
-THE TOKEN — 60 SECONDS OF YOUR TIME AND I'LL BAKE IT IN
--------------------------------------------------------
-I checked what your token can do before embedding it. It's scoped to just
-this repo, but it has administration and contents access, not only Issues.
-index.html lives in a PUBLIC repo, so anything baked into it is readable by
-anyone — and with contents access, whoever picks it up could replace
-WildApp.apk in your own update channel. GitHub's secret scanner would also
-spot it and auto-revoke it, so it would stop working anyway.
+1D BARCODES REGISTER AGAIN
+--------------------------
+The scanner filter I added in v1.76 is gone, all of it:
 
-  GitHub -> Settings -> Developer settings -> Personal access tokens ->
-  Fine-grained -> your token -> Repository permissions:
-      Issues:         Read and write
-      Contents:       No access
-      Administration: No access
+* A 1D barcode is handed to the app again whatever it says — postcode or
+  no postcode.
+* Tracking numbers included, as you asked. They have no address on them,
+  so they show "No postcode found", buzz, beep and land in Recent scans
+  like any other read — registered, not swallowed.
+* The web-side rule that silently ignored tracking numbers is gone too,
+  so nothing else is quietly dropping them behind the scenes.
 
-Tell me when that's done and I'll ship it pre-loaded — the plumbing is
-already in the file, it's a one-line change. Worst case then is someone
-opening issues on your repo, which you can delete.
+Your scanner beep comes back with it — v1.76 turned off the engine's own
+decode beep, and that's undone.
 
 
-STAMPS   code 71 · data 70 · rows 24149 · hash e71e95e7 · apk 62
-TESTS    78 green (37 + 11 PIN + 8 gates + 22 volume), plus 274 real labels
-         rendered through v1.74 and v1.75: 0 differences (audio only).
+SOUND BACK TO HOW IT WAS
+------------------------
+Everything I changed in v1.75 is reverted, exactly:
+
+* Sine wave again, not square.
+* The original pitches and lengths: exact 1500 + 1900 Hz, building 1400,
+  picker 950 twice, no-match 420, the low FIRM tail 640.
+* The old volume curve — 0.6 x (level/100) squared. At the default 70%
+  that's noticeably quieter than v1.75 was. If it ends up too quiet on the
+  round, the Sound screen slider still goes to 100.
+* The volume keys no longer set the app's beep level. They move the device
+  volume and show the "Volume 12 / 15" popup, as before; the beep level is
+  set on the Sound screen only, and no preview tone fires on a key press.
+
+0% on the Sound slider still means no beep, buzz only.
+
+
+HOW IT WAS BUILT
+----------------
+I didn't hand-edit the scanner code out — I put the ORIGINAL code file back.
+Your repo still had the v1.66 APK on it, and v1.76 was built on exactly that
+code, so its classes.dex is byte-for-byte the app before the filter existed.
+The old sound values came from the same place, so they're the real ones
+rather than my reconstruction.
+
+
+VERIFIED
+--------
+versionCode 74 (installed app is 72) · same signing key
+(2C:3A:BB:7A:B7…) · signatures v1+v2+v3 · zipaligned.
+
+* Code file identical to the pre-filter one; the three added methods
+  (shouldSkipScan, is2D, applyScanConfig) are gone and nothing else moved.
+* Every untouched file byte-identical to build 72, same entry order and
+  compression; 24,149 addresses.
+* 31 tests on the reverts (tracking codes logged and shown, every old tone
+  and the old volume curve, volume keys leaving the beep level alone) and
+  the 91 v1.77 tests re-run against the app packaged inside this APK.
+* 260-label comparison against v1.77: one difference, the tracking-number
+  card's wording.
+
+WildApp.apk — 1,102,769 bytes, sha256 47527522…
