@@ -591,7 +591,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=71;
+const THIS_BUILD_NUM=73;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -600,7 +600,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.75";
+const BUILD_NAME="v1.77";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -616,8 +616,8 @@ const BUILD_NAME="v1.75";
 const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
-const REPO_DATA_BUILD=70;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD=62;                  // build of the WildApp.apk beside this file
+const REPO_DATA_BUILD=72;                 // build of the wild_data.json beside this file
+const REPO_APK_BUILD=72;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -2847,11 +2847,9 @@ function zxingFormatName(res){
   }catch(e){return"";}
 }
 // Linear (1D) symbologies. Unlike QR/Data Matrix (which encode full address
-// text and go through the fuzzy matcher), a 1D label usually only carries a
-// bare code (postcode, product ID, tracking number). As of v1.73 a 1D read
-// is always picked and registered (displayed + logged + matched like a 2D
-// code) rather than being dropped when it isn't a W2 postcode — see
-// pickBestResult and the DO NOT PICK UP guard in handleQRResult.
+// text and go through the fuzzy matcher), a 1D label here only carries a bare
+// postcode, so a 1D read is only trustworthy when it actually yields a W2
+// postcode — otherwise it's a stray product/tracking barcode we should ignore.
 const LINEAR_FORMATS=new Set(["code_128","code_39","code_93","codabar","itf","ean_13","ean_8","upc_a","upc_e"]);
 function isLinearFormat(fmt){return LINEAR_FORMATS.has((fmt||"").toLowerCase());}
 function hasW2Postcode(raw){
@@ -3552,7 +3550,7 @@ async function scanPhotoFile(file){
     const pick=await runPhotoLadder(bmp);
     if(pick){
       lastRaw=""; // a deliberate photo scan must never be swallowed by the repeat-dedupe
-      acceptScan(pick.rawValue,pick.format);
+      acceptScan(pick.rawValue);
       return;
     }
     setStatus("🖼️ No code found in that photo — try a closer, straighter shot");
@@ -3888,7 +3886,7 @@ async function freezeAndScan(){
     // lets the label on screen be compared against the result below.
     if(pick){
       lastRaw=""; // a deliberate freeze-scan must never be swallowed by the repeat-dedupe
-      acceptScan(pick.rawValue,pick.format);
+      acceptScan(pick.rawValue);
       setStatus("🧊 Frozen — tap the view to resume");
     }else{
       setStatus("🧊 Nothing readable — tap to resume, get closer, tap again");
@@ -4351,40 +4349,94 @@ function rawResultBlock(raw){
    how many addresses each holds. Read-only — nothing here changes the data.
    Back returns to the scan that was on screen (renderHandheld with
    fromScanner=false, so it is silent and isn't logged again). */
+// v1.77: one pass over allData builds street -> {walk: addressCount}. That
+// single index answers BOTH questions this screen asks — which streets are on
+// a walk, and which OTHER walks deliver on the same street. Cached, and
+// dropped by handDropDataIndexes() whenever an address is added or deleted,
+// so a hand-added address is counted here straight away.
+let handStreetIdx=null;
+function streetWalkIndex(){
+  if(handStreetIdx)return handStreetIdx;
+  const m=Object.create(null);
+  if(typeof allData!=="undefined"&&Array.isArray(allData)){
+    for(const e of allData){
+      const st=String((e&&e.s)||"").trim();
+      const w=String((e&&e.r)||"").trim();
+      if(!st||!w)continue;
+      const k=st.toLowerCase();
+      if(!m[k])m[k]={name:st,walks:Object.create(null)};
+      m[k].walks[w]=(m[k].walks[w]||0)+1;
+    }
+  }
+  handStreetIdx=m;
+  return m;
+}
 function streetsOnWalk(walk){
   const w=String(walk||"").trim().toUpperCase();
-  if(!w||typeof allData==="undefined"||!Array.isArray(allData))return [];
-  const m=Object.create(null);
-  for(const e of allData){
-    if(String(e.r||"").trim().toUpperCase()!==w)continue;
-    const st=String(e.s||"").trim();
-    if(!st)continue;
-    const k=st.toLowerCase();
-    if(!m[k])m[k]={name:st,n:0};
-    m[k].n++;
+  if(!w)return [];
+  const idx=streetWalkIndex();
+  const out=[];
+  for(const k in idx){
+    const rec=idx[k];
+    for(const wk in rec.walks){
+      if(String(wk).trim().toUpperCase()===w){out.push({name:rec.name,n:rec.walks[wk]});break;}
+    }
   }
-  return Object.keys(m).map(k=>m[k]).sort((a,b)=>a.name.localeCompare(b.name));
+  return out.sort((a,b)=>a.name.localeCompare(b.name));
 }
-function showHandWalkStreets(walk){
+// Every OTHER walk that delivers on the same street, busiest first (v1.77 —
+// Ash: "walk 11 has Southwick Street and walk 13 also has Southwick Street").
+// FIRM counts as a walk here: a few doors on your street being FIRM matters
+// just as much as the street being split between two rounds.
+function otherWalksOnStreet(street,walk){
+  const rec=streetWalkIndex()[String(street||"").trim().toLowerCase()];
+  if(!rec)return [];
+  const w=String(walk||"").trim().toUpperCase();
+  return Object.keys(rec.walks)
+    .filter(k=>String(k).trim().toUpperCase()!==w)
+    .map(k=>({walk:k,n:rec.walks[k]}))
+    .sort((a,b)=>(b.n-a.n)||a.walk.localeCompare(b.walk));
+}
+function showHandWalkStreets(walk,backTo){
   const box=document.getElementById("handResult");
   if(!box)return;
   try{box.dataset.sub="streets";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   const list=streetsOnWalk(walk);
   const total=list.reduce((a,b)=>a+b.n,0);
   box.style.justifyContent="flex-start";
-  const rows=list.map(s=>`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:11px 13px;margin-top:7px;background:var(--sur);border-radius:11px;box-shadow:var(--shad)">
-      <div style="font-size:15px;font-weight:700;color:var(--txt);flex:1;min-width:0;line-height:1.3;word-break:break-word">${escHtml(s.name)}</div>
-      <div style="font-size:12px;font-weight:800;color:var(--sub);white-space:nowrap">${s.n}</div>
-    </div>`).join("");
+  let sharedCount=0;
+  const rows=list.map(s=>{
+    // v1.77: the other walks on this same street, shown under its name and
+    // tappable — tapping one lists THAT walk's streets, so a shared street
+    // can be followed straight through to the round it's shared with.
+    const others=otherWalksOnStreet(s.name,walk);
+    if(others.length)sharedCount++;
+    const chips=others.map(o=>`<button class="handStOther" data-w="${encodeURIComponent(o.walk)}" style="padding:5px 9px;background:#e8f0fe;border:1px solid #b7cdf5;border-radius:9px;font-size:11px;font-weight:800;color:var(--pri);cursor:pointer;line-height:1.2;text-align:left">⚠️ also on ${escHtml(o.walk)} · ${o.n}</button>`).join("");
+    return `<div style="padding:11px 13px;margin-top:7px;background:var(--sur);border-radius:11px;box-shadow:var(--shad)">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline">
+        <div style="font-size:15px;font-weight:700;color:var(--txt);flex:1;min-width:0;line-height:1.3;word-break:break-word">${escHtml(s.name)}</div>
+        <div style="font-size:12px;font-weight:800;color:var(--sub);white-space:nowrap">${s.n}</div>
+      </div>
+      ${chips?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${chips}</div>`:""}
+    </div>`;
+  }).join("");
+  const sharedNote=sharedCount?`<div style="font-size:11px;color:var(--sub);margin-top:6px;line-height:1.5">${sharedCount} of these street${sharedCount===1?" is":"s are"} also delivered by another walk — tap a blue tag to see that walk's streets.</div>`:"";
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Streets on this walk</div>
     <div style="font-size:30px;font-weight:900;color:var(--pri);line-height:1.1;margin-top:6px;word-break:break-word">${escHtml(String(walk))}</div>
-    <div style="font-size:12px;color:var(--sub);margin-top:4px">${list.length} street${list.length===1?"":"s"} · ${total} address${total===1?"":"es"}</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:4px">${list.length} street${list.length===1?"":"s"} · ${total} address${total===1?"":"es"}${sharedCount?" · "+sharedCount+" shared":""}</div>
+    ${sharedNote}
     ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">No streets found for this walk.</div>'}
-    <button id="handStBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+    <button id="handStBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">${backTo?"Back to "+escHtml(String(backTo)):"Back"}</button>
   </div>`;
+  box.querySelectorAll(".handStOther").forEach(b=>{
+    b.onclick=function(){showHandWalkStreets(decodeURIComponent(b.dataset.w),walk);};
+  });
   const bk=document.getElementById("handStBack");
   if(bk)bk.onclick=function(){
+    // Followed a shared street into another walk? Step back to the one you
+    // came from. Otherwise return to the scan that was on screen.
+    if(backTo){showHandWalkStreets(backTo,null);return;}
     if(handLastRaw)renderHandheld(handLastRaw,false);
     else if(typeof handGoIdle==="function")handGoIdle();
   };
@@ -4668,6 +4720,7 @@ function handKnowsAddress(text){
 // Anything built over allData is stale the moment a row is added or removed.
 function handDropDataIndexes(){
   handSearchIdx=null;handSearchIdxFor=-1;
+  try{handStreetIdx=null;}catch(e){}
   try{knownPostcodeSet._cache=null;knownPostcodeSet._for=null;}catch(e){}
   try{tokenStreetCount=null;}catch(e){}
 }
@@ -6021,6 +6074,9 @@ function renderHandheld(raw,fromScanner){
   // resolver uses, so "1-2" ranges and letter suffixes match as scanned.
   // To add more later: copy a row. `num` accepts a string or an array; `has`
   // is a lowercase substring that must be present in the raw payload.
+  // The firm at 1-2 Junction Mews, written once so the override below, the
+  // "12" picker and the always-on W2 1PN option can't drift apart (v1.77).
+  const JM_FIRM_ADDR="1-2 Junction Mews, W2 1PN (firm)";
   const HAND_OVERRIDES=[
     {pc:"W24TE", num:["1","1-1"], has:"chepstow",  walk:"33 HEREFORD",        addr:"1 Chepstow Place, W2 4TE"},
     {pc:"W22DS", has:"argos",                        walk:"FIRM",              addr:"Argos, 150 Edgware Road, W2 2DS"},
@@ -6048,7 +6104,7 @@ function renderHandheld(raw,fromScanner){
     // street word is NOT required here (v1.50): the label's QR often carries
     // just the number and the postcode, and demanding "junction" made this
     // rule — and the 12 / 1-2 picker below — miss those scans entirely.
-    {pc:"W21PN", num:["1","1-2","2"],                 walk:"FIRM",             addr:"1-2 Junction Mews, W2 1PN (firm)"},
+    {pc:"W21PN", num:["1","1-2","2"],                 walk:"FIRM",             addr:JM_FIRM_ADDR},
     {pc:"W24DB", has:"porchester",                   walk:"28 KGS",            addr:"Porchester Gardens, W2 4DB"},
     {pc:"W23SS",                                     walk:"23 INVERNESS",      addr:"W2 3SS (Queensborough Terrace)"}
   ];
@@ -6100,7 +6156,7 @@ function renderHandheld(raw,fromScanner){
   if(pcNoSpace==="W21PN" && hn==="12"){
     if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}outcomeTone("picker");logScan(raw,"🔌 Junction Mews — 1-2 (firm) or 12 — asked");}
     const opts=[
-      {walk:"FIRM",        addr:"1-2 Junction Mews, W2 1PN (firm)"},
+      {walk:"FIRM",        addr:JM_FIRM_ADDR},
       {walk:"11 NORFOLK",  addr:"12, Junction Mews, W2 1PN"}
     ];
     box.style.justifyContent="flex-start";
@@ -6226,6 +6282,35 @@ function renderHandheld(raw,fromScanner){
   }
 
   const walks=[...new Set(records.map(r=>r.r).filter(Boolean))];
+
+  // ── W2 1PN — THE FIRM AT 1-2 JUNCTION MEWS IS ALWAYS OFFERED (v1.77) ────
+  // Ash: every W2 1PN label should show the firm option. The firm's own
+  // barcodes print the range "1-2" as "12" or "1 2", so the number on a
+  // W2 1PN label can never be fully trusted — whatever door the resolver
+  // lands on, the firm stays on screen as a tappable alternative.
+  // Not needed on the two paths that already answer FIRM: the override
+  // (numbers 1 / 1-2 / 2) and the "12" barcode-error picker both return
+  // above this point, as does a correction Ash has saved himself.
+  if(pcNoSpace==="W21PN" && walks.length && walks.indexOf("FIRM")<0){
+    const jmFirm={s:"Junction Mews",d:JM_FIRM_ADDR,r:"FIRM",_bldg:"1-2, Junction Mews"};
+    if(walks.length===1){
+      // Single walk: ride the existing "also possible" card under the result.
+      if(handAlt){
+        if(handAlt.walks.indexOf("FIRM")<0){
+          handAlt.walks=handAlt.walks.concat(["FIRM"]);
+          handAlt.records=handAlt.records.concat([jmFirm]);
+        }
+      }else{
+        handAlt={title:"⚠ Also possible · the firm at 1-2",
+          note:"Every W2 1PN label can be for the firm at 1-2 Junction Mews — its barcode prints the range as 12 or 1 2, so the number on the label can't be trusted. Tap FIRM to use it.",
+          walks:["FIRM"],records:[jmFirm]};
+      }
+    }else{
+      // Several walks already listed: add FIRM as one more choice.
+      walks.push("FIRM");
+      records=records.concat([jmFirm]);
+    }
+  }
 
   if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}}
 
@@ -7871,14 +7956,9 @@ function enhanceDPM(canvas,ctx,moduleHint,invert){
 // mask an address code sitting right next to them. ----
 function pickBestResult(results){
   if(!results||!results.length)return null;
-  // v1.73: 1D/linear codes (Code128, Code39, EAN, UPC, Codabar, ITF) no
-  // longer require a dataset-verified W2 postcode just to be PICKED — any
-  // readable 1D code is now handed to handleQRResult, same as a 2D code,
-  // so it displays and is looked up/registered instead of vanishing. A 2D
-  // (address) code in the same frame still wins the pick when both are
-  // present (see the two-pass find below) — this keeps the existing
-  // anti-hijack behaviour for Amazon/marketplace 2D codes intact.
-  const ok=r=>r&&r.rawValue&&rmOnlyAccepts(r.format,r.rawValue);
+  const ok=r=>r&&r.rawValue
+    &&(!isLinearFormat(r.format)||hasW2Postcode(r.rawValue))
+    &&rmOnlyAccepts(r.format,r.rawValue);
   const pick=results.find(r=>ok(r)&&!isLinearFormat(r.format))||results.find(ok)||null;
   if(!pick)noteIgnoredCode(results); // RM ONLY binned a decoded 2D code → grey HUD hint
   return pick;
@@ -7903,14 +7983,14 @@ function noteIgnoredCode(results){
 // Shared success path for the live loop and the still-photo rescue, so the
 // two can never drift apart: dedupe bookkeeping, zoom reset, 5-SEC-WAIT
 // re-arm, then hand the payload to the matcher.
-function acceptScan(raw,format){
+function acceptScan(raw){
   lastRaw=raw;
   noDetectSince=Date.now();
   stillTried=false;focusNudged=false;
   if(autoZoomed===true)setCamZoom(1);
   if(autoZoomed!=="unsupported")autoZoomed=false;
   armScanDelay(); // 5 SEC WAIT on → next scan only after another countdown
-  handleQRResult(raw,true,false,format);
+  handleQRResult(raw,true);
 }
 
 // ---- Auto focus nudge. Focus drift is the most common reason a close-up
@@ -7989,7 +8069,7 @@ async function runStillRescue(bd){
         }
       }
       if(pick&&scanning&&stillTried&&pick.rawValue!==lastRaw){
-        acceptScan(pick.rawValue,pick.format);
+        acceptScan(pick.rawValue);
         return;
       }
     }
@@ -8291,7 +8371,7 @@ function startScanLoop(){
         // codes are skipped rather than wasting the frame.
         const pick=pickBestResult(results);
         if(pick && pick.rawValue!==lastRaw){
-          acceptScan(pick.rawValue,pick.format);
+          acceptScan(pick.rawValue);
         }else if(!results.length || !pick){
           // Nothing usable this frame (or only rejected non-W2 1D reads):
           // keep the stuck-timer running so focus / zoom / photo / OCR
@@ -8948,7 +9028,7 @@ function openScanHistory(){
   });
 }
 
-function handleQRResult(raw,fromCamera,typed,format){
+function handleQRResult(raw,fromCamera,typed){
   try{if(window.__wildNoteActivity)window.__wildNoteActivity();}catch(e){}
   // ── "DO NOT PICK UP" — ignore bare item/tracking barcodes (v1.32) ───────
   // Checked FIRST, before any flash/beep/vibrate/screen write, so an ignored
@@ -8959,13 +9039,7 @@ function handleQRResult(raw,fromCamera,typed,format){
   // name-only building QR still resolves — it has a confident match without a
   // postcode — so it is NOT ignored; nor is an ambiguous shared-name payload
   // (it deserves the pick-list).
-  // v1.73: this guard now only applies to non-linear (2D) formats. A 1D
-  // barcode (Code128/39/93, Codabar, ITF, EAN, UPC) is always registered —
-  // it displays, runs through the same walk/address matcher as a 2D code,
-  // and logs to scan history either way, falling through to the normal
-  // "no exact match" screen (renderClosestOptions) instead of vanishing
-  // silently when it isn't a delivery point.
-  if(fromCamera && !typed && !isLinearFormat(format)){
+  if(fromCamera && !typed){
     // Exact UPU S10 shape (two letters, nine digits, two letters) — an item
     // tracking number, never a delivery point. Checked outright (v1.71) so it
     // is ignored even if the fuzzy matcher would have found something in it.
