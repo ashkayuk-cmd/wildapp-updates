@@ -98,7 +98,7 @@ window.WILD_LIBS_READY=(async()=>{
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 /* Disable text highlight / long-press "Copy / Select all" callout everywhere. */
-html,body,#app{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-touch-callout:none}
+html,body,#app{padding-top:50px;padding-bottom:60px;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* But keep real inputs usable so you can still type a postcode / edit text. */
 input,textarea,[contenteditable="true"]{-webkit-user-select:text;-moz-user-select:text;-ms-user-select:text;user-select:text;-webkit-touch-callout:default}
 :root{--pri:#1565C0;--pri2:#0D47A1;--sur:#fff;--bg:#F0F4F8;--txt:#1A1A2E;--sub:#5f6368;--div:#dee3ea;--chip:#E3F2FD;--shad:0 2px 8px rgba(0,0,0,.13);--r:14px;}
@@ -591,7 +591,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=75;
+const THIS_BUILD_NUM=76;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -600,7 +600,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.79";
+const BUILD_NAME="v1.80";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -617,7 +617,7 @@ const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
 const REPO_DATA_BUILD=72;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD=72;                  // build of the WildApp.apk beside this file
+const REPO_APK_BUILD=74;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -5636,6 +5636,110 @@ function namedRecordOnLabel(raw,pcNoSpace,hn){
   if(walks.length!==1||pcs.length!==1||!pcs[0]||pcs[0]===pcNoSpace)return null;
   return {record:hits[0],records:hits,walk:walks[0],pc:pcs[0],words:unique};
 }
+// ── STREET + NUMBER ON THE LABEL BEATS A WRONG POSTCODE (v1.80) ───────────
+// namedRecordOnLabel above judges a printed postcode by a RARE word — one the
+// round confines to a street or two, like CITI or TALBOT. That catches labels
+// that NAME a building, and structurally cannot catch the commonest shape of
+// all: a plain "<number> <street>" address line on a busy street name.
+// "47 49 WESTBOURNE GROVE" carries no rare word anywhere (WESTBOURNE is on 18
+// streets in the round, GROVE on 4), so a label printed with someone else's
+// postcode resolved to that postcode's walk with no warning at all.
+//
+// Here the evidence is the PAIR, not either half: the whole street name as
+// printed, plus a number that exists on that street and nowhere at the
+// scanned postcode. Every gate below is a veto, and the fallback is the old
+// behaviour (the scanned postcode's walk).
+//   1. the WHOLE street name must appear in the label with whitespace
+//      squashed (Zebra injects stray spaces inside words), and a street name
+//      wholly contained in another matched one is not independent evidence,
+//      so "Bourne Terrace" can never win on a label reading WESTBOURNE
+//      TERRACE (28 such pairs in the round). Exactly one street may survive;
+//   2. the scanned postcode must cover NONE of that street — a postcode that
+//      does cover it explains the address at least as well;
+//   3. the number must NOT exist at the scanned postcode — if it does, the
+//      printed postcode explains the label and is left alone;
+//   4. the number on that street must land on exactly one walk and exactly
+//      one postcode, and that postcode must not be the scanned one.
+// The number is read from the label the way an address line reads it: the
+// digits printed immediately BEFORE the street name, which on "FLAT 55 47 49
+// WESTBOURNE GROVE" is the block 47-49 and not the flat. extractHouseNumber's
+// answer is tried after that, and both go through every gate.
+// Only the delivery half of a Mailmark payload is read: the sender's own
+// details sit after the ZGB marker and must never be taken for the address
+// being delivered to.
+function streetNumberOnLabel(raw,pcNoSpace,hn){
+  if(!pcNoSpace||typeof allData==="undefined"||!allData)return null;
+  const here=recordsAtPostcode(pcNoSpace);
+  if(!here.length)return null;                       // unknown postcode: other paths own it
+  let txt=String(raw||"");
+  const head=txt.split(/\d?ZGB/)[0];
+  const sq=t=>String(t||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if(head&&head.length!==txt.length&&sq(head).indexOf(pcNoSpace)>=0)txt=head;
+  // Squashed copy plus a map back to where each character came from, so the
+  // number printed next to the street can be found in the ORIGINAL spacing.
+  const ch=[],pos=[];
+  for(let i=0;i<txt.length;i++){
+    const c=txt.charAt(i).toUpperCase();
+    if(c>="A"&&c<="Z"||c>="0"&&c<="9"){ch.push(c);pos.push(i);}
+  }
+  const scope=ch.join("");
+  if(!scope)return null;
+  // normRangeText joins "1 2" into "1-2" on the LABEL, but leaves a record
+  // whose own text reads "2 5, Hereford Road" alone — so a record that should
+  // veto (Hereford Road holds both "2 5" on walk 33 and "Flat 2-5, Berrington
+  // House" on 28) was invisible to the test. Both spellings are checked here.
+  const forms=t=>{const s=normRangeText(String(t||""));
+    return [s,s.replace(/(\d)\s+(\d)/g,"$1-$2")];};
+  const has=(re,t)=>forms(t).some(f=>re.test(f));
+  const idx=streetWalkIndex();
+  let named=[];
+  for(const k in idx){
+    const st=idx[k].name,s=sq(st);
+    if(s.length<8)continue;
+    const at=scope.indexOf(s);
+    if(at<0)continue;                                                    // gate 1
+    named.push({name:st,sq:s,at:at});
+  }
+  named=named.filter(a=>!named.some(b=>b!==a&&b.sq.indexOf(a.sq)>=0));   // gate 1
+  if(named.length!==1)return null;
+  const stSq=named[0].sq;
+  if(here.some(r=>sq(r.s)===stSq))return null;                           // gate 2
+  // The digits printed just before the street name. The leading token of the
+  // slice may be cut in half, so it is dropped before reading.
+  const from=Math.max(0,pos[named[0].at]-26);
+  const before=txt.slice(from,pos[named[0].at]).replace(/^[A-Za-z0-9]+/,"");
+  const rng=/(?:^|[^A-Za-z0-9])(\d{1,4}[A-Za-z]?)(?:\s*[-\u2013\u2014\/&]\s*|\s+)(\d{1,4}[A-Za-z]?)\s*$/.exec(before);
+  const one=/(?:^|[^A-Za-z0-9])(\d{1,4}[A-Za-z]?)\s*$/.exec(before);
+  const cands=[];
+  if(rng)cands.push(rng[1]+"-"+rng[2]);
+  if(one)cands.push(one[1]);
+  if(hn)cands.push(String(hn));
+  const seen=Object.create(null);
+  for(const c0 of cands){
+    const c=String(c0||"").toUpperCase();
+    if(!c||seen[c])continue;
+    seen[c]=1;
+    const esc=normRangeText(c).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    const re=new RegExp("\\b"+esc+"\\b");
+    if(here.some(r=>has(re,r.d)))continue;                               // gate 3
+    const hits=allData.filter(r=>sq(r.s)===stSq&&has(re,r.d));
+    if(!hits.length)continue;
+    const walks=[...new Set(hits.map(r=>r.r).filter(Boolean))];
+    const pcs=[...new Set(hits.map(r=>getPostcode(r.d).toUpperCase().replace(/\s+/g,"")).filter(Boolean))];
+    if(walks.length!==1||pcs.length!==1||!pcs[0]||pcs[0]===pcNoSpace)continue;   // gate 4
+    // What to show. The hits can be every flat inside one block ("Flat 42,
+    // 47-49, Westbourne Grove, W2 4UA") while the label names only the block,
+    // so when they all share the same text after the first comma AND that text
+    // carries the number, show the block rather than an arbitrary flat.
+    let display=hits[0].d;
+    const tails=[...new Set(hits.map(r=>{const i=String(r.d||"").indexOf(",");
+      return i<0?String(r.d||""):String(r.d).slice(i+1).trim();}))];
+    if(tails.length===1&&tails[0]&&has(re,tails[0]))display=tails[0];
+    return {record:hits[0],records:hits,walk:walks[0],pc:pcs[0],
+            street:named[0].name,num:c,display:display};
+  }
+  return null;
+}
 // v1.67: an "also possible" walk is the app telling you it is NOT sure — a
 // second walk the same label could belong to. Ash asked for those to read as
 // a warning, so they are red rather than the blue of the walk above them.
@@ -6146,7 +6250,7 @@ function renderHandheld(raw,fromScanner){
   // address for the walk and flag the mismatch, rather than resolving against
   // the scanned (wrong) postcode's unrelated addresses. Agreement → falls
   // through to the normal path with no warning.
-  let handPcMismatch=null,pcMismatchRec=null;
+  let handPcMismatch=null,pcMismatchRec=null,pcMismatchRecs=null,handAddrOverride=null;
   if(pcNoSpace && /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pcNoSpace) && match && match.confidence>=0.8
      && addressBeatsPostcode(match,raw,pcNoSpace,hn)){
     const recPc=(getPostcode(match.record.d)||"").toUpperCase().replace(/\s+/g,"");
@@ -6166,6 +6270,20 @@ function renderHandheld(raw,fromScanner){
       const f=p=>p.length>3?p.slice(0,-3)+" "+p.slice(-3):p;
       handPcMismatch={scanned:f(pcNoSpace),correct:f(named.pc)};
       pcMismatchRec=named.record;
+    }
+  }
+
+  // Third route to the same verdict (v1.80): the label prints "<number>
+  // <street>" for a street the scanned postcode doesn't cover at all. See
+  // streetNumberOnLabel — this needs no rare word, so ordinary addresses on
+  // busy street names ("47 49 WESTBOURNE GROVE" against a W2 4JZ label) are
+  // caught too. Runs last: the two routes above are more specific.
+  if(!handPcMismatch && pcNoSpace && /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pcNoSpace)){
+    const sn=streetNumberOnLabel(raw,pcNoSpace,hn);
+    if(sn){
+      const f=p=>p.length>3?p.slice(0,-3)+" "+p.slice(-3):p;
+      handPcMismatch={scanned:f(pcNoSpace),correct:f(sn.pc)};
+      pcMismatchRec=sn.record;pcMismatchRecs=sn.records;handAddrOverride=sn.display;
     }
   }
 
@@ -6199,9 +6317,19 @@ function renderHandheld(raw,fromScanner){
   // On a confirmed postcode/address mismatch, resolve from the ADDRESS record,
   // not the scanned postcode's candidate list.
   if(handPcMismatch){
-    records=allData.filter(d=>d.d===pcMismatchRec.d);
-    if(!records.length)records=[pcMismatchRec];
-    exact=pcMismatchRec;
+    // v1.80: when the winning evidence was a street + number, a whole block of
+    // flats can share it. Keep the set so the screen answers at block level —
+    // findExactFlat still pins one door when the label's number belongs to
+    // exactly one of them, and only then does the flat's own text win.
+    if(pcMismatchRecs&&pcMismatchRecs.length>1){
+      records=pcMismatchRecs;
+      exact=findExactFlat(records,hn)||null;
+      if(exact)handAddrOverride=null;
+    }else{
+      records=allData.filter(d=>d.d===pcMismatchRec.d);
+      if(!records.length)records=[pcMismatchRec];
+      exact=pcMismatchRec;
+    }
   } else if(pcNoSpace){
     const cands=allData.filter(d=>getPostcode(d.d).toUpperCase().replace(/\s+/g,"")===pcNoSpace);
     if(cands.length){
@@ -6329,6 +6457,7 @@ function renderHandheld(raw,fromScanner){
     const walk=walks[0];
     let addr;
     if(exact)addr=exact.d;
+    else if(handAddrOverride)addr=handAddrOverride;   // v1.80 — the block the label names
     else if(pcNoSpace){const b=[...new Set(records.map(r=>r._bldg).filter(Boolean))];addr=b.length===1?b[0]:records[0].d;}
     else addr=records[0].d;
     // Postcode/address mismatch (computed up front as handPcMismatch): the QR
