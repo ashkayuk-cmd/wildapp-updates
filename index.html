@@ -594,7 +594,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=78;
+const THIS_BUILD_NUM=79;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -603,7 +603,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.82";
+const BUILD_NAME="v1.83";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3155,16 +3155,18 @@ function handTypeSuggestions(buf){
   out.sort();
   return out.slice(0,8);
 }
+const HAND_TYPE_LOCK="W2 ";
 function handTypeSet(v){
-  handTypeBuf=String(v||"").toUpperCase().replace(/[^A-Z0-9 ]/g,"").slice(0,24);
+  let s=String(v||"").toUpperCase().replace(/[^A-Z0-9 ]/g,"").slice(0,24);
+  if(s.indexOf(HAND_TYPE_LOCK)!==0)s=HAND_TYPE_LOCK+s.replace(/^W2\s*/,"");
+  handTypeBuf=s;
   handTypeRefresh();
 }
 function handTypeRefresh(){
   const d=document.getElementById("handTypeDisp");
   if(d){
-    d.textContent=handTypeBuf||"";
-    d.style.color=handTypeBuf?"var(--txt)":"var(--sub)";
-    if(!handTypeBuf)d.textContent="Postcode…";
+    d.textContent=handTypeBuf||HAND_TYPE_LOCK;
+    d.style.color=(handTypeBuf&&handTypeBuf!==HAND_TYPE_LOCK)?"var(--txt)":"var(--sub)";
   }
   const sg=document.getElementById("handTypeSug");
   if(sg){
@@ -3179,7 +3181,7 @@ function handTypeRefresh(){
     });
   }
   const go=document.getElementById("handTypeGo");
-  if(go)go.style.opacity=handTypeBuf?"1":".45";
+  if(go)go.style.opacity=(handTypeBuf&&handTypeBuf!==HAND_TYPE_LOCK)?"1":".45";
 }
 function handTypeLookup(){
   const t=handTypeBuf.trim();
@@ -3189,7 +3191,7 @@ function handTypeLookup(){
 function showHandTypeIn(keep){
   const box=document.getElementById("handResult");
   if(!box)return;
-  if(!keep)handTypeBuf="";
+  if(!keep)handTypeBuf=HAND_TYPE_LOCK;
   try{box.dataset.sub="typein";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
   const rows=["1234567890","QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
@@ -3220,9 +3222,9 @@ function showHandTypeIn(keep){
     b.onclick=()=>handTypeSet(handTypeBuf+b.dataset.k);
   });
   const del=document.getElementById("handTypeDel");
-  if(del)del.onclick=()=>handTypeSet(handTypeBuf.slice(0,-1));
+  if(del)del.onclick=()=>{if(handTypeBuf.length>HAND_TYPE_LOCK.length)handTypeSet(handTypeBuf.slice(0,-1));};
   const clr=document.getElementById("handTypeClr");
-  if(clr)clr.onclick=()=>handTypeSet("");
+  if(clr)clr.onclick=()=>handTypeSet(HAND_TYPE_LOCK);
   const go=document.getElementById("handTypeGo");
   if(go)go.onclick=handTypeLookup;
   const back=document.getElementById("handTypeBack");
@@ -3283,7 +3285,6 @@ function showHandSound(){
 function handIdleActionsHtml(){
   return '<div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">'+
     '<button type="button" onclick="try{showHandTypeIn()}catch(e){}" style="'+"+HAND_IDLE_BTN+"+'">⌨ Type a postcode</button>'+
-    '<button type="button" onclick="try{showHandSound()}catch(e){}" style="'+"+HAND_IDLE_BTN+"+'">🔊 Sound</button>'+
     '</div>';
 }
 function handIdleHtml(){
@@ -4104,25 +4105,10 @@ document.getElementById("qrRescan").addEventListener("click",resumeScan);
 document.getElementById("histBtn").addEventListener("click",openScanHistory);
 let qrTypeTimer=null;
 document.getElementById("qrResult").addEventListener("input",()=>{
-  var inp=document.getElementById("qrResult");
-  var v=inp.value;
-  // Keep W2 at the start, prevent deletion
-  if(!v.startsWith("W2")){
-    if(v.length>0 && v[0].toUpperCase()==="W" && v.length>1 && /^[A-Z]\d/.test(v.substring(1))){
-      // User typed something like "W1" or "W3", keep just "W2"
-      inp.value="W2 "+v.substring(v.indexOf(" ")+1).trim();
-    }else if(v.length===0){
-      // If empty, restore W2
-      inp.value="W2 ";
-    }else{
-      // Ensure W2 is at the start
-      inp.value="W2 "+v.replace(/^W2\s*/i,"").trim();
-    }
-  }
   clearTimeout(qrTypeTimer);
   qrTypeTimer=setTimeout(()=>{
-    const val=document.getElementById("qrResult").value.trim();
-    if(val && val!=="W2") handleQRResult(val,false,true); else document.getElementById("qrWalk").innerHTML="";
+    const v=document.getElementById("qrResult").value.trim();
+    if(v) handleQRResult(v,false,true); else document.getElementById("qrWalk").innerHTML="";
   },300);
 });
 document.getElementById("qrCopy").addEventListener("click",()=>{
@@ -9918,7 +9904,8 @@ document.addEventListener("visibilitychange",()=>{
     }
     btn.addEventListener("click",function(e){e.preventDefault();fullRestart();});
     btn.addEventListener("touchend",function(e){e.preventDefault();fullRestart();});
-    try{var row=document.getElementById("wildTagRow");if(row){row.appendChild(btn);}}catch(e){(document.body||document.documentElement).appendChild(btn);}
+    var row=document.getElementById("wildTagRow");
+    if(row){row.appendChild(btn);}else{(document.body||document.documentElement).appendChild(btn);}
     /* ── Two-line label: "⟳ RESET" with "APP" underneath (v1.50) ──────────
        Same size and shape as the old one-line button: measure the box while
        it still holds the single line, freeze THAT width and height, then
