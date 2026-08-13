@@ -594,7 +594,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=85;
+const THIS_BUILD_NUM=86;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -603,7 +603,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.89";
+const BUILD_NAME="v1.90";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -620,7 +620,7 @@ const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
 const REPO_DATA_BUILD=72;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD=85;                  // build of the WildApp.apk beside this file
+const REPO_APK_BUILD=86;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -5109,7 +5109,7 @@ function commitHandFix(walk,scope){
 /* One saved correction, rendered the same way wherever it appears (the
    manage screen and the App version screen). Returns the inner block only —
    the caller supplies the row wrapper and any buttons. */
-let handMgFrom="";   // "version" when the manage screen was opened from App version
+let handMgFrom="";   // "version"/"settings" — where the manage screen was opened from, so Back retraces it
 function overrideRowInner(r){
   const pcFmt=r.pc&&r.pc.length>3?r.pc.slice(0,-3)+" "+r.pc.slice(-3):(r.pc||"");
   return `<div style="flex:1;min-width:0">
@@ -5178,6 +5178,7 @@ function showHandManage(){
   // Opened from the App version screen? Go back THERE, not to the scan.
   if(back)back.onclick=()=>{
     if(handMgFrom==="version"){handMgFrom="";showAppVersion();return;}
+    if(handMgFrom==="settings"){handMgFrom="";openOptionsMenu();return;}
     if(handLastRaw)renderHandheld(handLastRaw,false);
     else{box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}
   };
@@ -7254,6 +7255,7 @@ function openOptionsMenu(){
     +'<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">'
       +item("🔊","Sound","How loud the scan beeps are")
       +item("🗣️","Voice","Which voice reads the walk aloud, speed &amp; pitch")
+      +item("✏️","Walk corrections","Walks you\'ve fixed, and addresses you\'ve added")
     +'</div>';
   document.body.appendChild(ov);
   const cl=ov.querySelector("#optClose");if(cl)cl.onclick=()=>ov.remove();
@@ -7266,6 +7268,15 @@ function openOptionsMenu(){
     try{showHandSound();}catch(e){}
   };
   if(rows[1])rows[1].onclick=()=>{ov.remove();try{openVoiceSheet();}catch(e){}};
+  if(rows[2])rows[2].onclick=()=>{
+    ov.remove();
+    // The corrections list renders into the handheld result box, so make that
+    // tab visible first — otherwise the screen opens behind whatever tab you
+    // were on (same reason Sound does this).
+    try{if(typeof openHand==="function")openHand();}catch(e){}
+    handMgFrom="settings";        // so its Back returns to Settings, not the scan
+    try{showHandManage();}catch(e){}
+  };
 }
 
 // ---- VOICE sheet v2: pick the read-aloud engine and shape it. Lists the
