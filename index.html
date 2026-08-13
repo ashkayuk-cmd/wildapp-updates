@@ -360,6 +360,9 @@ body.addr-locked #rl .lockmsg{display:flex}
 .wm-tag-delete{background:#c62828}
 .wm-streets-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;max-height:110px;overflow-y:auto}
 .wm-streets-chips span{background:var(--chip);color:var(--pri);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600}
+
+/* Bottom popups appear above the button row */
+[data-sub]{z-index:2147483646;}
 </style>
 </head>
 <body>
@@ -9879,7 +9882,7 @@ document.addEventListener("visibilitychange",()=>{
       "color:#fff","background:#c62828","border:none","border-radius:12px",
       "box-shadow:0 2px 8px rgba(0,0,0,.3)","cursor:pointer",
       "-webkit-tap-highlight-color:transparent","touch-action:manipulation",
-      "opacity:.92","user-select:none"
+      "opacity:.92","user-select:none","flex:0 0 auto"
     ].join(";");
     var busy=false;
     // The label is two lines ("RESET" with "APP" under it), so a flash must
