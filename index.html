@@ -594,7 +594,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=84;
+const THIS_BUILD_NUM=85;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -603,7 +603,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.88";
+const BUILD_NAME="v1.89";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -620,7 +620,7 @@ const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
 const REPO_DATA_BUILD=72;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD=74;                  // build of the WildApp.apk beside this file
+const REPO_APK_BUILD=85;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -724,6 +724,52 @@ function liveClearCode(){
   try{localStorage.removeItem(LIVE_CODE_KEY);localStorage.removeItem(LIVE_PENDING_KEY);}catch(e){}
 }
 function liveClearData(){try{localStorage.removeItem(LIVE_DATA_KEY);}catch(e){}}
+/* ── HOLDING THE DOWNLOADED COPY (v1.89) ──────────────────────────────────
+   "Use built-in version" is an escape hatch, and an escape hatch you can't
+   come back from is a trap: the copy was deleted, so returning to it meant
+   downloading it again, which needs signal. It is now MOVED to a hold slot,
+   and "Use latest update" moves it back. One generation is kept — a second
+   revert overwrites the first, which is what you want (the thing you'd go
+   back to is always the newest copy that ran). If the browser refuses the
+   write (storage full), the old destructive clear still happens, so the
+   revert itself can never fail. */
+const LIVE_HOLD_KEY="wildLiveHold_v1";
+const LIVE_HOLD_DATA_KEY="wildLiveHoldData_v1";
+function holdOne(srcKey,holdKey){
+  try{
+    const v=localStorage.getItem(srcKey);
+    if(!v)return true;                       // nothing there to hold
+    localStorage.removeItem(holdKey);        // free the slot before writing
+    localStorage.setItem(holdKey,v);
+    localStorage.removeItem(srcKey);
+    return true;
+  }catch(e){return false;}
+}
+function liveHoldForRevert(){
+  const okc=holdOne(LIVE_CODE_KEY,LIVE_HOLD_KEY);
+  const okd=holdOne(LIVE_DATA_KEY,LIVE_HOLD_DATA_KEY);
+  if(!okc)liveClearCode();                   // couldn't hold it — still revert
+  if(!okd)liveClearData();
+  try{localStorage.removeItem(LIVE_PENDING_KEY);}catch(e){}
+  return okc;
+}
+function liveHeldBuild(){const r=liveRead(LIVE_HOLD_KEY);return r?r.b:0;}
+function liveRestoreHeld(){
+  let moved=false;
+  try{
+    const c=localStorage.getItem(LIVE_HOLD_KEY);
+    if(c){localStorage.setItem(LIVE_CODE_KEY,c);localStorage.removeItem(LIVE_HOLD_KEY);moved=true;}
+    const d=localStorage.getItem(LIVE_HOLD_DATA_KEY);
+    if(d){localStorage.setItem(LIVE_DATA_KEY,d);localStorage.removeItem(LIVE_HOLD_DATA_KEY);}
+  }catch(e){}
+  return moved;
+}
+/* What the version screen can switch FORWARD to: a held copy, or one that has
+   been downloaded but not restarted into. Only counts if it actually beats
+   what is running — a held copy older than the baked app is just clutter. */
+function liveForwardBuild(){
+  return Math.max(liveHeldBuild(),liveCodeBuild());
+}
 // Boot finished — whatever is running works, so drop the watchdog flag.
 function liveConfirmBoot(){try{localStorage.removeItem(LIVE_PENDING_KEY);}catch(e){}}
 
@@ -843,7 +889,29 @@ function updBtnIdle(b){
   b.style.background=b._bg0||"";
   b.style.color=b._fg0||"";
 }
+let handUpdWaiting="";
+/* The one place every check reports a waiting update. The ⟳ button is gone
+   (v1.89), so this is also where the version pill is flagged. */
+function flagUpdateReadyPill(){
+  try{
+    const tg=document.getElementById("wildBuildTag");
+    if(!tg||tg._updFlagged)return;
+    tg._updFlagged=true;
+    tg.textContent=tg.textContent.split(" — ")[0]+" — update ready";
+    tg.style.color="#fff";
+    tg.style.background="#2e7d32";
+    tg.style.borderColor="rgba(0,0,0,.2)";
+  }catch(e){}
+}
+/* An update the person can act on right now: one already downloaded and
+   waiting for a restart, or one this session's check found. */
+function pendingUpdateKind(){
+  if(liveCodeBuild()>runningBuild())return "code";
+  return handUpdWaiting||"";
+}
 function updBtnReady(kind){
+  handUpdWaiting=kind||"code";
+  flagUpdateReadyPill();
   const b=document.getElementById("handUpdBtn");
   if(!b)return;
   b._ready=kind||"code";
@@ -4490,7 +4558,17 @@ function wireHandFixButtons(raw){
     const fix=e.target.closest&&e.target.closest("#handFixBtn");
     const man=e.target.closest&&e.target.closest("#handManageBtn");
     const rec=e.target.closest&&e.target.closest("#handRecentBtn");
-    if(fix){showHandFixPicker();return;}
+    if(fix){
+      // v1.89: changing a walk is now PIN'd — it rewrites what this address
+      // answers from here on, for every later scan of it.
+      requireHandPin({
+        title:"PIN to change a walk",
+        note:"A correction changes what this address gives from now on.",
+        onOk:()=>showHandFixPicker(),
+        onCancel:()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else handGoIdle();}
+      });
+      return;
+    }
     if(man){showHandManage();return;}
     if(rec){showHandRecent();return;}
   });
@@ -5128,14 +5206,33 @@ function showAppVersion(){
         `<button id="handVerManage" style="margin-top:12px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">Manage corrections (delete, back up, upload)</button>`
       : `<div style="font-size:13px;color:var(--sub);margin-top:10px;line-height:1.5">None saved yet. When a scan shows the wrong walk, tap “Wrong walk?” on the result to fix it.</div>`)+
     `</div>`;
+  /* v1.89: the buttons here depend on what this device can actually switch
+     to, so they're built from the state rather than being fixed markup.
+       · Check now        — always
+       · Apply update     — only when one is downloaded and waiting
+       · Use built-in     — only when a downloaded copy is running
+       · Use latest       — only when a held/downloaded copy BEATS what runs */
+  const VER_BTN="padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;cursor:pointer";
+  const pend=pendingUpdateKind();
+  const fwd=liveForwardBuild();
+  const canFwd=fwd>runningBuild();
+  const rowStart='<div style="display:flex;gap:8px;margin-top:8px">';
+  let VER_BTNS='<div style="margin-top:14px"></div>'+rowStart+
+    '<button id="handLiveCheck" style="'+VER_BTN+';flex:1;color:var(--txt)">Check now</button>';
+  if(pend)VER_BTNS+='<button id="handLiveApply" style="'+VER_BTN+';flex:1;border-color:#2e7d32;background:#2e7d32;color:#fff">'+
+    (pend==="apk"?"⬆ Download new app":"⬆ Apply update")+'</button>';
+  VER_BTNS+='</div>';
+  if(isLiveCopy()||canFwd){
+    VER_BTNS+=rowStart;
+    if(isLiveCopy())VER_BTNS+='<button id="handLiveRevert" style="'+VER_BTN+';flex:1;color:#8a5300">Use built-in version</button>';
+    if(canFwd)VER_BTNS+='<button id="handLiveForward" style="'+VER_BTN+';flex:1;color:var(--pri)">Use latest update ('+fwd+')</button>';
+    VER_BTNS+='</div>';
+  }
   box.style.justifyContent="flex-start";
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">App version</div>
     <div id="handLiveInfo" style="font-size:13px;color:var(--sub);margin-top:10px;line-height:1.5"></div>
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <button id="handLiveCheck" style="flex:1;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">Check now</button>
-      <button id="handLiveRevert" style="flex:1;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:#8a5300;cursor:pointer">Use built-in version</button>
-    </div>
+    ${VER_BTNS}
     ${corrHtml}
     <button id="handVerBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
   </div>`;
@@ -5151,6 +5248,8 @@ function showAppVersion(){
     const ab=installedApkBuildNow();
     if(ab)bits.push("Installed app (APK): build <b>"+ab+"</b>.");
     if(lc>run)bits.push("Build <b>"+lc+"</b> downloaded — restart to apply.");
+    const held=liveHeldBuild();
+    if(held)bits.push("Downloaded build <b>"+held+"</b> is being kept"+(held>run?" — you can switch back to it.":" (older than this one)."));
     if(ld>BAKED_DATA_BUILD)bits.push("Addresses: downloaded set <b>"+ld+"</b> in use.");
     if(note)bits.push('<span style="color:#8a5300">'+escHtml(note)+"</span>");
     info.innerHTML=bits.join("<br>");
@@ -5165,14 +5264,44 @@ function showAppVersion(){
       setTimeout(()=>showAppVersion(),1200);
     });
   };
+  /* Everything that changes WHICH VERSION RUNS is behind the PIN (v1.89) —
+     applying an update, dropping back to the built-in copy, and going forward
+     again. Checking is not: looking costs nothing. */
+  const ap=document.getElementById("handLiveApply");
+  if(ap)ap.onclick=()=>requireHandPin({
+    title:"PIN to update",
+    note:"The app will restart on the new version.",
+    onOk:()=>applyUpdateNow(pend),
+    onCancel:()=>showAppVersion()
+  });
   const rev=document.getElementById("handLiveRevert");
-  // Escape hatch: bin the downloaded copy and restart on the version inside
-  // the APK. Corrections and scan history are untouched.
-  if(rev)rev.onclick=()=>{
-    liveClearCode();liveClearData();
-    try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the built-in version ("+THIS_BUILD_NUM+").");}catch(e){}
-    liveApplyNow();
-  };
+  // Escape hatch: set the downloaded copy aside (v1.89 — it used to be
+  // deleted) and restart on the version inside the APK. Corrections and scan
+  // history are untouched either way.
+  if(rev)rev.onclick=()=>requireHandPin({
+    title:"PIN to change version",
+    note:"Goes back to the version built into the app.",
+    onOk:()=>{
+      const kept=liveHoldForRevert();
+      try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the built-in version ("+THIS_BUILD_NUM+")."+
+        (kept?" The downloaded copy is kept — \u201cUse latest update\u201d brings it back.":""));}catch(e){}
+      liveApplyNow();
+    },
+    onCancel:()=>showAppVersion()
+  });
+  const fw=document.getElementById("handLiveForward");
+  // The way back: whatever was set aside by a revert, or a copy downloaded
+  // and not yet restarted into.
+  if(fw)fw.onclick=()=>requireHandPin({
+    title:"PIN to change version",
+    note:"Goes back to the latest downloaded version.",
+    onOk:()=>{
+      liveRestoreHeld();
+      try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the downloaded version ("+fwd+").");}catch(e){}
+      liveApplyNow();
+    },
+    onCancel:()=>showAppVersion()
+  });
   const mg=document.getElementById("handVerManage");
   if(mg)mg.onclick=()=>{handMgFrom="version";showHandManage();};
   const back=document.getElementById("handVerBack");
@@ -5317,6 +5446,28 @@ function ghToken(){
 }
 // PIN required before anything is sent (v1.74).
 const GH_PIN="1984";
+/* ── SHARED PIN (v1.89) ───────────────────────────────────────────────────
+   The same four digits guard three things now: uploading corrections,
+   changing a walk, and changing which version of the app runs. Once entered
+   it stays unlocked for ten minutes, so a run of corrections doesn't mean
+   typing it four times, and it re-locks on restart (the window lives in
+   memory, deliberately not in storage). */
+const WILD_PIN=GH_PIN;
+const PIN_GRACE_MS=10*60*1000;
+let handPinOkUntil=0;
+function handPinFresh(){return Date.now()<handPinOkUntil;}
+function handPinClear(){handPinOkUntil=0;}
+function requireHandPin(opts){
+  opts=opts||{};
+  if(handPinFresh()){opts.onOk&&opts.onOk();return;}
+  showHandPin({
+    sub:opts.subName||"pin",
+    title:opts.title||"Enter PIN",
+    note:opts.note||"",
+    onOk:()=>{handPinOkUntil=Date.now()+PIN_GRACE_MS;opts.onOk&&opts.onOk();},
+    onCancel:opts.onCancel
+  });
+}
 function ghSetToken(t){try{if(t)localStorage.setItem(GH_TOKEN_KEY,t);else localStorage.removeItem(GH_TOKEN_KEY);}catch(e){}}
 function ghIssueBody(){
   const m=userOverrides();
@@ -5334,9 +5485,20 @@ function ghIssueBody(){
    focus, and the kiosk answers a focus loss by pulling itself back — the same
    reason the "type a postcode" screen draws its own keys (v1.65). */
 function showGhPinPad(onOk){
+  showHandPin({
+    sub:"ghpin",
+    title:"PIN to upload",
+    note:"Stops corrections being sent by an accidental tap.",
+    onOk:onOk,
+    onCancel:showGithubUpload
+  });
+}
+function showHandPin(opts){
+  opts=opts||{};
+  const onOk=opts.onOk||function(){};
   const box=document.getElementById("handResult");
   if(!box)return;
-  try{box.dataset.sub="ghpin";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  try{box.dataset.sub=opts.sub||"pin";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   let buf="";
   const kb="padding:15px 0;border:1px solid var(--div);border-radius:12px;background:var(--sur);"+
            "font-size:21px;font-weight:800;color:var(--txt);cursor:pointer;"+
@@ -5347,8 +5509,8 @@ function showGhPinPad(onOk){
       (i<buf.length?"var(--pri)":"transparent")+';border:2px solid var(--div)"></span>').join("");
     const keys=[1,2,3,4,5,6,7,8,9].map(n=>'<button data-k="'+n+'" style="'+kb+'">'+n+'</button>').join("");
     box.innerHTML=`<div style="width:100%;max-width:320px;margin:0 auto;text-align:center;padding:8px 4px">
-      <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">PIN to upload</div>
-      <div style="font-size:12px;color:var(--sub);margin-top:5px">Stops corrections being sent by an accidental tap.</div>
+      <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">${escHtml(opts.title||"Enter PIN")}</div>
+      <div style="font-size:12px;color:var(--sub);margin-top:5px">${escHtml(opts.note||"")}</div>
       <div style="margin:18px 0 2px">${dots}</div>
       <div style="font-size:12px;min-height:17px;font-weight:700;color:#e53935">${err||""}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px">
@@ -5361,12 +5523,15 @@ function showGhPinPad(onOk){
     box.querySelectorAll("button[data-k]").forEach(b=>{
       b.onclick=()=>{
         const k=b.getAttribute("data-k");
-        if(k==="cancel"){showGithubUpload();return;}
+        if(k==="cancel"){
+          if(opts.onCancel){opts.onCancel();return;}
+          handGoIdle();return;
+        }
         if(k==="del"){buf=buf.slice(0,-1);draw("");return;}
         if(buf.length>=4)return;
         buf+=k;
         if(buf.length<4){draw("");return;}
-        if(buf===GH_PIN){onOk();return;}
+        if(buf===WILD_PIN){onOk();return;}
         buf="";draw("Wrong PIN — try again");
       };
     });
@@ -7152,12 +7317,20 @@ function openVoiceSheet(){
       +'<div style="display:flex;justify-content:flex-end"><button id="vcReset" type="button" style="border:none;background:#f1f3f4;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:600;color:#202124;cursor:pointer">Reset speed &amp; pitch</button></div>'
     +'</div>'
     +'<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">'
-      +(vs.length?rows:'<div style="padding:34px 16px;text-align:center;color:var(--sub,#5f6368);font-size:13px;line-height:1.5">No voices reported by this phone yet — tap Refresh, or add voices in the phone\'s text-to-speech settings</div>')
+      +(vs.length?rows:'<div style="padding:34px 16px;text-align:center;color:var(--sub,#5f6368);font-size:13px;line-height:1.5">No voices reported yet — tap Refresh. If it stays empty, add a voice in the device\'s text-to-speech settings (Settings › Language &amp; input › Text-to-speech)</div>')
     +'</div>';
   document.body.appendChild(ov);
   const preview=()=>speakText("14 Westbourne Terrace");
   ov.querySelector("#vcClose").onclick=()=>ov.remove();
-  ov.querySelector("#vcRefresh").onclick=()=>{try{speechSynthesis.getVoices();}catch(e){}ov.remove();setTimeout(openVoiceSheet,150);};
+  ov.querySelector("#vcRefresh").onclick=()=>{
+    // v1.89: on the PDA the list comes from the native text-to-speech engine
+    // through the bridge and is cached, so Refresh has to drop that cache —
+    // otherwise it re-renders the same (possibly empty) list. In a browser
+    // the hook doesn't exist and getVoices() alone is the right call.
+    try{if(window.__wildRefreshVoices)window.__wildRefreshVoices();}catch(e){}
+    try{speechSynthesis.getVoices();}catch(e){}
+    ov.remove();setTimeout(openVoiceSheet,150);
+  };
   const wire=(id,key)=>{
     const el=ov.querySelector("#"+id),lab=ov.querySelector("#"+id+"Val");
     el.oninput=()=>{lab.textContent=parseFloat(el.value).toFixed(2);};
@@ -10010,14 +10183,14 @@ document.addEventListener("visibilitychange",()=>{
     o.style.cssText=pill.concat(["position:static","pointer-events:auto","cursor:pointer",
       "white-space:nowrap","-webkit-tap-highlight-color:transparent","touch-action:manipulation"]).join(";");
     o.onclick=function(){try{if(typeof openOptionsMenu==="function")openOptionsMenu();}catch(e){}};
-    var u=document.createElement("button");
-    u.id="handUpdBtn";
-    u.type="button";
-    u.textContent="⟳ Update";
-    u.style.cssText=pill.concat(["position:static","pointer-events:auto","cursor:pointer",
-      "white-space:nowrap","-webkit-tap-highlight-color:transparent","touch-action:manipulation"]).join(";");
+    /* v1.89: the ⟳ Update button has been REMOVED from this row at Ash's
+       request. Updating now lives on the App version screen (tap the pill),
+       behind the PIN. Nothing else here changes — the checks still run on
+       their own, and when one is waiting the pill itself turns green, so a
+       ready update is still visible from the scanning screen without a
+       second button sitting in the corner. updBtnIdle/updBtnReady/
+       wireUpdateButton all no-op safely when the button is absent. */
     row.appendChild(o);
-    row.appendChild(u);
     row.appendChild(t);
     (document.body||document.documentElement).appendChild(row);
     try{wireUpdateButton();}catch(e){}
