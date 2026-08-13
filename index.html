@@ -594,7 +594,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=77;
+const THIS_BUILD_NUM=78;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -603,7 +603,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.81";
+const BUILD_NAME="v1.82";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -9891,13 +9891,14 @@ document.addEventListener("visibilitychange",()=>{
     btn.setAttribute("aria-label","Reset app");
     btn.textContent="⟳ RESET";
     btn.style.cssText=[
+      "position:fixed","bottom:6px","right:8px",
       "z-index:2147483647",
       "padding:8px 12px","font-size:13px","font-weight:800",
       "font-family:inherit","letter-spacing:.03em",
       "color:#fff","background:#c62828","border:none","border-radius:12px",
       "box-shadow:0 2px 8px rgba(0,0,0,.3)","cursor:pointer",
       "-webkit-tap-highlight-color:transparent","touch-action:manipulation",
-      "opacity:.92","user-select:none","flex:0 0 auto"
+      "opacity:.92","user-select:none"
     ].join(";");
     var busy=false;
     // The label is two lines ("RESET" with "APP" under it), so a flash must
