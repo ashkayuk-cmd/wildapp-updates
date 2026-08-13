@@ -594,7 +594,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=80;
+const THIS_BUILD_NUM=81;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -603,7 +603,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.84";
+const BUILD_NAME="v1.85";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -7037,12 +7037,20 @@ function openOptionsMenu(){
       +'<div style="font-weight:700;font-size:16px;flex:1;color:#202124;text-align:center;margin-right:56px">⚙️ Options</div>'
     +'</div>'
     +'<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">'
+      +item("🔊","Sound","How loud the scan beeps are")
       +item("🗣️","Voice","Which voice reads the walk aloud, speed &amp; pitch")
     +'</div>';
   document.body.appendChild(ov);
   const cl=ov.querySelector("#optClose");if(cl)cl.onclick=()=>ov.remove();
   const rows=ov.querySelectorAll(".optRow");
-  if(rows[0])rows[0].onclick=()=>{ov.remove();try{openVoiceSheet();}catch(e){}};
+  if(rows[0])rows[0].onclick=()=>{
+    ov.remove();
+    // Sound lives inside the handheld result box — switch to that tab first
+    // so the screen it opens is actually visible, whichever tab we're on.
+    try{if(typeof openHand==="function")openHand();}catch(e){}
+    try{showHandSound();}catch(e){}
+  };
+  if(rows[1])rows[1].onclick=()=>{ov.remove();try{openVoiceSheet();}catch(e){}};
 }
 
 // ---- VOICE sheet v2: pick the read-aloud engine and shape it. Lists the
@@ -7082,25 +7090,22 @@ function openVoiceSheet(){
     +'<input id="'+id+'" type="range" min="'+min+'" max="'+max+'" step="0.05" value="'+val+'" style="flex:1;accent-color:#1a73e8">'
     +'<div id="'+id+'Val" style="width:38px;text-align:right;font-size:12px;color:var(--sub,#5f6368)">'+val.toFixed(2)+'</div></div>';
   const ov=document.createElement("div");
-  ov.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center";
-  ov.innerHTML='<div style="width:100%;max-width:440px;max-height:82vh;background:#fff;border-radius:16px 16px 0 0;display:flex;flex-direction:column;overflow:hidden">'
-    +'<div style="display:flex;align-items:center;gap:8px;padding:13px 14px;border-bottom:1px solid #e8ebef">'
-      +'<div style="font-weight:700;font-size:15px;flex:1;color:#202124">🔊 Read-aloud voice</div>'
-      +'<button id="vcRefresh" type="button" style="border:none;background:#f1f3f4;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:600;color:#202124;cursor:pointer">Refresh</button>'
-      +'<button id="vcClose" type="button" style="border:none;background:#f1f3f4;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:600;color:#202124;cursor:pointer">Close</button>'
+  ov.style.cssText="position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column";
+  ov.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:16px 14px;border-bottom:1px solid #e8ebef;flex-shrink:0">'
+      +'<button id="vcClose" type="button" style="border:none;background:#f1f3f4;border-radius:8px;padding:9px 13px;font-size:13px;font-weight:700;color:#202124;cursor:pointer">‹ Back</button>'
+      +'<div style="font-weight:700;font-size:16px;flex:1;color:#202124;text-align:center">🔊 Read-aloud voice</div>'
+      +'<button id="vcRefresh" type="button" style="border:none;background:#f1f3f4;border-radius:8px;padding:9px 13px;font-size:12px;font-weight:600;color:#202124;cursor:pointer">Refresh</button>'
     +'</div>'
-    +'<div style="padding:8px 14px;border-bottom:1px solid #e8ebef">'
+    +'<div style="padding:10px 14px;border-bottom:1px solid #e8ebef;flex-shrink:0">'
       +slider("vcRate","Speed",sp.rate,0.6,1.6)
       +slider("vcPitch","Pitch",sp.pitch,0.6,1.5)
       +'<div style="display:flex;justify-content:flex-end"><button id="vcReset" type="button" style="border:none;background:#f1f3f4;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:600;color:#202124;cursor:pointer">Reset speed &amp; pitch</button></div>'
     +'</div>'
-    +'<div style="overflow-y:auto;-webkit-overflow-scrolling:touch">'
+    +'<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">'
       +(vs.length?rows:'<div style="padding:34px 16px;text-align:center;color:var(--sub,#5f6368);font-size:13px;line-height:1.5">No voices reported by this phone yet — tap Refresh, or add voices in the phone\'s text-to-speech settings</div>')
-    +'</div>'
-  +'</div>';
+    +'</div>';
   document.body.appendChild(ov);
   const preview=()=>speakText("14 Westbourne Terrace");
-  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
   ov.querySelector("#vcClose").onclick=()=>ov.remove();
   ov.querySelector("#vcRefresh").onclick=()=>{try{speechSynthesis.getVoices();}catch(e){}ov.remove();setTimeout(openVoiceSheet,150);};
   const wire=(id,key)=>{
