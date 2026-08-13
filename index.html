@@ -4104,10 +4104,25 @@ document.getElementById("qrRescan").addEventListener("click",resumeScan);
 document.getElementById("histBtn").addEventListener("click",openScanHistory);
 let qrTypeTimer=null;
 document.getElementById("qrResult").addEventListener("input",()=>{
+  var inp=document.getElementById("qrResult");
+  var v=inp.value;
+  // Keep W2 at the start, prevent deletion
+  if(!v.startsWith("W2")){
+    if(v.length>0 && v[0].toUpperCase()==="W" && v.length>1 && /^[A-Z]\d/.test(v.substring(1))){
+      // User typed something like "W1" or "W3", keep just "W2"
+      inp.value="W2 "+v.substring(v.indexOf(" ")+1).trim();
+    }else if(v.length===0){
+      // If empty, restore W2
+      inp.value="W2 ";
+    }else{
+      // Ensure W2 is at the start
+      inp.value="W2 "+v.replace(/^W2\s*/i,"").trim();
+    }
+  }
   clearTimeout(qrTypeTimer);
   qrTypeTimer=setTimeout(()=>{
-    const v=document.getElementById("qrResult").value.trim();
-    if(v) handleQRResult(v,false,true); else document.getElementById("qrWalk").innerHTML="";
+    const val=document.getElementById("qrResult").value.trim();
+    if(val && val!=="W2") handleQRResult(val,false,true); else document.getElementById("qrWalk").innerHTML="";
   },300);
 });
 document.getElementById("qrCopy").addEventListener("click",()=>{
