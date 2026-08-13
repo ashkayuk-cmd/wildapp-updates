@@ -41,9 +41,33 @@ catch up and tap again.
 
 ---
 
+## Startup was doing 20 seconds of work nobody could see  *(the sluggishness)*
+
+`finishBoot()` built the website's **Walks** browser at every single launch —
+all 36 walks, every street, every building folder, all 24,149 addresses — as
+about **102,000 DOM nodes, a 6.5 MB tree** — then walked the whole thing again
+to decorate it.
+
+On this build that screen cannot be opened. The `liteMode` stylesheet hides the
+tab bar and the app is pinned to the handheld panel, so `#tab-routes` is
+unreachable. Every launch paid for it anyway, and the tree then sat in memory
+for the rest of the session with the page-wide change observer stepping over it.
+
+Measured on the same file, same data: `finishBoot` went from **21,552 ms to
+117 ms**. Everything else in boot put together was under 60 ms — this was
+essentially all of it. (That's in a test harness, which is slower at DOM work
+than the real WebView, so don't expect to save twenty literal seconds on the
+PDA — but it was the overwhelming majority of startup, and it's now gone.)
+
+The tree is now built **on demand**. Nothing on the handheld touches it. If a
+build ever shows the tab bar again, it builds during boot exactly as before, and
+every route into it (the Walks tab, `jumpToStreet`, rebuild-after-move) builds
+it first. Verified: the handheld walk-to-streets screen, type-in lookup and
+scanning all work with the tree never built.
+
 ## What's new since build 84
 
-### Walk corrections is now in ⚙️ Settings  *(this request)*
+### Walk corrections is now in ⚙️ Settings
 
 Settings now has a third row — **✏️ Walk corrections** — opening the same list
 you could already reach from the version screen: every walk you've fixed and
@@ -86,8 +110,7 @@ pill); when an update is waiting the pill turns green and reads "update ready".
 
 ## Checked before delivery
 
-- **101 tests** on the exact `app.html` inside this APK (the two "failures" in
-  the raw run are the test expecting the old build number — behaviour is right).
+- **103 tests** on the exact `app.html` inside this APK — all green.
 - **19 loader / update-check tests**: the loader boots the built-in app, ignores
   an older cached copy without binning it, boots a genuinely newer one, refuses
   a truncated / failed / self copy; and the running app applies this OTA file,
@@ -106,7 +129,7 @@ pill); when an update is waiting the pill turns green and reads "update ready".
 APK: `BAKED_DATA_BUILD=86`, loader `BAKED=86`. OTA `index.html`:
 `BAKED_DATA_BUILD=57` (so it runs on any older wrapper).
 
-APK — 1,115,057 bytes, sha256 `28234db29c88628b…`
-`index.html` — 593,818 bytes, sha256 `b89e40bce496b451…`
+APK — 1,115,057 bytes, sha256 `fbf83b20881408cb…`
+`index.html` — 595,788 bytes, sha256 `068bfd919bd5b72a…`
 
 `version.txt` and `content.json` in the repo are dead files — leave them alone.

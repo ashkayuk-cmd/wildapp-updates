@@ -1983,8 +1983,11 @@ function finishBoot(){
   WildMoves.setKnownWalks(allData);
   buildSharedBuildings();
   buildSharedStreets();
-  buildRouteList();
-  WildMoves.decorateAllRows();
+  // v1.91: only build the Walks tree up front when it can actually be opened.
+  // On the handheld that tab is hidden, so this is skipped and startup no
+  // longer pays for ~102,000 DOM nodes nobody can see.
+  routeListBuilt=false;
+  if(routeListReachable())ensureRouteList();
   try{ window.applyAddressLock&&window.applyAddressLock(); }catch(e){}
   setTimeout(()=>{document.getElementById("loader").classList.add("done");},400);
   try{updateDataBadge();renderRecents();}catch(e){}
@@ -2053,8 +2056,10 @@ function restoreTree(s){
 
 window.rebuildAfterMove = () => {
   const snap = snapshotTree();
+  const hadTree = routeListBuilt;          // v1.91: was the tree up before?
   document.getElementById("rl").innerHTML = "";
-  finishBoot();
+  finishBoot();                            // resets routeListBuilt
+  if(hadTree)ensureRouteList();            // rebuild it only if it was in use
   restoreTree(snap);
   // Refresh any live search results so edits/deletes show there too.
   try{
@@ -2456,6 +2461,32 @@ function applyWalkSort(sel){
   });
 }
 
+/* ── THE WALKS TREE IS BUILT ON DEMAND (v1.91) ────────────────────────────
+   buildRouteList() renders every address in the round into #rl — about
+   102,000 DOM nodes, a 6.5 MB tree — and WildMoves.decorateAllRows() then
+   walks the whole thing again. finishBoot() called both on EVERY launch.
+
+   In this build nobody can see it: the <style id="liteMode"> block hides the
+   tab bar and the app is pinned to the handheld panel, so #tab-routes is
+   unreachable. It was pure startup cost, and the tree then sat in memory for
+   the session with the body MutationObserver stepping over it.
+
+   Now it is built the first time something actually needs it. Every entry
+   point into the tree calls ensureRouteList() first, so a build WITHOUT
+   liteMode (the full app, tab bar visible) behaves exactly as before — it
+   builds during finishBoot, just as it always did. */
+let routeListBuilt=false;
+function routeListReachable(){
+  // The handheld build hides the tab bar outright. If it's hidden there is no
+  // way to open the Walks tab, so there is nothing to build yet.
+  try{ return !document.getElementById("liteMode"); }catch(e){ return true; }
+}
+function ensureRouteList(){
+  if(routeListBuilt)return;
+  routeListBuilt=true;
+  try{buildRouteList();}catch(e){}
+  try{WildMoves.decorateAllRows();}catch(e){}
+}
 function buildRouteList(){
   const c=document.getElementById("rl");
   getRoutes().forEach(rn=>{
@@ -2836,6 +2867,7 @@ function jumpToWalkStreet(walk,street){
 // Jump to a street's shared building in the Walks view. Called from the
 // "Also on" badge when user taps a street link.
 function jumpToStreet(street,bldgName){
+  ensureRouteList();   // v1.91: the tree may not exist yet
   // Find all street groups across all walks
   const allSg=document.querySelectorAll(".sg");
   for(const sg of allSg){
@@ -2879,7 +2911,7 @@ function openInMaps(btn){
   window.open("https://maps.google.com/?q="+encodeURIComponent(pc||addr),"_blank");
 }
 document.getElementById("bcopy").onclick=()=>{if(!cur)return;navigator.clipboard?.writeText(cur.r+" – "+cur.d).then(()=>{const b=document.getElementById("bcopy");b.textContent="✅ Copied!";setTimeout(()=>b.innerHTML="📋 Copy",1600);});};
-document.querySelectorAll(".tab:not(#qrTab):not(#handTab)").forEach(t=>{t.addEventListener("click",()=>{closeQR();closeHand();const id=t.dataset.tab;document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));t.classList.add("active");document.getElementById("tab-"+id).classList.add("active");});});
+document.querySelectorAll(".tab:not(#qrTab):not(#handTab)").forEach(t=>{t.addEventListener("click",()=>{closeQR();closeHand();const id=t.dataset.tab;if(id==="routes")ensureRouteList();   /* v1.91: build it the first time the tab is opened */document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));t.classList.add("active");document.getElementById("tab-"+id).classList.add("active");});});
 
 // ── QR SCANNER ──
 let camStream=null,scanLoop=null,scanning=false,lastRaw="",frameFrozen=false,scanGen=0;
