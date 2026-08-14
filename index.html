@@ -594,7 +594,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=87;
+const THIS_BUILD_NUM=88;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -603,7 +603,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.92";
+const BUILD_NAME="v1.93";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -1989,6 +1989,7 @@ function finishBoot(){
   routeListBuilt=false;
   if(routeListReachable())ensureRouteList();
   try{ window.applyAddressLock&&window.applyAddressLock(); }catch(e){}
+  try{scheduleWarm();}catch(e){}
   setTimeout(()=>{document.getElementById("loader").classList.add("done");},400);
   try{updateDataBadge();renderRecents();}catch(e){}
 }
@@ -4904,6 +4905,8 @@ function handDropDataIndexes(){
   try{handStreetIdx=null;}catch(e){}
   try{knownPostcodeSet._cache=null;knownPostcodeSet._for=null;}catch(e){}
   try{tokenStreetCount=null;}catch(e){}
+  try{dropRecTokenCache();}catch(e){}
+  try{scheduleWarm();}catch(e){}
 }
 function mergeUserAddrs(){
   if(typeof allData==="undefined"||!allData)return 0;
@@ -9224,10 +9227,12 @@ function buildTokenIndex(){
   const streetsPerToken=new Map();
   const allStreets=new Set();
   knownVocabulary=new Set();
-  allData.forEach(d=>{
+  tokRecs=new Map();
+  allData.forEach((d,__i)=>{
     allStreets.add(d.s||"");
     new Set(tokenize(d.d)).forEach(t=>{
       knownVocabulary.add(t);
+      { let __a=tokRecs.get(t); if(!__a){__a=[];tokRecs.set(t,__a);} __a.push(__i); }
       if(!streetsPerToken.has(t))streetsPerToken.set(t,new Set());
       streetsPerToken.get(t).add(d.s||"");
     });
@@ -9296,6 +9301,58 @@ function recordWeight(recTokens){
   return sum||1;
 }
 
+
+// ---- scan-path speedups (v1.93) --------------------------------------
+// A scan used to re-tokenise all 24k records: findBestAddressMatch called
+// tokenize(d.d) per record, which runs the scan-repair passes and a postcode
+// parse over dataset text that is clean and never changes. Two changes:
+// (1) cache each record's tokens/weight, (2) score only the records that can
+// possibly match, found through a postings list instead of a full sweep.
+// Both caches hang off the token index and are dropped with it.
+var tokRecs=null,warmT=null;
+function recTokensOf(d){var t=d._tk;if(t)return t;t=tokenize(d.d);try{d._tk=t;}catch(e){}return t;}
+function recWeightOf(d,t){var w=d._rw;if(w)return w;w=recordWeight(t||recTokensOf(d));try{d._rw=w;}catch(e){}return w;}
+function dropRecTokenCache(){
+  tokRecs=null;
+  try{ if(typeof allData!=="undefined"&&allData) for(var i=0;i<allData.length;i++){allData[i]._tk=null;allData[i]._rw=null;} }catch(e){}
+}
+// tokenScore only credits a record for its CLOSEST token, and only when that
+// token is accepted — so a record with no accepted token scores 0 and can
+// never win. Gather exactly the records that could: exact postings for real
+// words, and for an unknown (typo'd/OCR'd) word the vocabulary is fuzzy-
+// expanded ONCE with the same accept rule, instead of per record. The result
+// is a superset of everything the old full sweep could have scored.
+function candidateRecords(rawTokens){
+  buildTokenIndex();
+  if(!tokRecs)return allData;
+  const seen=new Set();
+  const add=t=>{const a=tokRecs.get(t);if(a)for(let i=0;i<a.length;i++)seen.add(a[i]);};
+  for(const rt of rawTokens){
+    if(/\d/.test(rt)||knownVocabulary.has(rt)){add(rt);continue;}
+    knownVocabulary.forEach(ct=>{
+      const dist=levenshtein(rt,ct);
+      const ratio=dist/Math.max(rt.length,ct.length);
+      if(ratio>=1)return;
+      if(tokenWeight(ct)>=totalStreetCount/5?dist<=1:ratio<=0.25)add(ct);
+    });
+  }
+  const out=[];seen.forEach(i=>out.push(allData[i]));return out;
+}
+// Build the index and fill the per-record caches in the background, so the
+// FIRST scan doesn't pay for it. Chunked: a single pass over 24k records
+// blocks the UI thread on the PDA for long enough to feel like a freeze.
+function warmScanIndex(){
+  if(typeof allData==="undefined"||!allData||!allData.length)return;
+  try{buildTokenIndex();}catch(e){return;}
+  let i=0;
+  (function step(){
+    if(typeof allData==="undefined"||!allData)return;
+    const end=Math.min(i+1500,allData.length);
+    for(;i<end;i++){try{const d=allData[i];if(!d._tk)recWeightOf(d,recTokensOf(d));}catch(e){}}
+    if(i<allData.length)setTimeout(step,0);
+  })();
+}
+function scheduleWarm(){ if(warmT)return; warmT=setTimeout(function(){warmT=null;try{warmScanIndex();}catch(e){}},400); }
 function findBestAddressMatch(raw){
   const rawTokens=tokenize(raw);
   if(!rawTokens.length)return null;
@@ -9316,11 +9373,11 @@ function findBestAddressMatch(raw){
   // only breaks ties among otherwise-equal candidates like several
   // different units sharing one postcode with no street text at all).
   let best=null,bestCombined=0,bestScore=0,bestConfidence=0,bestStrongHit=false;
-  allData.forEach(d=>{
-    const recTokens=tokenize(d.d);
+  candidateRecords(rawTokens).forEach(d=>{
+    const recTokens=recTokensOf(d);
     const score=tokenScore(rawTokens,recTokens);
     if(score<=0)return;
-    const rw=recordWeight(recTokens);
+    const rw=recWeightOf(d,recTokens);
     let confidence=Math.min(1,score/rw);
     // A distinctive name confined to a single street (e.g. "HETHPOOL",
     // "WESTCLIFFE") that the scan matched EXACTLY is a near-unique locator
@@ -9364,11 +9421,11 @@ function findClosestMatches(raw,n){
   buildTokenIndex();
   const houseNum=extractHouseNumber(raw);
   const scored=[];
-  allData.forEach(d=>{
-    const recTokens=tokenize(d.d);
+  candidateRecords(rawTokens).forEach(d=>{
+    const recTokens=recTokensOf(d);
     const score=tokenScore(rawTokens,recTokens);
     if(score<=0)return;
-    const rw=recordWeight(recTokens);
+    const rw=recWeightOf(d,recTokens);
     let confidence=Math.min(1,score/rw);
     const strongHit=rawTokens.some(rt=>{
       if(/\d/.test(rt))return false;
@@ -9667,7 +9724,7 @@ function findAmbiguousMatches(raw){
   // A record is a candidate if it contains EVERY real query word. This is the
   // "all words present" test — "post office" needs both POST and OFFICE.
   const out=allData.filter(d=>{
-    const recSet=new Set(tokenize(d.d));
+    const recSet=new Set(recTokensOf(d));
     return realTokens.every(t=>recSet.has(t));
   });
   return out;
