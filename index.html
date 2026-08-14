@@ -603,7 +603,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.90";
+const BUILD_NAME="v1.91";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4279,6 +4279,44 @@ function displayAddrText(s){
 // built-in HAND_OVERRIDES and the fuzzy resolver next time. Managed via the
 // "Manage overrides" screen (review / delete).
 const USER_OV_KEY="wildUserOverrides_v1";
+/* ── WHY DID IT RESTART? (v1.91) ──────────────────────────────────────────
+   A ring of the last 12 events, kept across restarts. Boots are recorded as
+   well as errors on purpose: if the app is being torn down and rebuilt by
+   Android (a configuration change, low memory) there is no JavaScript error
+   at all, just another boot — and that looks exactly like a crash from the
+   outside while needing a completely different fix. Capped hard and written
+   with the same guards as everything else here, because a logger that can
+   throw during boot is worse than no logger. */
+const WILD_LOG_KEY="wildEventLog_v1";
+const WILD_LOG_MAX=12;
+function wildLogRead(){
+  try{const a=JSON.parse(localStorage.getItem(WILD_LOG_KEY)||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}
+}
+function wildLog(kind,msg){
+  try{
+    const a=wildLogRead();
+    a.push({k:String(kind||"?"),m:String(msg||"").slice(0,180),t:Date.now(),b:(typeof THIS_BUILD_NUM!=="undefined"?THIS_BUILD_NUM:0)});
+    while(a.length>WILD_LOG_MAX)a.shift();
+    localStorage.setItem(WILD_LOG_KEY,JSON.stringify(a));
+  }catch(e){}
+}
+function wildLogWhen(t){
+  try{
+    const d=new Date(t),now=new Date();
+    const hh=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    const sameDay=d.toDateString()===now.toDateString();
+    return sameDay?hh:(d.getDate()+"/"+(d.getMonth()+1)+" "+hh);
+  }catch(e){return "";}
+}
+try{
+  wildLog("boot","started");
+  window.addEventListener("error",function(e){
+    try{wildLog("error",(e&&e.message||"error")+" @"+String((e&&e.filename)||"").split("/").pop()+":"+(e&&e.lineno||0));}catch(x){}
+  });
+  window.addEventListener("unhandledrejection",function(e){
+    try{wildLog("promise",String((e&&e.reason&&(e.reason.message||e.reason))||"rejected"));}catch(x){}
+  });
+}catch(e){}
 function userOverrides(){
   try{const m=JSON.parse(localStorage.getItem(USER_OV_KEY)||"{}");return (m&&typeof m==="object")?m:{};}catch(e){return {};}
 }
@@ -5239,6 +5277,23 @@ function showAppVersion(){
         `<button id="handVerManage" style="margin-top:12px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">Manage corrections (delete, back up, upload)</button>`
       : `<div style="font-size:13px;color:var(--sub);margin-top:10px;line-height:1.5">None saved yet. When a scan shows the wrong walk, tap “Wrong walk?” on the result to fix it.</div>`)+
     `</div>`;
+  /* v1.91: why did it restart? Boots and errors, newest first. Shown only
+     when there's something worth reading — a device that has simply been
+     switched on and off a few times shouldn't grow a diagnostics panel. */
+  const logRows=wildLogRead().slice().reverse();
+  const logErrs=logRows.filter(r=>r.k!=="boot").length;
+  const logHtml=(logRows.length>1||logErrs)?`<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--div)">
+      <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Recent restarts${logErrs?" &amp; errors":""}</div>
+      <div style="font-size:11px;color:var(--sub);margin-top:6px;line-height:1.5">${logErrs
+        ? "An error means the app itself failed. A run of starts with no error between them means Android restarted it."
+        : "Starts only — no errors recorded."}</div>`+
+    logRows.slice(0,8).map(r=>`<div style="display:flex;gap:8px;align-items:baseline;font-size:12px;margin-top:7px">
+        <span style="color:var(--sub);min-width:44px">${wildLogWhen(r.t)}</span>
+        <span style="font-weight:800;color:${r.k==="boot"?"var(--sub)":"#d32f2f"};min-width:52px">${r.k==="boot"?"start":escHtml(r.k)}</span>
+        <span style="flex:1;min-width:0;color:var(--txt);word-break:break-word">${escHtml(r.m)}${r.b?` <span style="color:var(--sub)">(build ${r.b})</span>`:""}</span>
+      </div>`).join("")+
+    `<button id="handVerLogClear" style="margin-top:12px;width:100%;padding:10px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12px;font-weight:800;color:var(--sub);cursor:pointer">Clear this list</button>
+    </div>`:"";
   /* v1.89: the buttons here depend on what this device can actually switch
      to, so they're built from the state rather than being fixed markup.
        · Check now        — always
@@ -5267,6 +5322,7 @@ function showAppVersion(){
     <div id="handLiveInfo" style="font-size:13px;color:var(--sub);margin-top:10px;line-height:1.5"></div>
     ${VER_BTNS}
     ${corrHtml}
+    ${logHtml}
     <button id="handVerBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
   </div>`;
   const info=document.getElementById("handLiveInfo");
@@ -5300,6 +5356,8 @@ function showAppVersion(){
   /* Everything that changes WHICH VERSION RUNS is behind the PIN (v1.89) —
      applying an update, dropping back to the built-in copy, and going forward
      again. Checking is not: looking costs nothing. */
+  const lc2=document.getElementById("handVerLogClear");
+  if(lc2)lc2.onclick=()=>{try{localStorage.removeItem(WILD_LOG_KEY);}catch(e){}showAppVersion();};
   const ap=document.getElementById("handLiveApply");
   if(ap)ap.onclick=()=>requireHandPin({
     title:"PIN to update",
@@ -7272,6 +7330,7 @@ function speakPrefs(){
 // added elsewhere, rather than growing this into its own settings surface. ----
 function openOptionsMenu(){
   const ov=document.createElement("div");
+  ov.id="wildOptSheet";        // v1.91: so the version pill can dismiss it
   ov.style.cssText="position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column";
   const item=(emoji,label,sub)=>'<button type="button" class="optRow" style="display:flex;align-items:center;gap:12px;width:100%;'+
     'padding:14px;border:none;border-top:1px solid #f0f2f5;background:none;text-align:left;cursor:pointer;'+
@@ -7288,6 +7347,7 @@ function openOptionsMenu(){
       +item("🔊","Sound","How loud the scan beeps are")
       +item("🗣️","Voice","Which voice reads the walk aloud, speed &amp; pitch")
       +item("✏️","Walk corrections","Walks you\'ve fixed, and addresses you\'ve added")
+      +item("ℹ️","App version","Which build is running, and updates")
     +'</div>';
   document.body.appendChild(ov);
   const cl=ov.querySelector("#optClose");if(cl)cl.onclick=()=>ov.remove();
@@ -7300,6 +7360,11 @@ function openOptionsMenu(){
     try{showHandSound();}catch(e){}
   };
   if(rows[1])rows[1].onclick=()=>{ov.remove();try{openVoiceSheet();}catch(e){}};
+  if(rows[3])rows[3].onclick=()=>{
+    ov.remove();
+    try{if(typeof openHand==="function")openHand();}catch(e){}
+    try{showAppVersion();}catch(e){}
+  };
   if(rows[2])rows[2].onclick=()=>{
     ov.remove();
     // The corrections list renders into the handheld result box, so make that
@@ -7348,6 +7413,7 @@ function openVoiceSheet(){
     +'<input id="'+id+'" type="range" min="'+min+'" max="'+max+'" step="0.05" value="'+val+'" style="flex:1;accent-color:#1a73e8">'
     +'<div id="'+id+'Val" style="width:38px;text-align:right;font-size:12px;color:var(--sub,#5f6368)">'+val.toFixed(2)+'</div></div>';
   const ov=document.createElement("div");
+  ov.id="wildVoiceSheet";      // v1.91: dismissable by the version pill
   ov.style.cssText="position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column";
   ov.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:16px 14px;border-bottom:1px solid #e8ebef;flex-shrink:0">'
       +'<button id="vcClose" type="button" style="border:none;background:#f1f3f4;border-radius:8px;padding:9px 13px;font-size:13px;font-weight:700;color:#202124;cursor:pointer">‹ Back</button>'
@@ -10213,7 +10279,20 @@ document.addEventListener("visibilitychange",()=>{
     t.setAttribute("role","button");
     t.setAttribute("aria-label","App version");
     t.title="App version";
-    t.onclick=function(){try{if(typeof showAppVersion==="function")showAppVersion();}catch(e){}};
+    /* v1.91: the pill's z-index puts it ABOVE the ⚙️ Settings sheet, so it
+       looks tappable there and the tap does work — but the sheet is opaque and
+       full-screen, so the version screen opened out of sight behind it and
+       nothing appeared to happen. Close any settings surface on the way. */
+    t.onclick=function(){
+      try{
+        var sh=document.getElementById("wildOptSheet");
+        if(sh)sh.remove();
+        var vs=document.getElementById("wildVoiceSheet");   // same problem
+        if(vs)vs.remove();
+      }catch(e){}
+      try{if(typeof openHand==="function")openHand();}catch(e){}
+      try{if(typeof showAppVersion==="function")showAppVersion();}catch(e){}
+    };
     // v1.79: ⚙️ Options — sits directly next to the version pill (not the
     // Update button) since it's a settings door, same family as tapping the
     // version number, not an update action.
@@ -10385,8 +10464,15 @@ document.addEventListener("visibilitychange",()=>{
   // on a spare, to avoid stacking dozens of entries.
   window.__wildPushOverlay=function(){
     try{
+      /* v1.91: this used to add an entry EVERY time — both branches of the
+         old if/else called armSpare(), so the "avoid stacking dozens of
+         entries" it was written for never happened. 160 screen opens left
+         121 entries behind, held for the life of the page.
+
+         One spare is all the BACK key needs: popstate consumes it and
+         wildBack re-arms. So if we're already sitting on a spare, there is
+         nothing to do. */
       if(!history.state || !history.state.__wildSpare) armSpare();
-      else armSpare(); // keep one ahead even when already spared
     }catch(e){}
   };
 
