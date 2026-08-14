@@ -594,7 +594,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=86;
+const THIS_BUILD_NUM=87;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -603,7 +603,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.91";
+const BUILD_NAME="v1.92";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4639,7 +4639,16 @@ function wireHandFixButtons(raw){
       });
       return;
     }
-    if(man){showHandManage();return;}
+    if(man){
+      // v1.92: same screen, same guard, whichever door you come through.
+      requireHandPin({
+        title:"PIN for corrections",
+        note:"Saved corrections can be deleted from this screen.",
+        onOk:()=>showHandManage(),
+        onCancel:()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else handGoIdle();}
+      });
+      return;
+    }
     if(rec){showHandRecent();return;}
   });
 }
@@ -5394,7 +5403,12 @@ function showAppVersion(){
     onCancel:()=>showAppVersion()
   });
   const mg=document.getElementById("handVerManage");
-  if(mg)mg.onclick=()=>{handMgFrom="version";showHandManage();};
+  if(mg)mg.onclick=()=>requireHandPin({
+    title:"PIN for corrections",
+    note:"Saved corrections can be deleted from this screen.",
+    onOk:()=>{handMgFrom="version";showHandManage();},
+    onCancel:()=>showAppVersion()
+  });
   const back=document.getElementById("handVerBack");
   if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}};
 }
@@ -5544,9 +5558,12 @@ const GH_PIN="1984";
    typing it four times, and it re-locks on restart (the window lives in
    memory, deliberately not in storage). */
 const WILD_PIN=GH_PIN;
-const PIN_GRACE_MS=10*60*1000;
+/* v1.92: was ten minutes. Ash asked for the PIN EVERY time you go back into
+   a correction, so the window is off. The machinery stays — it is one number
+   to put back if a long run of fixes ever makes it tiresome. */
+const PIN_GRACE_MS=0;
 let handPinOkUntil=0;
-function handPinFresh(){return Date.now()<handPinOkUntil;}
+function handPinFresh(){return PIN_GRACE_MS>0 && Date.now()<handPinOkUntil;}
 function handPinClear(){handPinOkUntil=0;}
 function requireHandPin(opts){
   opts=opts||{};
@@ -7371,8 +7388,16 @@ function openOptionsMenu(){
     // tab visible first — otherwise the screen opens behind whatever tab you
     // were on (same reason Sound does this).
     try{if(typeof openHand==="function")openHand();}catch(e){}
-    handMgFrom="settings";        // so its Back returns to Settings, not the scan
-    try{showHandManage();}catch(e){}
+    // v1.92: this screen deletes and uploads corrections, so it asks too.
+    requireHandPin({
+      title:"PIN for corrections",
+      note:"Saved corrections can be deleted from this screen.",
+      onOk:()=>{
+        handMgFrom="settings";    // so its Back returns to Settings, not the scan
+        try{showHandManage();}catch(e){}
+      },
+      onCancel:()=>{try{openOptionsMenu();}catch(e){}}
+    });
   };
 }
 
