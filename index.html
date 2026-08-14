@@ -498,6 +498,14 @@ body.addr-locked #rl .lockmsg{display:flex}
     <h1 style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:18px;font-weight:600;color:#fff;margin:0;display:flex;align-items:center"><svg width="20" height="22" viewBox="0 0 24 26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7.4 1.9 L6.2 0.6 M12 1.6 L12 0.4 M16.6 1.9 L17.8 0.6"/><rect x="8" y="2.6" width="8" height="2.8" rx="1"/><rect x="4.8" y="5.4" width="14.4" height="20.1" rx="2.6"/><rect x="7.4" y="8" width="9.2" height="6" rx="1"/><path d="M19.4 13 h1.5 a1.1 1.1 0 0 1 1.1 1.1 v2.3 a1.1 1.1 0 0 1 -1.1 1.1 h-1.5"/><path d="M8.2 17.6 h7.6 M8.2 21.6 h7.6"/></svg>Handheld Scanner</h1>
     <button type="button" id="wildResetBtn" aria-label="Reset app" style="flex:0 0 auto;padding:6px 10px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET</span><span id="wildResetL2" style="font-size:9.5px;letter-spacing:.06em;opacity:.9">APP</span></button>
   </div>
+  <!-- v1.98: the website version, at the top of the main screen where it is
+       always in view. Fixed markup outside #handResult, so no scan, screen or
+       Back can wipe it. Tap it to copy the address. -->
+  <div id="wildSiteBar" style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--sur);border-bottom:1px solid var(--div);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">
+    <div style="font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Website version</div>
+    <div id="wildSiteBarUrl" style="flex:1;min-width:0;font-size:13px;font-weight:800;color:var(--pri);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">wildapp.gt.tc</div>
+    <div id="wildSiteBarHint" style="font-size:10.5px;font-weight:700;color:var(--sub);white-space:nowrap">tap to copy</div>
+  </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
   <input id="handCatch" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="none" style="position:absolute;opacity:0;pointer-events:none;height:0;width:0;border:0;padding:0">
@@ -594,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=92;
+const THIS_BUILD_NUM=94;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -604,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.97";
+const BUILD_NAME="v1.99";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -621,7 +629,7 @@ const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
 const REPO_DATA_BUILD=72;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD=86;                  // build of the WildApp.apk beside this file
+const REPO_APK_BUILD=95;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -3393,7 +3401,16 @@ function handIdleActionsHtml(){
     '<button type="button" onclick="try{showHandTypeIn()}catch(e){}" style="'+"+HAND_IDLE_BTN+"+'">⌨ Type a postcode</button>'+
     '</div>';
 }
+/* v1.99: the REAL idle screen — the "Scan a barcode" panel with the
+   accuracy note — captured from the page as written, once, at start-up.
+   Every Back route calls handIdleHtml(), and it used to return a bare
+   "Ready to scan.", so going back to home quietly threw the explanation
+   away for the rest of the session. */
+const HAND_EMPTY_HTML=(function(){
+  try{var e=document.getElementById("handEmpty");return e?e.outerHTML:"";}catch(e){return "";}
+})();
 function handIdleHtml(){
+  if(HAND_EMPTY_HTML)return HAND_EMPTY_HTML;
   return '<div style="color:var(--sub)">Ready to scan.'+'</div>'+handIdleActionsHtml();
 }
 // Back to the scanning screen from a sub-screen: the previous result if there
@@ -5357,12 +5374,6 @@ function showAppVersion(){
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">App version</div>
     <div id="handLiveInfo" style="font-size:13px;color:var(--sub);margin-top:10px;line-height:1.5"></div>
-    <div style="margin-top:12px;padding:11px 12px;border:1px solid var(--div);border-radius:12px;background:var(--sur)">
-      <div style="font-size:12px;font-weight:800;color:var(--txt)">Website version</div>
-      <div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.5">The same app runs in a browser on any phone — no install, nothing to update:</div>
-      <div id="wildSiteUrl" style="margin-top:6px;font-size:14px;font-weight:800;color:var(--pri);word-break:break-all">${WILD_SITE_URL}</div>
-      <button id="wildSiteCopy" style="margin-top:8px;width:100%;padding:10px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12px;font-weight:800;color:var(--sub);cursor:pointer">Copy the address</button>
-    </div>
     ${VER_BTNS}
     ${corrHtml}
     ${logHtml}
@@ -5399,11 +5410,6 @@ function showAppVersion(){
   /* Everything that changes WHICH VERSION RUNS is behind the PIN (v1.89) —
      applying an update, dropping back to the built-in copy, and going forward
      again. Checking is not: looking costs nothing. */
-  const sc=document.getElementById("wildSiteCopy");
-  if(sc)sc.onclick=()=>{
-    try{if(typeof copyText==="function")copyText(WILD_SITE_URL);}catch(e){}
-    sc.textContent="✓ Copied";setTimeout(()=>{try{sc.textContent="Copy the address";}catch(e){}},1400);
-  };
   const lc2=document.getElementById("handVerLogClear");
   if(lc2)lc2.onclick=()=>{try{localStorage.removeItem(WILD_LOG_KEY);}catch(e){}showAppVersion();};
   const ap=document.getElementById("handLiveApply");
@@ -10740,6 +10746,18 @@ document.addEventListener("visibilitychange",()=>{
       _t.setAttribute("aria-label","Back to the home screen");
       _t.title="Back to the home screen";
       _t.addEventListener("click",function(){ try{ wildHome(); }catch(e){} });
+    }
+  }catch(e){}
+
+  try{
+    var _sb=document.getElementById("wildSiteBar");
+    if(_sb && !_sb._wired){
+      _sb._wired=true;
+      _sb.addEventListener("click",function(){
+        try{if(typeof copyText==="function")copyText(WILD_SITE_URL);}catch(e){}
+        var h=document.getElementById("wildSiteBarHint");
+        if(h){h.textContent="\u2713 copied";setTimeout(function(){try{h.textContent="tap to copy";}catch(e){}},1400);}
+      });
     }
   }catch(e){}
 
