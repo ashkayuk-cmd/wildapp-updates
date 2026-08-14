@@ -594,7 +594,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=88;
+const THIS_BUILD_NUM=90;
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -603,7 +603,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.93";
+const BUILD_NAME="v1.95";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -894,7 +894,7 @@ let handUpdWaiting="";
    (v1.89), so this is also where the version pill is flagged. */
 function flagUpdateReadyPill(){
   try{
-    const tg=document.getElementById("wildBuildTag");
+    const tg=document.getElementById("wildOptBtn");   // v1.95: was the version pill
     if(!tg||tg._updFlagged)return;
     tg._updFlagged=true;
     tg.textContent=tg.textContent.split(" — ")[0]+" — update ready";
@@ -6239,11 +6239,48 @@ function renderNoPostcode(raw,fromScanner,isTracking){
     <div style="font-size:13px;margin-top:8px;line-height:1.5">${isTracking?"This looks like an item tracking number — there's no delivery address on it.":"No delivery address in this barcode."} Aim at the address barcode and scan again.</div>
   </div>${rawResultBlock(raw)}`;
 }
+
+// A scan must always end up visible. The Settings and Voice screens are
+// full-screen sheets appended to <body> (position:fixed;inset:0;z-index:9999),
+// NOT handResult sub-screens — so the dataset.sub reset at the top of
+// renderHandheld never touched them, and a scan taken while one was open
+// rendered the result and read the walk aloud behind it: the walk was spoken
+// and the screen never changed (reported 14 Aug 2026). Close every such sheet
+// on a live scan. Matched by shape rather than by id so sheets added later are
+// covered too; the app's own panels are class-styled (el.style reads INLINE
+// styles only) and are named here as well, so they can never be caught.
+function handClearSheets(){
+  let gone=0;
+  try{
+    const keep={handPanel:1,qrPanel:1,loader:1,ov:1};
+    const kids=Array.prototype.slice.call(document.body.children);
+    for(let i=kids.length-1;i>=0;i--){
+      const el=kids[i];
+      if(!el||el.nodeType!==1)continue;
+      if(el.id&&keep[el.id])continue;
+      if(el.classList&&el.classList.contains("wm-overlay"))continue;   // WildMoves owns its own
+      const st=el.style;
+      if(!st||st.position!=="fixed")continue;
+      if(st.inset!=="0px"&&st.inset!=="0")continue;
+      if(!el.querySelector||!el.querySelector("button"))continue;      // a real sheet has controls
+      try{el.remove();gone++;}catch(e){}
+    }
+  }catch(e){}
+  return gone;
+}
+try{ window.__wildCloseSheets=handClearSheets; }catch(e){}
 function renderHandheld(raw,fromScanner){
   try{if(fromScanner&&window.__wildNoteActivity)window.__wildNoteActivity();}catch(e){}
   // Back-button bookkeeping: rendering a real result means we're back on the
   // main handheld screen, so no sub-screen (fix picker/manage/recent) is open.
   try{var _hb=document.getElementById("handResult");if(_hb)delete _hb.dataset.sub;}catch(e){}
+  // A live scan closes whatever sheet is covering the screen, and brings the
+  // handheld screen to the front if some other tab was showing — otherwise the
+  // result renders somewhere the person can't see.
+  if(fromScanner){
+    try{handClearSheets();}catch(e){}
+    try{if(typeof handPanelOpen==="function"&&!handPanelOpen()&&typeof openHand==="function")openHand();}catch(e){}
+  }
   // Normalise separators once, up front: some scanners (Zebra EMDK/Mailmark)
   // emit non-breaking spaces or GS/control characters between fields instead
   // of plain spaces, which quietly broke street/postcode text matching. Keep
@@ -10320,29 +10357,12 @@ document.addEventListener("visibilitychange",()=>{
     // Whatever is running has now started cleanly, so the live copy (if any)
     // is good — drop the loader's watchdog flag. (v1.45)
     try{liveConfirmBoot();}catch(e){}
-    if(document.getElementById("wildBuildTag"))return;
-    var t=document.createElement("div");
-    t.id="wildBuildTag";
-    // Show the version AND the integer build number, so "which build is this
-    // PDA on?" is answerable at a glance — a silent failed install, or a
-    // WebView serving a stale page, is otherwise invisible.
-    t.textContent=BUILD+" · build "+runningBuild()+(runningBuild()!==BUILD_NUM?" (live)":"");
-    // v1.37: was 11px rgba(0,0,0,.35) — invisible against the DARK camera
-    // screen, so it couldn't be read on the one screen you're usually on.
-    // Now a light pill with dark text: legible on both the light app screens
-    // and the camera view. Still pointer-events:none so it can never swallow
-    // a tap while scanning.
-    t.style.cssText=["position:fixed","bottom:6px","left:8px","z-index:2147483647",
-      "font-size:11px","font-weight:800","font-family:inherit","color:#33383d",
-      "background:rgba(255,255,255,.86)","border:1px solid rgba(0,0,0,.14)",
-      "border-radius:8px","padding:2px 8px","pointer-events:none",
-      "letter-spacing:.04em","box-shadow:0 1px 3px rgba(0,0,0,.18)"].join(";");
-    // v1.49: the ⟳ Update button now sits in the bottom-left corner alongside
-    // this pill instead of in the title bar (where the fixed RESET button kept
-    // landing on top of it). Both live in one fixed row so they can never
-    // overlap each other, and the button copies the pill's own styling — same
-    // size, same box — differing only where it has to: it takes taps
-    // (pointer-events) and shows it can be pressed.
+    if(document.getElementById("wildTagRow"))return;
+    /* v1.95: the bottom-left VERSION PILL is gone at Ash's request — the App
+       version screen it opened is already one tap inside ⚙️ Settings, so the
+       corner had two doors to the same place. The pill was also the only
+       visible sign of a waiting update, so that badge now rides on the
+       Settings button instead (see flagUpdateReadyPill / flagApkUpdate). */
     var row=document.createElement("div");
     row.id="wildTagRow";
     row.style.cssText=["position:fixed","bottom:6px","left:8px","z-index:2147483647",
@@ -10351,33 +10371,9 @@ document.addEventListener("visibilitychange",()=>{
       "background:rgba(255,255,255,.86)","border:1px solid rgba(0,0,0,.14)",
       "border-radius:8px","padding:2px 8px","letter-spacing:.04em",
       "box-shadow:0 1px 3px rgba(0,0,0,.18)"];
-    /* v1.51: the pill is now the door to the App version screen (it used to
-       live at the bottom of "Manage my corrections"). That means it has to
-       take taps — pointer-events was deliberately OFF here so the tag could
-       never swallow a tap while scanning, so it stays small, sits in the
-       corner, and does nothing but open that one screen. */
-    t.style.cssText=pill.concat(["position:static","pointer-events:auto","cursor:pointer",
-      "white-space:nowrap","-webkit-tap-highlight-color:transparent","touch-action:manipulation"]).join(";");
-    t.setAttribute("role","button");
-    t.setAttribute("aria-label","App version");
-    t.title="App version";
-    /* v1.91: the pill's z-index puts it ABOVE the ⚙️ Settings sheet, so it
-       looks tappable there and the tap does work — but the sheet is opaque and
-       full-screen, so the version screen opened out of sight behind it and
-       nothing appeared to happen. Close any settings surface on the way. */
-    t.onclick=function(){
-      try{
-        var sh=document.getElementById("wildOptSheet");
-        if(sh)sh.remove();
-        var vs=document.getElementById("wildVoiceSheet");   // same problem
-        if(vs)vs.remove();
-      }catch(e){}
-      try{if(typeof openHand==="function")openHand();}catch(e){}
-      try{if(typeof showAppVersion==="function")showAppVersion();}catch(e){}
-    };
-    // v1.79: ⚙️ Options — sits directly next to the version pill (not the
-    // Update button) since it's a settings door, same family as tapping the
-    // version number, not an update action.
+    // v1.79: ⚙️ Options — the one door in this corner since v1.95, and the
+    // only thing left in the row. App version, Sound, Voice and corrections
+    // all live behind it.
     var o=document.createElement("button");
     o.id="wildOptBtn";
     o.type="button";
@@ -10388,14 +10384,13 @@ document.addEventListener("visibilitychange",()=>{
       "white-space:nowrap","-webkit-tap-highlight-color:transparent","touch-action:manipulation"]).join(";");
     o.onclick=function(){try{if(typeof openOptionsMenu==="function")openOptionsMenu();}catch(e){}};
     /* v1.89: the ⟳ Update button has been REMOVED from this row at Ash's
-       request. Updating now lives on the App version screen (tap the pill),
-       behind the PIN. Nothing else here changes — the checks still run on
-       their own, and when one is waiting the pill itself turns green, so a
-       ready update is still visible from the scanning screen without a
-       second button sitting in the corner. updBtnIdle/updBtnReady/
+       request. Updating now lives on the App version screen (⚙️ Settings →
+       App version), behind the PIN. Nothing else here changes — the checks
+       still run on their own, and when one is waiting the Settings button
+       itself turns green (amber for a new APK), so a ready update is still
+       visible from the scanning screen. updBtnIdle/updBtnReady/
        wireUpdateButton all no-op safely when the button is absent. */
     row.appendChild(o);
-    row.appendChild(t);
     (document.body||document.documentElement).appendChild(row);
     try{wireUpdateButton();}catch(e){}
   })();
@@ -10441,7 +10436,7 @@ document.addEventListener("visibilitychange",()=>{
     // flagApkUpdate now only recolours the pill; no DOM banner is created.
     function flagApkUpdate(latest){
       try{
-        var tg=document.getElementById("wildBuildTag");
+        var tg=document.getElementById("wildOptBtn");   // v1.95: was the version pill
         if(tg){
           tg.textContent=tg.textContent.split(" — ")[0]+" — build "+latest+" available";
           tg.style.color="#8a5300";
