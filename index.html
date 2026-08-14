@@ -601,7 +601,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=96;
+const THIS_BUILD_NUM=98;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -611,7 +611,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v2.1";
+const BUILD_NAME="v2.3";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -628,7 +628,7 @@ const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
 const REPO_DATA_BUILD=72;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD=95;                  // build of the WildApp.apk beside this file
+const REPO_APK_BUILD=97;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -5417,12 +5417,7 @@ function showAppVersion(){
   // Escape hatch: set the downloaded copy aside (v1.89 — it used to be
   // deleted) and restart on the version inside the APK. Corrections and scan
   // history are untouched either way.
-  if(rev)rev.onclick=()=>{
-    const kept=liveHoldForRevert();
-    try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the built-in version ("+THIS_BUILD_NUM+")."+
-      (kept?" The downloaded copy is kept — \u201cUse latest update\u201d brings it back.":""));}catch(e){}
-    liveApplyNow();
-  };
+  if(rev)rev.onclick=()=>showRevertConfirm();
   const fw=document.getElementById("handLiveForward");
   // The way back: whatever was set aside by a revert, or a copy downloaded
   // and not yet restarted into.
@@ -5435,6 +5430,48 @@ function showAppVersion(){
   if(mg)mg.onclick=()=>{handMgFrom="version";showHandManage();};
   const back=document.getElementById("handVerBack");
   if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}};
+}
+/* ── "USE BUILT-IN VERSION" — ARE YOU SURE, THEN THE PIN AGAIN (v2.3) ────
+   This button restarts the app on the version inside the APK, so it is the
+   one control that changes what everyone sees the next time it starts. It
+   now takes three deliberate acts: open the screen (PIN), say yes, and type
+   the PIN again — the second one is forced, so typing it at the door does
+   not carry over. Cancel at either step leaves everything exactly as it is. */
+function doLiveRevert(){
+  const kept=liveHoldForRevert();
+  try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the built-in version ("+THIS_BUILD_NUM+")."+
+    (kept?" The downloaded copy is kept — \u201cUse latest update\u201d brings it back.":""));}catch(e){}
+  liveApplyNow();
+}
+function showRevertConfirm(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{box.dataset.sub="version";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  const running=runningBuild();
+  const built=THIS_BUILD_NUM;
+  box.style.justifyContent="flex-start";
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Are you sure?</div>
+    <div style="font-size:13px;color:var(--sub);margin-top:10px;line-height:1.55">
+      This restarts the app on the version built into it — <b>build ${built}</b> — instead of the downloaded <b>build ${running}</b>.
+    </div>
+    <div style="font-size:13px;color:var(--sub);margin-top:8px;line-height:1.55">
+      The downloaded copy is kept, so “Use latest update” brings it back. Your corrections, added addresses and scan history are not touched.
+    </div>
+    <div style="font-size:12.5px;color:var(--sub);margin-top:8px;line-height:1.5">You'll be asked for the PIN once more after this.</div>
+    <button id="handRevYes" style="margin-top:16px;width:100%;padding:13px;background:#8a5300;border:none;border-radius:12px;font-size:13.5px;font-weight:800;color:#fff;cursor:pointer">Yes — use the built-in version</button>
+    <button id="handRevNo" style="margin-top:8px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Cancel</button>
+  </div>`;
+  const no=document.getElementById("handRevNo");
+  if(no)no.onclick=()=>{try{showAppVersion();}catch(e){}};
+  const yes=document.getElementById("handRevYes");
+  if(yes)yes.onclick=()=>requireHandPin({
+    force:true,
+    title:"PIN to change version",
+    note:"Type the PIN again to go back to the built-in version.",
+    onOk:()=>doLiveRevert(),
+    onCancel:()=>{try{showAppVersion();}catch(e){}}
+  });
 }
 // Colour a logged scan by its outcome, for the Recent list's left border.
 function handOutcomeColor(res){
@@ -5597,7 +5634,10 @@ function handPinFresh(){return PIN_GRACE_MS>0 && Date.now()<handPinOkUntil;}
 function handPinClear(){handPinOkUntil=0;}
 function requireHandPin(opts){
   opts=opts||{};
-  if(handPinFresh()){opts.onOk&&opts.onOk();return;}
+  /* v2.3: opts.force asks EVEN IF the PIN was typed moments ago. Used by
+     the second gate on "Use built-in version" — a grace-window skip would
+     make the double check a single check. */
+  if(!opts.force && handPinFresh()){opts.onOk&&opts.onOk();return;}
   showHandPin({
     sub:opts.subName||"pin",
     title:opts.title||"Enter PIN",
