@@ -594,7 +594,8 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=90;
+const THIS_BUILD_NUM=92;
+const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
@@ -603,7 +604,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v1.95";
+const BUILD_NAME="v1.97";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3258,8 +3259,11 @@ function handTypeSuggestions(buf){
 }
 const HAND_TYPE_LOCK="W2 ";
 function handTypeSet(v){
-  let s=String(v||"").toUpperCase().replace(/[^A-Z0-9 ]/g,"").slice(0,24);
-  if(s.indexOf(HAND_TYPE_LOCK)!==0)s=HAND_TYPE_LOCK+s.replace(/^W2\s*/,"");
+  /* v1.97: a W2 postcode is W2 + three characters and the W2 is already
+     printed, so only three can be typed and the space key is gone. */
+  let s=String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  s=s.replace(/^W2/,"");
+  s=HAND_TYPE_LOCK+s.slice(0,3);
   handTypeBuf=s;
   handTypeRefresh();
 }
@@ -3288,6 +3292,8 @@ function handTypeLookup(){
   const t=handTypeBuf.trim();
   if(!t)return;
   try{renderHandheld(t,false);}catch(e){}
+  // BACK from the result goes back to the keypad, with what was typed intact.
+  try{window.__wildBackTo=function(){showHandTypeIn(true);};}catch(e){}
 }
 function showHandTypeIn(keep){
   const box=document.getElementById("handResult");
@@ -3304,15 +3310,14 @@ function showHandTypeIn(keep){
     '</div>').join("");
   box.innerHTML=`<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:10px 2px 4px">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Type a postcode</div>
-    <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">A postcode on its own, or a number and a postcode — <b>12 W2 1PN</b>. Looks it up exactly as if it had been scanned.</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">Type the three characters after <b>W2</b> — for W2 1PN, tap <b>1PN</b>. Looks it up exactly as if it had been scanned.</div>
     <div id="handTypeDisp" style="margin-top:10px;padding:12px;border:2px solid var(--div);border-radius:12px;
       font-size:22px;font-weight:800;letter-spacing:.06em;text-align:center;min-height:26px;color:var(--sub)">Postcode…</div>
     <div id="handTypeSug" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
     ${pad}
     <div style="display:flex;gap:5px;margin-top:5px">
-      <button type="button" class="handKey" data-k=" " style="${key};flex:3">space</button>
-      <button type="button" id="handTypeDel" style="${key};flex:2">⌫</button>
-      <button type="button" id="handTypeClr" style="${key};flex:2">clear</button>
+      <button type="button" id="handTypeDel" style="${key};flex:1">⌫</button>
+      <button type="button" id="handTypeClr" style="${key};flex:1">clear</button>
     </div>
     <button type="button" id="handTypeGo" style="margin-top:10px;width:100%;padding:14px;border:none;border-radius:12px;
       background:var(--pri,#1565C0);color:#fff;font-size:15px;font-weight:800;cursor:pointer">Look up</button>
@@ -4431,6 +4436,14 @@ let handLastPc=null, handLastHn=null, handLastAddr="";
 // to keep), and the pending address / postcode edits inside a correction —
 // both cleared every time the correction flow is opened afresh. (v1.43)
 let handLastWalk="", handFixAddr=null, handFixPc=null;
+/* v1.97 — WHERE BACK GOES FROM A RESULT.
+   A result reached from a LIST (Recent scans) or a LOOKUP (Type a postcode)
+   used to be a dead end: the sub-screen marker is gone by then, so BACK had
+   nothing to close and did nothing at all. window.__wildBackTo holds the
+   screen to return to; a live trigger scan clears it, because a scan starts
+   a new journey. On a scan result with nothing behind it, BACK goes to the
+   idle scanning screen instead of doing nothing. */
+try{window.__wildBackTo=null;}catch(e){}
 
 function rawResultBlock(raw){
   if(!handShowRaw||!raw)return "";
@@ -4443,7 +4456,6 @@ function rawResultBlock(raw){
   // Two unobtrusive links under every result: review recent scans, and manage
   // saved corrections. Kept off the idle screen so the scanning view stays clean.
   const linksRow=`<div style="display:flex;gap:18px;margin-top:8px;justify-content:center;flex-wrap:wrap">
-    <button id="handRecentBtn" style="background:transparent;border:none;font-size:11px;font-weight:700;color:var(--sub);text-decoration:underline;cursor:pointer;opacity:.8;padding:4px 2px">Recent scans</button>
     <button id="handManageBtn" style="background:transparent;border:none;font-size:11px;font-weight:700;color:var(--sub);text-decoration:underline;cursor:pointer;opacity:.8;padding:4px 2px">Manage my corrections</button>
   </div>`;
   return `<div style="margin-top:14px;width:100%;max-width:92%;text-align:left">
@@ -5272,6 +5284,19 @@ function showHandManage(){
    bottom of "Manage my corrections", which is the wrong place to look for it —
    it now opens by TAPPING THE VERSION PILL in the bottom-left corner, right
    where the build number is already shown. */
+/* ── PIN ON THE WAY IN (v1.96) ──────────────────────────────────
+   Every button on the App version screen changes which version runs, so the
+   PIN used to sit on each one — which meant typing 1984 twice to do one
+   thing. Now the PIN is on the door: type it once to get in, nothing inside
+   asks again. Leaving re-locks it, because no unlocked flag is kept. */
+function openAppVersion(){
+  requireHandPin({
+    title:"PIN for app version",
+    note:"This screen can change which version of the app runs.",
+    onOk:()=>{try{showAppVersion();}catch(e){}},
+    onCancel:()=>{try{openOptionsMenu();}catch(e){}}
+  });
+}
 function showAppVersion(){
   const box=document.getElementById("handResult");
   if(!box)return;
@@ -5332,6 +5357,12 @@ function showAppVersion(){
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">App version</div>
     <div id="handLiveInfo" style="font-size:13px;color:var(--sub);margin-top:10px;line-height:1.5"></div>
+    <div style="margin-top:12px;padding:11px 12px;border:1px solid var(--div);border-radius:12px;background:var(--sur)">
+      <div style="font-size:12px;font-weight:800;color:var(--txt)">Website version</div>
+      <div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.5">The same app runs in a browser on any phone — no install, nothing to update:</div>
+      <div id="wildSiteUrl" style="margin-top:6px;font-size:14px;font-weight:800;color:var(--pri);word-break:break-all">${WILD_SITE_URL}</div>
+      <button id="wildSiteCopy" style="margin-top:8px;width:100%;padding:10px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:12px;font-weight:800;color:var(--sub);cursor:pointer">Copy the address</button>
+    </div>
     ${VER_BTNS}
     ${corrHtml}
     ${logHtml}
@@ -5368,50 +5399,35 @@ function showAppVersion(){
   /* Everything that changes WHICH VERSION RUNS is behind the PIN (v1.89) —
      applying an update, dropping back to the built-in copy, and going forward
      again. Checking is not: looking costs nothing. */
+  const sc=document.getElementById("wildSiteCopy");
+  if(sc)sc.onclick=()=>{
+    try{if(typeof copyText==="function")copyText(WILD_SITE_URL);}catch(e){}
+    sc.textContent="✓ Copied";setTimeout(()=>{try{sc.textContent="Copy the address";}catch(e){}},1400);
+  };
   const lc2=document.getElementById("handVerLogClear");
   if(lc2)lc2.onclick=()=>{try{localStorage.removeItem(WILD_LOG_KEY);}catch(e){}showAppVersion();};
   const ap=document.getElementById("handLiveApply");
-  if(ap)ap.onclick=()=>requireHandPin({
-    title:"PIN to update",
-    note:"The app will restart on the new version.",
-    onOk:()=>applyUpdateNow(pend),
-    onCancel:()=>showAppVersion()
-  });
+  if(ap)ap.onclick=()=>applyUpdateNow(pend);
   const rev=document.getElementById("handLiveRevert");
   // Escape hatch: set the downloaded copy aside (v1.89 — it used to be
   // deleted) and restart on the version inside the APK. Corrections and scan
   // history are untouched either way.
-  if(rev)rev.onclick=()=>requireHandPin({
-    title:"PIN to change version",
-    note:"Goes back to the version built into the app.",
-    onOk:()=>{
-      const kept=liveHoldForRevert();
-      try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the built-in version ("+THIS_BUILD_NUM+")."+
-        (kept?" The downloaded copy is kept — \u201cUse latest update\u201d brings it back.":""));}catch(e){}
-      liveApplyNow();
-    },
-    onCancel:()=>showAppVersion()
-  });
+  if(rev)rev.onclick=()=>{
+    const kept=liveHoldForRevert();
+    try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the built-in version ("+THIS_BUILD_NUM+")."+
+      (kept?" The downloaded copy is kept — \u201cUse latest update\u201d brings it back.":""));}catch(e){}
+    liveApplyNow();
+  };
   const fw=document.getElementById("handLiveForward");
   // The way back: whatever was set aside by a revert, or a copy downloaded
   // and not yet restarted into.
-  if(fw)fw.onclick=()=>requireHandPin({
-    title:"PIN to change version",
-    note:"Goes back to the latest downloaded version.",
-    onOk:()=>{
-      liveRestoreHeld();
-      try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the downloaded version ("+fwd+").");}catch(e){}
-      liveApplyNow();
-    },
-    onCancel:()=>showAppVersion()
-  });
+  if(fw)fw.onclick=()=>{
+    liveRestoreHeld();
+    try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the downloaded version ("+fwd+").");}catch(e){}
+    liveApplyNow();
+  };
   const mg=document.getElementById("handVerManage");
-  if(mg)mg.onclick=()=>requireHandPin({
-    title:"PIN for corrections",
-    note:"Saved corrections can be deleted from this screen.",
-    onOk:()=>{handMgFrom="version";showHandManage();},
-    onCancel:()=>showAppVersion()
-  });
+  if(mg)mg.onclick=()=>{handMgFrom="version";showHandManage();};
   const back=document.getElementById("handVerBack");
   if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}};
 }
@@ -5443,9 +5459,12 @@ function showHandRecent(){
   }else{
     const rows=h.map((e,i)=>{
       const col=handOutcomeColor(e.res);
+      // v1.97: older entries were logged with a plug emoji in front of the
+      // walk. It never suited the list, so it's stripped on the way out too.
+      const resTxt=String(e.res||"—").replace(/^\s*\uD83D\uDD0C\s*/,"");
       return `<button class="handRecPick" data-i="${i}" style="display:block;width:100%;text-align:left;margin-top:8px;padding:12px 14px;background:var(--sur);border:none;border-left:6px solid ${col};border-radius:12px;box-shadow:var(--shad);cursor:pointer">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
-          <div style="font-size:15px;font-weight:800;color:var(--txt);flex:1;min-width:0;line-height:1.25;word-break:break-word">${escHtml(e.res||"—")}</div>
+          <div style="font-size:15px;font-weight:800;color:var(--txt);flex:1;min-width:0;line-height:1.25;word-break:break-word">${escHtml(resTxt)}</div>
           <div style="font-size:10px;color:var(--sub);white-space:nowrap">${fmtWhen(e.t||0)}</div>
         </div>
         <div style="margin-top:3px;font-size:10.5px;color:var(--sub);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escHtml((e.raw||"").slice(0,120))}</div>
@@ -5460,7 +5479,10 @@ function showHandRecent(){
     box.querySelectorAll(".handRecPick").forEach(b=>{
       b.onclick=()=>{
         const e=h[+b.dataset.i];
-        if(e&&e.raw)renderHandheld(e.raw,false); // typed-style replay: no beep/speech, not re-logged
+        if(e&&e.raw){
+          renderHandheld(e.raw,false); // typed-style replay: no beep/speech, not re-logged
+          try{window.__wildBackTo=showHandRecent;}catch(e2){}   // BACK returns to the list
+        }
       };
     });
   }
@@ -6278,6 +6300,7 @@ function renderHandheld(raw,fromScanner){
   // handheld screen to the front if some other tab was showing — otherwise the
   // result renders somewhere the person can't see.
   if(fromScanner){
+    try{window.__wildBackTo=null;}catch(e){}
     try{handClearSheets();}catch(e){}
     try{if(typeof handPanelOpen==="function"&&!handPanelOpen()&&typeof openHand==="function")openHand();}catch(e){}
   }
@@ -6550,7 +6573,7 @@ function renderHandheld(raw,fromScanner){
       return true;
     });
     if(ov){
-      if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}outcomeTone("exact",ov.walk);logScan(raw,"🔌 "+ov.walk+" · "+ov.addr+" (override)");}
+      if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}outcomeTone("exact",ov.walk);logScan(raw,""+ov.walk+" · "+ov.addr+" (override)");}
       box.style.justifyContent="center";
       box.innerHTML=`
         <div style="font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.12em;text-transform:uppercase">Walk</div>
@@ -6573,7 +6596,7 @@ function renderHandheld(raw,fromScanner){
   // and the QR on these labels often carries only the number and the postcode,
   // so insisting on "junction" let a plain "12 W2 1PN" scan through silently.
   if(pcNoSpace==="W21PN" && hn==="12"){
-    if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}outcomeTone("picker");logScan(raw,"🔌 Junction Mews — 1-2 (firm) or 12 — asked");}
+    if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}outcomeTone("picker");logScan(raw,"Junction Mews — 1-2 (firm) or 12 — asked");}
     const opts=[
       {walk:"FIRM",        addr:JM_FIRM_ADDR},
       {walk:"11 NORFOLK",  addr:"12, Junction Mews, W2 1PN"}
@@ -6842,7 +6865,7 @@ function renderHandheld(raw,fromScanner){
     // walk, when only the address or postcode is being fixed). (v1.43 — this
     // used to stay empty here, so "Just this address" had nothing to show.)
     handLastAddr=addr; handLastWalk=walk;
-    if(fromScanner){outcomeTone(pcMismatch?"building":"exact",walk);logScan(raw,"🔌 "+walk+" · "+addr+(pcMismatch?" (⚠ postcode "+pcMismatch.scanned+"≠"+pcMismatch.correct+")":""));}
+    if(fromScanner){outcomeTone(pcMismatch?"building":"exact",walk);logScan(raw,""+walk+" · "+addr+(pcMismatch?" (⚠ postcode "+pcMismatch.scanned+"≠"+pcMismatch.correct+")":""));}
     const mismatchBanner=pcMismatch?`
       <div style="margin-top:10px;padding:11px 14px;background:#fff8e1;border:1px solid #f9a825;border-left:5px solid #f9a825;border-radius:12px;max-width:94%;text-align:left">
         <div style="font-size:13px;font-weight:800;color:#a15c00">⚠ Postcode doesn't match this address</div>
@@ -6870,7 +6893,7 @@ function renderHandheld(raw,fromScanner){
   const byWalk={};
   records.forEach(r=>{(byWalk[r.r]=byWalk[r.r]||[]).push(r);});
   const pcFmt=pcNoSpace?(pcNoSpace.length>3?pcNoSpace.slice(0,-3)+" "+pcNoSpace.slice(-3):pcNoSpace):"";
-  if(fromScanner){outcomeTone("picker");logScan(raw,"🔌 "+walks.length+" possible walks");}
+  if(fromScanner){outcomeTone("picker");logScan(raw,""+walks.length+" possible walks");}
   // Sub-labels: normally the building/street names. But when two walks on the
   // same postcode share the same name (e.g. both just "Alfred Road") the list
   // reads identically and can't be chosen from — in that case show each walk's
@@ -7405,6 +7428,7 @@ function openOptionsMenu(){
       +item("🗣️","Voice","Which voice reads the walk aloud, speed &amp; pitch")
       +item("✏️","Walk corrections","Walks you\'ve fixed, and addresses you\'ve added")
       +item("ℹ️","App version","Which build is running, and updates")
+      +item("🕒","Recent scans","The last 40 scans, and what each one gave")
     +'</div>';
   document.body.appendChild(ov);
   const cl=ov.querySelector("#optClose");if(cl)cl.onclick=()=>ov.remove();
@@ -7420,7 +7444,14 @@ function openOptionsMenu(){
   if(rows[3])rows[3].onclick=()=>{
     ov.remove();
     try{if(typeof openHand==="function")openHand();}catch(e){}
-    try{showAppVersion();}catch(e){}
+    try{openAppVersion();}catch(e){}
+  };
+  /* v1.97: Recent scans moved OFF the result screen and in here, so the
+     scanning view is just the result. Same screen, one door. */
+  if(rows[4])rows[4].onclick=()=>{
+    ov.remove();
+    try{if(typeof openHand==="function")openHand();}catch(e){}
+    try{showHandRecent();}catch(e){}
   };
   if(rows[2])rows[2].onclick=()=>{
     ov.remove();
@@ -10628,6 +10659,25 @@ document.addEventListener("visibilitychange",()=>{
         openRi.classList.remove("open");
         return true;
       }
+
+      // 6) A result reached from Recent scans or the postcode keypad: go
+      //     back to the screen it came from (v1.97). One step only — the
+      //     target is cleared as it's used.
+      try{
+        if(window.__wildBackTo){
+          var _f=window.__wildBackTo; window.__wildBackTo=null;
+          _f(); return true;
+        }
+      }catch(e){}
+
+      // 7) A scan result sitting on the main screen with nothing above it:
+      //     BACK clears it back to the idle scanning screen, rather than
+      //     doing nothing at all (v1.97).
+      try{
+        if(hr && !hr.querySelector("#handIdleActions") && typeof handGoIdle==="function"){
+          handGoIdle(); return true;
+        }
+      }catch(e){}
     }catch(e){}
     return false;
   }
@@ -10652,6 +10702,9 @@ document.addEventListener("visibilitychange",()=>{
       //    last scan (which we're about to clear anyway).
       var hr=document.getElementById("handResult");
       if(hr && hr.dataset){ try{ delete hr.dataset.sub; }catch(e){} }
+      // HOME ends the journey, so nothing is "behind" the screen any more
+      // (v1.97: without this, BACK after HOME reopened the postcode keypad).
+      try{ window.__wildBackTo=null; }catch(e){}
       // 2) Close every stacked surface: modals, bottom sheets, the detail
       //    sheet, the camera panel, an expanded walk row.
       for(var i=0;i<12;i++){ if(!wildBack()) break; }
