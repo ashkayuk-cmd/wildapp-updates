@@ -601,7 +601,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=101;
+const THIS_BUILD_NUM=102;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -611,7 +611,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v2.6";
+const BUILD_NAME="v2.7";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -5601,6 +5601,51 @@ function histWalkCounts(){
 function clearScanHistory(){
   try{scanHist=[];localStorage.removeItem(SCAN_HIST_KEY);}catch(e){}
 }
+// v2.7: every saved scan that resolved to ONE walk, for that walk — opened
+// from a row of the "Scans per walk" tally. Shows the code itself (the raw
+// barcode/QR payload) with what it resolved to; tapping one replays it, the
+// same as the main Recent list. Reads the whole history, not the 40 the
+// main list shows, so the count on the tally row and the list here agree.
+function scansForWalk(walk){
+  const W=String(walk||"").trim().toUpperCase();
+  const h=(typeof loadScanHistory==="function"?loadScanHistory():[]);
+  return h.filter(function(e){return histWalkOf(e).toUpperCase()===W;});
+}
+function showHandWalkScans(walk){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{box.dataset.sub="walkscans";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const h=scansForWalk(walk);
+  const rows=h.map((e,i)=>{
+    const resTxt=String(e.res||"—").replace(/^\s*\uD83D\uDD0C\s*/,"");
+    return `<button class="handWsPick" data-i="${i}" style="display:block;width:100%;text-align:left;margin-top:8px;padding:12px 14px;background:var(--sur);border:none;border-left:6px solid ${handOutcomeColor(e.res)};border-radius:12px;box-shadow:var(--shad);cursor:pointer">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);flex:1;min-width:0;line-height:1.3;word-break:break-word">${escHtml(resTxt)}</div>
+        <div style="font-size:10px;color:var(--sub);white-space:nowrap">${fmtWhen(e.t||0)}</div>
+      </div>
+      <div style="margin-top:4px;font-size:10.5px;color:var(--sub);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all">${escHtml(e.raw||"")}</div>
+    </button>`;
+  }).join("");
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Scans on this walk</div>
+    <div style="font-size:26px;font-weight:900;color:var(--pri);line-height:1.15;margin-top:6px;word-break:break-word">${escHtml(String(walk))}</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:4px">${h.length} code${h.length===1?"":"s"} scanned — the code itself is under each result. Tap one to see it again.</div>
+    ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">No saved scans for this walk.</div>'}
+    <button id="handWsBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to recent scans</button>
+  </div>`;
+  box.querySelectorAll(".handWsPick").forEach(b=>{
+    b.onclick=()=>{
+      const e=h[+b.dataset.i];
+      if(e&&e.raw){
+        renderHandheld(e.raw,false);                                  // replay: no beep, no speech, not re-logged
+        try{window.__wildBackTo=function(){showHandWalkScans(walk);};}catch(e2){}
+      }
+    };
+  });
+  const bk=document.getElementById("handWsBack");
+  if(bk)bk.onclick=function(){try{showHandRecent();}catch(e){}};
+}
 function showHandRecent(){
   const box=document.getElementById("handResult");
   try{box.dataset.sub="recent";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
@@ -5630,16 +5675,17 @@ function showHandRecent(){
     // v2.6: how many of the saved scans landed on each walk, over the WHOLE
     // history, not just the 40 listed below.
     const tally=histWalkCounts();
-    const tallyRows=tally.walks.map(t=>`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:7px 12px;margin-top:5px;background:var(--sur);border-radius:10px;box-shadow:var(--shad)">
+    // v2.7: each tally row opens that walk's own scans.
+    const tallyRows=tally.walks.map(t=>`<button class="handTalRow" data-w="${encodeURIComponent(t.walk)}" style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;width:100%;text-align:left;padding:9px 12px;margin-top:5px;background:var(--sur);border:none;border-radius:10px;box-shadow:var(--shad);cursor:pointer">
         <div style="font-size:13.5px;font-weight:700;color:var(--pri);flex:1;min-width:0;word-break:break-word">${escHtml(t.walk)}</div>
-        <div style="font-size:13px;font-weight:800;color:var(--txt);white-space:nowrap">${t.n}</div>
-      </div>`).join("");
+        <div style="font-size:13px;font-weight:800;color:var(--txt);white-space:nowrap">${t.n} ›</div>
+      </button>`).join("");
     const tallySection=(tally.walks.length||tally.none)?`<div style="font-size:12px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:14px">Scans per walk <span style="font-weight:400;text-transform:none;letter-spacing:0">· ${tally.total} saved</span></div>
       ${tallyRows}
       ${tally.none?`<div style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.45">${tally.none} scan${tally.none===1?"":"s"} didn't land on a single walk (a pick-list, no match, or not in W2).</div>`:""}`:"";
     box.innerHTML=`<div style="width:100%;text-align:left">
       <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Recent scans <span style="font-weight:400;color:var(--sub)">· ${h.length}</span></div>
-      <div style="font-size:11px;color:var(--sub);margin-top:3px;line-height:1.4">Tap any scan to see it again — the walk, and the “Wrong walk?” fix.</div>
+      <div style="font-size:11px;color:var(--sub);margin-top:3px;line-height:1.4">Tap any scan to see it again — the walk, and the “Wrong walk?” fix. Tap a walk below for just its scans.</div>
       ${tallySection}
       <div style="font-size:12px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:18px">The scans</div>
       ${rows}
@@ -5656,6 +5702,9 @@ function showHandRecent(){
       };
     });
   }
+  box.querySelectorAll(".handTalRow").forEach(b=>{
+    b.onclick=function(){showHandWalkScans(decodeURIComponent(b.dataset.w));};
+  });
   // Two taps to clear: the first turns the button into the confirmation, so
   // a stray tap can't wipe the log. It reverts after 4 s if left alone.
   const clr=document.getElementById("handRecClear");
