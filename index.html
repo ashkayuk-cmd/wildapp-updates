@@ -601,7 +601,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=102;
+const THIS_BUILD_NUM=103;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -611,7 +611,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v2.7";
+const BUILD_NAME="v2.8";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3414,9 +3414,43 @@ function handIdleHtml(){
 }
 // Back to the scanning screen from a sub-screen: the previous result if there
 // is one, otherwise idle. Same shape as the other Back buttons.
+// ──── SCREEN TRAIL (v2.8) ────────────────────────────────────────────────
+// Ash: "when i click a link and then another link pressing back takes me to
+// home page, it should go back a link and then another link until its at
+// home". BACK's rule 1 collapsed ANY sub-screen straight to the scan result,
+// so a two-hop journey (Options → Walks → a walk → a shared walk) lost every
+// step but the first press. The browsing screens now leave a trail: each one
+// records itself as it renders, and BACK walks the trail one step at a time
+// before falling through to the old behaviour at the end of it.
+//
+// Only BROWSING screens join the trail (walks, a walk's streets, recent
+// scans, a walk's scans). The correction flow keeps its own Back handling —
+// its screens are a wizard, not a journey, and must not be re-entered by a
+// stray press.
+let handNavStack=[],handNavCur=null,handNavReplay=false;
+function handNavReset(){handNavStack=[];handNavCur=null;}
+function handNav(key,fn){
+  if(handNavReplay)return;                      // re-rendering an earlier screen, not a new hop
+  const keys=handNavStack.map(x=>x.key);
+  const at=keys.lastIndexOf(key);
+  if(at>=0){handNavStack.length=at;}            // stepped back to somewhere we'd been: truncate
+  else if(handNavCur&&handNavCur.key!==key){handNavStack.push(handNavCur);}
+  handNavCur={key:key,fn:fn};
+}
+// One step back along the trail. True if it moved.
+function handNavBack(){
+  const prev=handNavStack.pop();
+  if(!prev){handNavCur=null;return false;}
+  handNavCur=prev;
+  handNavReplay=true;
+  try{prev.fn();}catch(e){}
+  handNavReplay=false;
+  return true;
+}
 function handGoIdle(){
   const box=document.getElementById("handResult");
   if(!box)return;
+  handNavReset();                               // home: nothing behind us any more
   try{delete box.dataset.sub;}catch(e){}
   box.style.justifyContent="center";
   box.innerHTML=handIdleHtml();
@@ -4590,6 +4624,7 @@ function showHandWalksList(){
   const box=document.getElementById("handResult");
   if(!box)return;
   try{openHand();}catch(e){}
+  handNav("walks",function(){showHandWalksList();});
   try{box.dataset.sub="walks";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
   const walks=walksInRound();
@@ -4615,6 +4650,7 @@ function showHandWalksList(){
 function showHandWalkStreets(walk,backTo){
   const box=document.getElementById("handResult");
   if(!box)return;
+  handNav("streets:"+String(walk).toUpperCase(),function(){showHandWalkStreets(walk,backTo);});
   try{box.dataset.sub="streets";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   const list=streetsOnWalk(walk);
   const total=list.reduce((a,b)=>a+b.n,0);
@@ -5614,6 +5650,7 @@ function scansForWalk(walk){
 function showHandWalkScans(walk){
   const box=document.getElementById("handResult");
   if(!box)return;
+  handNav("walkscans:"+String(walk).toUpperCase(),function(){showHandWalkScans(walk);});
   try{box.dataset.sub="walkscans";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
   const h=scansForWalk(walk);
@@ -5648,6 +5685,7 @@ function showHandWalkScans(walk){
 }
 function showHandRecent(){
   const box=document.getElementById("handResult");
+  handNav("recent",function(){showHandRecent();});
   try{box.dataset.sub="recent";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   if(!box)return;
   const h=(typeof loadScanHistory==="function"?loadScanHistory():[]).slice(0,40);
@@ -6537,6 +6575,7 @@ function renderHandheld(raw,fromScanner){
   // result renders somewhere the person can't see.
   if(fromScanner){
     try{window.__wildBackTo=null;}catch(e){}
+    try{if(typeof handNavReset==="function")handNavReset();}catch(e){}   // v2.8: a live scan starts a new journey
     try{handClearSheets();}catch(e){}
     try{if(typeof handPanelOpen==="function"&&!handPanelOpen()&&typeof openHand==="function")openHand();}catch(e){}
   }
@@ -10841,6 +10880,12 @@ document.addEventListener("visibilitychange",()=>{
       var hr=document.getElementById("handResult");
       if(hr && hr.dataset && hr.dataset.sub){
         var sub=hr.dataset.sub;
+        // v2.8: one step back along the browsing trail, if there is one.
+        // Only the trail screens leave marks, so a wizard step still falls
+        // through to the collapse below.
+        try{
+          if(typeof handNavBack==="function" && handNavBack()) return true;
+        }catch(e){}
         delete hr.dataset.sub;
         // Manage opened FROM the App version screen goes back there (v1.54),
         // so the hardware key retraces the same path as the on-screen Back.
@@ -10954,6 +10999,7 @@ document.addEventListener("visibilitychange",()=>{
       // HOME ends the journey, so nothing is "behind" the screen any more
       // (v1.97: without this, BACK after HOME reopened the postcode keypad).
       try{ window.__wildBackTo=null; }catch(e){}
+      try{ if(typeof handNavReset==="function") handNavReset(); }catch(e){}
       // 2) Close every stacked surface: modals, bottom sheets, the detail
       //    sheet, the camera panel, an expanded walk row.
       for(var i=0;i<12;i++){ if(!wildBack()) break; }
