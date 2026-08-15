@@ -1,118 +1,109 @@
-# Wild App — v1.77 (build 73)
+# Wild App — build 104 (v2.9)
 
-OTA release. **No APK, no install.** One file to upload.
+**15 August 2026 · content update only — no APK, no install.**
 
-## Upload
-
-| File | Upload as |
-|---|---|
-| `index.html` | `index.html` |
-
-To `ashkayuk-cmd/wildapp-updates` (main), replacing the old one. **Nothing else** —
-the addresses haven't changed (still 24,149), so `wild_data.json` stays as it is.
-
-Then on the PDA: **⟳ Update** → it turns green → tap it.
+This one file carries every change from build 99 onwards. If you never uploaded
+99–103, uploading this covers all of them at once.
 
 ---
 
-## What I built on
+## What to upload
 
-Worth knowing, because it isn't what it looks like. The `index.html` sitting in
-your repo says **build 71 (v1.75)** — but the APK on your PDA is **v1.76 / build
-72**, and a downloaded copy is only used when its number *beats* the APK's. So
-the repo copy is dead weight: your PDA ignores it and runs the app baked inside
-the APK.
+| File | Where | Needed? |
+|---|---|---|
+| `index.html` | repo root, replacing the existing one | **yes** |
+| `wild_data.json` | repo root, replacing the existing one | only if you haven't already uploaded it today |
 
-That baked copy is the real "current app", and it's what I changed. This file is
-build 73, so it beats 72 and will actually be used.
+Both go in `ashkayuk-cmd/wildapp-updates`, on `main`, under exactly those names.
 
-One consequence: the repo copy also carried a change that made **every** 1D
-barcode register on screen. That change has never run on your PDA, and v1.76 now
-handles 1D codes in the scanner itself (drop tracking numbers, drop 1D codes with
-no postcode, keep hunting). So I deliberately left it behind rather than
-reviving it — if you *did* want 1D codes shown again, say so and I'll do it
-properly on top of the native filter.
+Two things that have caught us out before:
 
----
+- **The file must be named `index.html`.** A mobile upload that lands as
+  `index (1).html` publishes nothing.
+- **Press the green "Commit changes" button.** Choosing the file isn't the
+  upload.
 
-## 1. W2 1PN always offers the firm
+Then on the PDA: ⚙️ Settings → App version → **Check now**. The first check
+after a publish is done by the *old* code, so if a new button doesn't appear
+straight away, check once more.
 
-Any label with **W2 1PN** on it now keeps the firm on screen as a tappable option
-under whatever the app worked out:
-
-> **11 NORFOLK** — 5, Junction Mews, W2 1PN
-> ⚠ Also possible · the firm at 1-2
-> **FIRM** — 1-2 Junction Mews, W2 1PN (firm)  *(red, tappable)*
-
-Tap it and it becomes the answer like any other pick — speaks the walk, keeps
-Back and "Wrong walk?" working.
-
-That covers the ones that used to give you 11 NORFOLK and nothing else: a bare
-`W2 1PN`, a `5`, a `10`, an `11a`, or a label with no number at all.
-
-**Three things I deliberately left alone**, because they already answer FIRM or
-are your own ruling:
-
-- **1, 1-2 or 2** on the label → still snaps straight to FIRM, no extra card.
-- **12** → still the "⚠ Barcode error" two-button picker (FIRM 1-2 / 11 NORFOLK 12).
-- A **correction you've saved yourself** for a W2 1PN address still wins outright.
-
-This is the handheld screen — the one the PDA trigger feeds. The phone camera
-screen is unchanged.
-
-## 2. The other walks on a street
-
-Tap a walk name → the streets list now shows, under each street, a blue tag for
-every **other** walk that delivers on it:
-
-> **Southwick Street** 20
-> ⚠️ also on 13 RADNOR · 135
-
-The number on the tag is how many addresses that other walk has there. Tap the
-tag and you get *that* walk's streets, with **Back to 11 NORFOLK** to step back
-where you came from. The header now reads e.g. `18 streets · 575 addresses · 2 shared`.
-
-FIRM counts as a walk here — a couple of firm doors on your street matters as
-much as a split with another round.
-
-From your data:
-
-- **Walk 11** has two shared streets: Southwick Street (13 RADNOR, 135 addresses)
-  and Norfolk Square (one FIRM door).
-- Your Delamere example is **Delamere Terrace** — walk **2 WOODCHESTER** has 138
-  addresses on it, walk **3 JOHN AIRD** has 7.
-- Across the whole round, **48 of 260 streets** are shared. Only 2 walks have no
-  shared street at all.
-
-Hardware BACK still exits the streets screen straight to the scan (as it did
-before) — it's the on-screen Back button that retraces the walk-to-walk chain.
+Stamps in this file: build **104**, name **v2.9**, data build **100**, data hash
+**b3956e1b**, 24,149 rows, APK build **97**.
 
 ---
 
-## Checked before delivery
+## What's new
 
-- **91 tests** on this exact file: every W2 1PN shape, the three paths that must
-  *not* change, the tap-through, and — for the streets index — a brute-force
-  parity sweep proving the rewritten street counts match the old ones on **all 36
-  walks**, plus a check that the `wild_data.json` already in your repo still
-  matches this build's data stamps (hash and row count).
-- **10 end-to-end tests**: the build you're running downloads this file, judges
-  it, caches it; the APK's real loader then boots it and both new features work
-  after the handover; and it doesn't wrongly claim another app update afterwards.
-- **260-label render comparison** against the app you're running now: exactly
-  **2 differences**, both the intended W2 1PN cards. Everything else — Talbot
-  Square, the concierge labels, Lancaster Hall, tracking codes, the not-in-W2
-  screen — resolves identically.
+### Walks (⚙️ Settings → Walks) — build 99
+Every walk in the round, in order with FIRM last, showing its street and
+address counts. Tap one for its streets.
 
-## One thing you'll see
+Your A‑Z list's street column is now used: a named building sits **under the
+street it stands on** (`🏢 ASTLEY HOUSE · BRINDLEY HOUSE`) instead of dropping
+into the loose list at the bottom. That list went from 325 entries across all
+walks down to 62, and those 62 show their street when the sheet gave one.
 
-After the app update lands, the ⟳ button may go green once more, for the
-**addresses**. Tap it — it's the same 24,149 addresses you already have. It's
-there on purpose: if this file ever lands on a PDA still running an older APK,
-that device must not be left on the old address list (the concierge rows and the
-Queensway fixes would silently vanish). One redundant tap is the cheaper mistake.
+### Street search — build 104
+A search box on the Walks screen. Type two letters of a street and it tells you
+which walk has it, with the walks as tappable chips. Southwick Street comes back
+as 11 NORFOLK and 13 RADNOR.
 
-`index.html` — 564,349 bytes, sha256 `941e43f34647602c…`
-Stamps: `THIS_BUILD_NUM=73` · `BUILD_NAME="v1.77"` · `REPO_DATA_BUILD=72` ·
-`REPO_DATA_HASH="e71e95e7"` · `REPO_DATA_ROWS=24149` · `REPO_APK_BUILD=72` ·
-`BAKED_DATA_BUILD=57`
+### Data fix — build 100
+Roman Catholic Church of Our Lady, Queen of Heaven, 4a Inverness Place,
+W2 3RS → **23 INVERNESS**.
+
+Knock-on effect worth knowing: W2 3RS is now 7 Queensway addresses on walk 24
+plus this one church on 23, so a label carrying **only** the bare postcode will
+offer both walks. Anything naming 4a, Inverness Place or the church resolves to
+23 outright.
+
+### Scans per walk (⚙️ Settings → Recent scans) — builds 101, 102
+A tally above the scan list: every walk you've scanned, busiest first, counted
+over your whole saved history rather than the 40 shown.
+
+Tap a walk for **just its scans**, each with the raw barcode/QR code printed
+underneath. Tap one of those to replay it.
+
+Also on that screen: **Clear recent scans**, two taps (the first arms it, and it
+disarms itself after 4 seconds).
+
+### Didn't resolve — build 104
+The "N scans didn't land on a single walk" line is now a button. It lists the
+pick-lists, no-matches and out-of-area labels with their raw codes, and has a
+**Copy the list** button. Send a week of those over and the gaps can be fixed in
+the data properly.
+
+### Split postcodes (⚙️ Settings → Split postcodes) — build 104
+The app now finds the postcodes that cause pick-lists, instead of you finding
+them on the doorstep.
+
+16 of the round's 1,086 postcodes go to more than one walk. Fourteen are marked
+**amber** — a tiny minority of addresses on a *different street* from the rest,
+which is the shape that caused the Leinster/Craven and 114 Queensway problems.
+W2 3SS (one Seymour Street among 82 Queensborough Terrace) and W2 3RS are both
+there.
+
+W2 1NJ and W2 5PN aren't flagged: those are the same street split between a
+walk and FIRM, which is honest, not an error.
+
+Tap any postcode for every address at it with its walk.
+
+### Back button — build 103
+BACK used to send you home from any screen, however deep you'd gone. It now
+steps back one screen at a time: Options → Walks → walk 11 → its shared walk 13
+takes four presses to get home, in the order you came.
+
+The correction flow deliberately still closes straight to the result — a stray
+press shouldn't drop you back into a half-finished fix. A new scan clears the
+trail.
+
+---
+
+## Not changed
+
+The resolver, the scanner, the correction flow, sound and voice are all
+untouched. A 250-label comparison against the running build shows no difference
+in what a scan reports — every change here is a screen you go looking for.
+
+Your saved corrections, added addresses and scan history all survive this
+update.

@@ -601,7 +601,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=103;
+const THIS_BUILD_NUM=104;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -611,7 +611,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v2.8";
+const BUILD_NAME="v2.9";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4620,6 +4620,108 @@ function walksInRound(){
     return a.walk.localeCompare(b.walk);
   });
 }
+// ──── SPLIT POSTCODES (v2.9) ─────────────────────────────────────────────
+// Postcodes where the round delivers to more than one walk. Some are honest
+// splits (a genuine firm alongside houses); some are one stray row carrying
+// a neighbour's postcode, which is what caused the Leinster/Craven and 114
+// Queensway pickers. The app can find them itself, so they turn up here
+// rather than on the doorstep. Computed from the live data on demand and
+// cached until the data changes.
+let handSplitCache=null;
+function splitPostcodes(){
+  if(handSplitCache)return handSplitCache;
+  const re=/\bW2 ?\d[A-Z]{2}\b/g;
+  const m=Object.create(null);
+  if(typeof allData!=="undefined"&&Array.isArray(allData)){
+    for(const e of allData){
+      const d=String((e&&e.d)||"").toUpperCase();
+      const g=d.match(re);
+      if(!g||!g.length)continue;
+      const pc=g[g.length-1].replace(/\s+/g,"");
+      (m[pc]=m[pc]||[]).push(e);
+    }
+  }
+  const out=[];
+  for(const pc in m){
+    const rows=m[pc];
+    const walks=Object.create(null),streets=Object.create(null);
+    rows.forEach(function(e){
+      const w=String(e.r||"").trim(),s=String(e.s||"").trim();
+      if(w)walks[w]=(walks[w]||0)+1;
+      if(s)streets[s]=(streets[s]||0)+1;
+    });
+    const wk=Object.keys(walks);
+    if(wk.length<2)continue;
+    const list=wk.map(w=>({walk:w,n:walks[w]})).sort((a,b)=>b.n-a.n);
+    const smallest=list[list.length-1].n;
+    // A "stray" is the shape that misleads: a tiny minority AND a different
+    // street from the majority. A firm on the same street is a real split.
+    const stList=Object.keys(streets).map(s=>({street:s,n:streets[s]})).sort((a,b)=>b.n-a.n);
+    const stray=(smallest<=2&&stList.length>1);
+    out.push({pc:pc,fmt:pc.slice(0,-3)+" "+pc.slice(-3),walks:list,streets:stList,rows:rows.length,smallest:smallest,stray:stray});
+  }
+  out.sort((a,b)=>(b.stray-a.stray)||(a.smallest-b.smallest)||a.pc.localeCompare(b.pc));
+  handSplitCache=out;
+  return out;
+}
+function showHandSplits(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{openHand();}catch(e){}
+  handNav("splits",function(){showHandSplits();});
+  try{box.dataset.sub="splits";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const list=splitPostcodes();
+  const nStray=list.filter(x=>x.stray).length;
+  const rows=list.map(x=>{
+    const chips=x.walks.map(w=>`<span style="display:inline-block;padding:3px 8px;margin:3px 5px 0 0;background:#e8f0fe;border-radius:8px;font-size:11px;font-weight:800;color:var(--pri)">${escHtml(w.walk)} · ${w.n}</span>`).join("");
+    return `<button class="handSpRow" data-p="${encodeURIComponent(x.pc)}" style="display:block;width:100%;text-align:left;padding:11px 13px;margin-top:7px;background:var(--sur);border:none;border-left:6px solid ${x.stray?"#f9a825":"var(--pri)"};border-radius:11px;box-shadow:var(--shad);cursor:pointer">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <div style="font-size:15px;font-weight:800;color:var(--txt)">${escHtml(x.fmt)}</div>
+        <div style="font-size:11px;color:var(--sub);white-space:nowrap">${x.rows} addresses ›</div>
+      </div>
+      <div style="margin-top:2px">${chips}</div>
+      ${x.stray?`<div style="font-size:11px;color:#8a5300;margin-top:5px;line-height:1.4">Worth a look — ${x.smallest} address${x.smallest===1?"":"es"} on a different street from the rest.</div>`:""}
+    </button>`;
+  }).join("");
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Split postcodes</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.45">${list.length} postcode${list.length===1?"":"s"} in the round go to more than one walk — these are the ones that give you a pick-list. ${nStray?nStray+" look like a stray address rather than a real split.":"None look like a stray address."}</div>
+    ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">No split postcodes.</div>'}
+    <button id="handSpBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>
+  </div>`;
+  box.querySelectorAll(".handSpRow").forEach(b=>{
+    b.onclick=function(){showHandSplitRows(decodeURIComponent(b.dataset.p));};
+  });
+  const bk=document.getElementById("handSpBack");
+  if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
+}
+function showHandSplitRows(pc){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  handNav("splitrows:"+pc,function(){showHandSplitRows(pc);});
+  try{box.dataset.sub="splitrows";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const rec=splitPostcodes().filter(x=>x.pc===pc)[0];
+  const re=/\bW2 ?\d[A-Z]{2}\b/g;
+  const rows=(typeof allData!=="undefined"&&Array.isArray(allData)?allData:[]).filter(function(e){
+    const g=String((e&&e.d)||"").toUpperCase().match(re);
+    return g&&g.length&&g[g.length-1].replace(/\s+/g,"")===pc;
+  }).slice().sort((a,b)=>String(a.r).localeCompare(String(b.r))||String(a.d).localeCompare(String(b.d)));
+  const html=rows.map(e=>`<div style="padding:9px 12px;margin-top:5px;background:var(--sur);border-radius:10px;box-shadow:var(--shad)">
+      <div style="font-size:13px;font-weight:700;color:var(--txt);line-height:1.35;word-break:break-word">${escHtml(e.d||"")}</div>
+      <div style="font-size:11.5px;color:var(--pri);font-weight:800;margin-top:3px">${escHtml(e.r||"")}<span style="color:var(--sub);font-weight:400"> · ${escHtml(e.s||"")}</span></div>
+    </div>`).join("");
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Every address here</div>
+    <div style="font-size:26px;font-weight:900;color:var(--pri);line-height:1.15;margin-top:6px">${escHtml(rec?rec.fmt:pc)}</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:4px">${rows.length} address${rows.length===1?"":"es"} · grouped by walk</div>
+    ${html}
+    <button id="handSrBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to split postcodes</button>
+  </div>`;
+  const bk=document.getElementById("handSrBack");
+  if(bk)bk.onclick=function(){try{showHandSplits();}catch(e){}};
+}
 function showHandWalksList(){
   const box=document.getElementById("handResult");
   if(!box)return;
@@ -4638,12 +4740,41 @@ function showHandWalksList(){
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Walks</div>
     <div style="font-size:12px;color:var(--sub);margin-top:4px">${walks.length} walk${walks.length===1?"":"s"} in the round — tap one for its streets and buildings.</div>
+    <input id="handWkFind" type="text" placeholder="Find a street or a walk…" style="width:100%;margin-top:10px;padding:11px 12px;font-size:14px;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt);box-sizing:border-box">
+    <div id="handWkHits"></div>
     ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">No walks found.</div>'}
     <button id="handWkBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>
   </div>`;
   box.querySelectorAll(".handWkRow").forEach(b=>{
     b.onclick=function(){showHandWalkStreets(decodeURIComponent(b.dataset.w),WALKS_LIST_BACK);};
   });
+  // v2.9: type a street name to see which walk (or walks) has it, without
+  // opening each walk to look. Matches walks by name too.
+  const find=document.getElementById("handWkFind");
+  const hits=document.getElementById("handWkHits");
+  if(find&&hits){
+    find.oninput=function(){
+      const q=String(find.value||"").trim().toLowerCase();
+      if(q.length<2){hits.innerHTML="";return;}
+      const idx=streetWalkIndex();
+      const out=[];
+      for(const k in idx){
+        if(k.indexOf(q)<0)continue;
+        const rec=idx[k];
+        out.push({name:rec.name,walks:Object.keys(rec.walks).map(w=>({walk:w,n:rec.walks[w]})).sort((a,b)=>b.n-a.n)});
+      }
+      out.sort((a,b)=>a.name.localeCompare(b.name));
+      const shown=out.slice(0,12);
+      hits.innerHTML=shown.length?shown.map(s=>`<div style="padding:9px 12px;margin-top:6px;background:var(--sur);border-radius:10px;box-shadow:var(--shad)">
+          <div style="font-size:13.5px;font-weight:700;color:var(--txt);word-break:break-word">${escHtml(s.name)}</div>
+          <div style="margin-top:3px">${s.walks.map(x=>`<button class="handWkHit" data-w="${encodeURIComponent(x.walk)}" style="display:inline-block;padding:4px 9px;margin:3px 5px 0 0;background:#e8f0fe;border:1px solid #b7cdf5;border-radius:9px;font-size:11.5px;font-weight:800;color:var(--pri);cursor:pointer">${escHtml(x.walk)} · ${x.n}</button>`).join("")}</div>
+        </div>`).join("")+(out.length>shown.length?`<div style="font-size:11px;color:var(--sub);margin-top:6px">…and ${out.length-shown.length} more — keep typing.</div>`:""):
+        `<div style="font-size:12px;color:var(--sub);margin-top:8px">No street matches “${escHtml(q)}”.</div>`;
+      hits.querySelectorAll(".handWkHit").forEach(b=>{
+        b.onclick=function(){showHandWalkStreets(decodeURIComponent(b.dataset.w),null);};
+      });
+    };
+  }
   const bk=document.getElementById("handWkBack");
   if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
 }
@@ -5042,6 +5173,7 @@ function handKnowsAddress(text){
 function handDropDataIndexes(){
   handSearchIdx=null;handSearchIdxFor=-1;
   try{handStreetIdx=null;}catch(e){}
+  try{handSplitCache=null;}catch(e){}      // v2.9: the split-postcode audit is derived from the data too
   try{knownPostcodeSet._cache=null;knownPostcodeSet._for=null;}catch(e){}
   try{tokenStreetCount=null;}catch(e){}
   try{dropRecTokenCache();}catch(e){}
@@ -5647,6 +5779,50 @@ function scansForWalk(walk){
   const h=(typeof loadScanHistory==="function"?loadScanHistory():[]);
   return h.filter(function(e){return histWalkOf(e).toUpperCase()===W;});
 }
+// v2.9: the scans that DIDN'T resolve to one walk — pick-lists, no-matches,
+// out-of-area labels. These are the real gaps: the raw code is kept, so a
+// week's worth can be sent on and fixed in the data rather than remembered.
+function showHandUnresolved(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  handNav("unresolved",function(){showHandUnresolved();});
+  try{box.dataset.sub="unresolved";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const h=(typeof loadScanHistory==="function"?loadScanHistory():[]).filter(function(e){return !histWalkOf(e);});
+  const rows=h.map((e,i)=>`<button class="handUnPick" data-i="${i}" style="display:block;width:100%;text-align:left;margin-top:8px;padding:12px 14px;background:var(--sur);border:none;border-left:6px solid ${handOutcomeColor(e.res)};border-radius:12px;box-shadow:var(--shad);cursor:pointer">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);flex:1;min-width:0;line-height:1.3;word-break:break-word">${escHtml(String(e.res||"—"))}</div>
+        <div style="font-size:10px;color:var(--sub);white-space:nowrap">${fmtWhen(e.t||0)}</div>
+      </div>
+      <div style="margin-top:4px;font-size:10.5px;color:var(--sub);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all">${escHtml(e.raw||"")}</div>
+    </button>`).join("");
+  const txt=h.length?("Wild App — scans that didn't resolve ("+h.length+")\n"+
+    h.map(e=>fmtWhen(e.t||0)+"  |  "+String(e.res||"")+"  |  "+String(e.raw||"")).join("\n")):"";
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Didn't resolve</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.45">${h.length} scan${h.length===1?"":"es"} that gave a pick-list, no match, or an out-of-area postcode. The code is kept with each one — copy them and they can be fixed in the data for good.</div>
+    ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">Nothing — every saved scan landed on a walk.</div>'}
+    ${h.length?`<textarea id="handUnBox" readonly style="width:100%;margin-top:14px;height:120px;padding:11px 12px;font-size:11.5px;font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.45;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt);resize:vertical;box-sizing:border-box">${escHtml(txt)}</textarea>
+    <button id="handUnCopy" style="margin-top:8px;width:100%;padding:12px;background:var(--pri);border:none;border-radius:12px;font-size:13px;font-weight:800;color:#fff;cursor:pointer">Copy the list</button>`:""}
+    <button id="handUnBack" style="margin-top:${h.length?8:16}px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to recent scans</button>
+  </div>`;
+  box.querySelectorAll(".handUnPick").forEach(b=>{
+    b.onclick=()=>{
+      const e=h[+b.dataset.i];
+      if(e&&e.raw){renderHandheld(e.raw,false);try{window.__wildBackTo=function(){showHandUnresolved();};}catch(e2){}}
+    };
+  });
+  const cp=document.getElementById("handUnCopy");
+  if(cp)cp.onclick=function(){
+    const ta=document.getElementById("handUnBox");
+    try{ta.focus();ta.select();ta.setSelectionRange(0,ta.value.length);}catch(e){}
+    if(typeof copyText==="function")copyText(ta.value);
+    else{try{document.execCommand("copy");}catch(e){}}
+    cp.textContent="✓ Copied";setTimeout(()=>{cp.textContent="Copy the list";},1400);
+  };
+  const bk=document.getElementById("handUnBack");
+  if(bk)bk.onclick=function(){try{showHandRecent();}catch(e){}};
+}
 function showHandWalkScans(walk){
   const box=document.getElementById("handResult");
   if(!box)return;
@@ -5720,7 +5896,7 @@ function showHandRecent(){
       </button>`).join("");
     const tallySection=(tally.walks.length||tally.none)?`<div style="font-size:12px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:14px">Scans per walk <span style="font-weight:400;text-transform:none;letter-spacing:0">· ${tally.total} saved</span></div>
       ${tallyRows}
-      ${tally.none?`<div style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.45">${tally.none} scan${tally.none===1?"":"s"} didn't land on a single walk (a pick-list, no match, or not in W2).</div>`:""}`:"";
+      ${tally.none?`<button id="handTalNone" style="display:block;width:100%;text-align:left;font-size:11.5px;color:#8a5300;margin-top:6px;padding:9px 12px;background:#fff8e6;border:1px solid #f0dcae;border-radius:10px;line-height:1.45;cursor:pointer">${tally.none} scan${tally.none===1?"":"s"} didn't land on a single walk (a pick-list, no match, or not in W2) — tap to see them ›</button>`:""}`:"";
     box.innerHTML=`<div style="width:100%;text-align:left">
       <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Recent scans <span style="font-weight:400;color:var(--sub)">· ${h.length}</span></div>
       <div style="font-size:11px;color:var(--sub);margin-top:3px;line-height:1.4">Tap any scan to see it again — the walk, and the “Wrong walk?” fix. Tap a walk below for just its scans.</div>
@@ -5743,6 +5919,8 @@ function showHandRecent(){
   box.querySelectorAll(".handTalRow").forEach(b=>{
     b.onclick=function(){showHandWalkScans(decodeURIComponent(b.dataset.w));};
   });
+  const noneBtn=document.getElementById("handTalNone");
+  if(noneBtn)noneBtn.onclick=function(){showHandUnresolved();};
   // Two taps to clear: the first turns the button into the confirmation, so
   // a stray tap can't wipe the log. It reverts after 4 s if left alone.
   const clr=document.getElementById("handRecClear");
@@ -7705,6 +7883,7 @@ function openOptionsMenu(){
       +item("ℹ️","App version","Which build is running, and updates")
       +item("🕒","Recent scans","The last 40 scans, and what each one gave")
       +item("🚶","Walks","Every walk, and the streets and buildings on it")
+      +item("⚠️","Split postcodes","Postcodes that go to more than one walk")
     +'</div>';
   document.body.appendChild(ov);
   const cl=ov.querySelector("#optClose");if(cl)cl.onclick=()=>ov.remove();
@@ -7728,6 +7907,12 @@ function openOptionsMenu(){
     ov.remove();
     try{if(typeof openHand==="function")openHand();}catch(e){}
     try{showHandRecent();}catch(e){}
+  };
+  /* v2.9: appended after Walks, so rows[0..5] keep their places. */
+  if(rows[6])rows[6].onclick=()=>{
+    ov.remove();
+    try{if(typeof openHand==="function")openHand();}catch(e){}
+    try{showHandSplits();}catch(e){}
   };
   /* v2.4: appended LAST so every index above stays where it was. */
   if(rows[5])rows[5].onclick=()=>{
