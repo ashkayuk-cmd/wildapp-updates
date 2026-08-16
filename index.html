@@ -597,7 +597,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 128;
+const THIS_BUILD_NUM = 129;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -607,7 +607,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.13";
+const BUILD_NAME = "v4.15";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4906,30 +4906,43 @@ function showHandWalkSimple(key){
   try{box.dataset.sub="simple1";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
   const label=walkFullName(key);
-  /* v4.14: back to tap-to-expand, but the SIMPLE way — straight off the
-     SHEET itself (which other walks list the same street text), just NAMES,
-     no address detail. v4.11 pulled real data from wild_data and listed each
-     other walk's addresses underneath; that was "too complicated". This is
-     the plain sheet cross-reference, collapsed until tapped. */
+  /* v4.15: expand shows what the SHEET ITSELF says each other walk has on
+     that street — the number ranges baked into the A-Z sheet's own entry
+     text (e.g. "EDGWARE ROAD 2-258 (EVENS), 7-217 (ODDS)"), not anything
+     derived from wild_data. azBaseKey() strips an entry's leading digits to
+     get the plain street it's describing ("EDGWARE ROAD 2-258…" → "edgware
+     road"), or uses its own street column when the entry has one (a named
+     building). Only BARE street/number entries (empty street column) are
+     matched as companions — that is the shape Ash's example used, so a
+     building on the same street doesn't clutter the list. */
   const ents=(WALK_AZ_ENTRIES[key]||[]).slice().sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
-  const sheetStreetWalks=Object.create(null);
+  function azBaseKey(nm,st){
+    st=String(st||"").trim();
+    if(st)return st.toLowerCase();
+    const m=String(nm||"").match(/^([^\d]+?)\s*\d/);
+    return (m?m[1]:nm).trim().toLowerCase();
+  }
+  const bareByKey=Object.create(null);   // baseKey -> [{walk,name}]
   for(const k in WALK_AZ_ENTRIES){
+    const wname=walkFullName(k);
     (WALK_AZ_ENTRIES[k]||[]).forEach(function(e){
-      const st=String((e&&e[1])||"").trim().toLowerCase();
-      if(!st)return;
-      (sheetStreetWalks[st]=sheetStreetWalks[st]||Object.create(null))[walkFullName(k)]=1;
+      const nm=String((e&&e[0])||""), st=String((e&&e[1])||"");
+      if(st.trim())return;                     // only bare street/number rows
+      const bk=azBaseKey(nm,"");
+      (bareByKey[bk]=bareByKey[bk]||[]).push({walk:wname,name:nm});
     });
   }
   const rows=ents.map((e,ix)=>{
     const nm=String(e[0]||""), st=String(e[1]||"");
-    const stKey=st.trim().toLowerCase();
-    const others=stKey?Object.keys(sheetStreetWalks[stKey]||{}).filter(w=>w!==label):[];
+    const bk=azBaseKey(nm,st);
+    const others=(bareByKey[bk]||[]).filter(x=>x.walk!==label).sort((a,b)=>a.name.localeCompare(b.name));
     const head=`<div style="font-size:17px;font-weight:700;color:var(--txt);line-height:1.3;word-break:break-word">${escHtml(nm)}${others.length?' <span style="font-size:12px;color:#d32f2f;font-weight:800;vertical-align:2px">▾ shared</span>':""}</div>`+
       (st?`<div style="font-size:13px;color:var(--sub);margin-top:3px">${escHtml(st)}</div>`:"");
     if(!others.length){
       return `<div style="padding:12px 14px;margin-top:6px;background:var(--sur);border-radius:11px;box-shadow:var(--shad)">${head}</div>`;
     }
-    return `<button type="button" class="handSiExp" data-i="${ix}" style="display:block;width:100%;text-align:left;padding:12px 14px;margin-top:6px;background:var(--sur);border:none;border-radius:11px;box-shadow:var(--shad);cursor:pointer">${head}<div class="handSiExpBody" style="display:none;margin-top:4px;font-size:12px;color:#d32f2f;font-weight:700">Also on: ${others.map(escHtml).join(", ")}</div></button>`;
+    const lines=others.map(o=>`<div style="margin-top:4px"><span style="font-weight:800">${escHtml(o.walk)}</span> ${escHtml(o.name)}</div>`).join("");
+    return `<button type="button" class="handSiExp" data-i="${ix}" style="display:block;width:100%;text-align:left;padding:12px 14px;margin-top:6px;background:var(--sur);border:none;border-radius:11px;box-shadow:var(--shad);cursor:pointer">${head}<div class="handSiExpBody" style="display:none;margin-top:5px;padding-top:5px;border-top:1px solid var(--div);font-size:12.5px;color:#d32f2f;line-height:1.5">${lines}</div></button>`;
   }).join("");
   box.innerHTML=`<div style="width:100%;text-align:left">
     ${handTopBar(label==="FIRM"?"FIRM":"Walk "+label)}
