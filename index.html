@@ -496,7 +496,7 @@ body.addr-locked #rl .lockmsg{display:flex}
 <div id="handPanel">
   <div class="qrbar">
     <h1 style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:18px;font-weight:600;color:#fff;margin:0;display:flex;align-items:center"><svg width="20" height="22" viewBox="0 0 24 26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7.4 1.9 L6.2 0.6 M12 1.6 L12 0.4 M16.6 1.9 L17.8 0.6"/><rect x="8" y="2.6" width="8" height="2.8" rx="1"/><rect x="4.8" y="5.4" width="14.4" height="20.1" rx="2.6"/><rect x="7.4" y="8" width="9.2" height="6" rx="1"/><path d="M19.4 13 h1.5 a1.1 1.1 0 0 1 1.1 1.1 v2.3 a1.1 1.1 0 0 1 -1.1 1.1 h-1.5"/><path d="M8.2 17.6 h7.6 M8.2 21.6 h7.6"/></svg>Handheld Scanner</h1>
-    <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button><button type="button" id="wildResetBtn" aria-label="Reset app" style="flex:0 0 auto;padding:6px 10px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET</span><span id="wildResetL2" style="font-size:9.5px;letter-spacing:.06em;opacity:.9">APP</span></button>
+    <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;margin-right:44px;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button><button type="button" id="wildResetBtn" aria-label="Reset app" style="flex:0 0 auto;padding:6px 10px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET</span><span id="wildResetL2" style="font-size:9.5px;letter-spacing:.06em;opacity:.9">APP</span></button>
   </div>
   <!-- v1.98: the website version, at the top of the main screen where it is
        always in view. Fixed markup outside #handResult, so no scan, screen or
@@ -601,7 +601,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=106;
+const THIS_BUILD_NUM=108;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -611,7 +611,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v3.1";
+const BUILD_NAME="v3.3";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4724,6 +4724,79 @@ function showHandSplitRows(pc){
   const bk=document.getElementById("handSrBack");
   if(bk)bk.onclick=function(){try{showHandSplits();}catch(e){}};
 }
+/* v3.3: the Walks search used to look ONLY at streetWalkIndex keys, and only
+   as a plain substring. So a named building ("HALL TOWER") found nothing even
+   though the A-Z sheet knows it, and one mistyped letter ("PREAD STREET")
+   found nothing either. handFindTargets() merges streets + A-Z buildings +
+   walk names into one list; handFindLoose() is the typo pass, tried only when
+   the plain substring pass comes back empty. */
+let handFindIdx=null;
+function handFindTargets(){
+  if(handFindIdx)return handFindIdx;
+  const out=[];
+  const byKey=Object.create(null);
+  const idx=streetWalkIndex();
+  const isStreet=Object.create(null);
+  for(const k in idx){
+    const rec=idx[k];
+    isStreet[k]=1;
+    out.push({key:k,name:rec.name,street:"",kind:"street",
+      walks:Object.keys(rec.walks).map(w=>({walk:w,n:rec.walks[w]})).sort((a,b)=>b.n-a.n)});
+  }
+  let walks=[];
+  try{walks=walksInRound();}catch(e){}
+  walks.forEach(function(w){
+    const nm=String(w.walk||"").trim();
+    if(!nm)return;
+    out.push({key:nm.toLowerCase(),name:nm,street:"",kind:"walk",walks:[{walk:nm,n:w.n}]});
+    let az=[];
+    try{az=azEntriesForWalk(nm);}catch(e){}
+    az.forEach(function(p){
+      const nb=String((p&&p[0])||"").trim();
+      if(!nb)return;
+      const kk=nb.toLowerCase();
+      if(isStreet[kk])return;                    // it is a street — already listed above
+      let t=byKey[kk];
+      if(!t){
+        t={key:kk,name:nb,street:String((p&&p[1])||"").trim(),kind:"bldg",walks:[]};
+        byKey[kk]=t;out.push(t);
+      }
+      if(!t.walks.some(x=>x.walk===nm))t.walks.push({walk:nm,n:0});
+    });
+  });
+  handFindIdx=out;
+  return out;
+}
+// Damerau edit distance, given up once it passes 1 (that is all we ask of it).
+function handFindDist(a,b){
+  const m=a.length,n=b.length;
+  if(Math.abs(m-n)>1)return 2;
+  let prev2=null,prev=[],cur=[];
+  for(let j=0;j<=n;j++)prev[j]=j;
+  for(let i=1;i<=m;i++){
+    cur=[i];
+    for(let j=1;j<=n;j++){
+      const cost=a.charAt(i-1)===b.charAt(j-1)?0:1;
+      let v=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+cost);
+      if(prev2&&i>1&&j>1&&a.charAt(i-1)===b.charAt(j-2)&&a.charAt(i-2)===b.charAt(j-1))
+        v=Math.min(v,prev2[j-2]+1);              // swapped letters: praed / pread
+      cur[j]=v;
+    }
+    prev2=prev;prev=cur;
+  }
+  return prev[n];
+}
+function handFindLoose(name,words){
+  const nw=String(name||"").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  if(!nw.length||!words.length)return false;
+  return words.every(function(q){
+    if(q.length<4)return nw.some(w=>w.indexOf(q)===0);
+    return nw.some(function(w){
+      if(w.indexOf(q)>=0)return true;
+      return handFindDist(w,q)<=1;
+    });
+  });
+}
 function showHandWalksList(){
   const box=document.getElementById("handResult");
   if(!box)return;
@@ -4742,7 +4815,7 @@ function showHandWalksList(){
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Walks</div>
     <div style="font-size:12px;color:var(--sub);margin-top:4px">${walks.length} walk${walks.length===1?"":"s"} in the round — tap one for its streets and buildings.</div>
-    <input id="handWkFind" type="text" placeholder="Find a street or a walk…" style="width:100%;margin-top:10px;padding:11px 12px;font-size:14px;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt);box-sizing:border-box">
+    <input id="handWkFind" type="text" placeholder="Find a street, building or walk…" style="width:100%;margin-top:10px;padding:11px 12px;font-size:14px;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt);box-sizing:border-box">
     <div id="handWkHits"></div>
     ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">No walks found.</div>'}
     <button id="handWkBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>
@@ -4758,20 +4831,27 @@ function showHandWalksList(){
     find.oninput=function(){
       const q=String(find.value||"").trim().toLowerCase();
       if(q.length<2){hits.innerHTML="";return;}
-      const idx=streetWalkIndex();
-      const out=[];
-      for(const k in idx){
-        if(k.indexOf(q)<0)continue;
-        const rec=idx[k];
-        out.push({name:rec.name,walks:Object.keys(rec.walks).map(w=>({walk:w,n:rec.walks[w]})).sort((a,b)=>b.n-a.n)});
+      const all=handFindTargets();
+      const qs=q.split(/[^a-z0-9]+/).filter(Boolean);
+      // v3.3: plain substring first — a clean spelling must never be beaten by
+      // a fuzzy neighbour. Only when that finds nothing do we forgive a typo.
+      let out=all.filter(t=>t.key.indexOf(q)>=0);
+      let loose=false;
+      if(!out.length&&qs.length){
+        out=all.filter(t=>handFindLoose(t.name+" "+(t.street||""),qs));
+        loose=out.length>0;
       }
-      out.sort((a,b)=>a.name.localeCompare(b.name));
+      const rank={street:0,bldg:1,walk:2};
+      out.sort((a,b)=>(rank[a.kind]-rank[b.kind])||a.name.localeCompare(b.name));
       const shown=out.slice(0,12);
-      hits.innerHTML=shown.length?shown.map(s=>`<div style="padding:9px 12px;margin-top:6px;background:var(--sur);border-radius:10px;box-shadow:var(--shad)">
-          <div style="font-size:13.5px;font-weight:700;color:var(--txt);word-break:break-word">${escHtml(s.name)}</div>
-          <div style="margin-top:3px">${s.walks.map(x=>`<button class="handWkHit" data-w="${encodeURIComponent(x.walk)}" style="display:inline-block;padding:4px 9px;margin:3px 5px 0 0;background:#e8f0fe;border:1px solid #b7cdf5;border-radius:9px;font-size:11.5px;font-weight:800;color:var(--pri);cursor:pointer">${escHtml(x.walk)} · ${x.n}</button>`).join("")}</div>
+      hits.innerHTML=shown.length?
+        (loose?`<div style="font-size:11.5px;color:var(--sub);margin-top:8px">No exact match for &ldquo;${escHtml(q)}&rdquo; — closest spellings:</div>`:"")+
+        shown.map(s=>`<div style="padding:9px 12px;margin-top:6px;background:var(--sur);border-radius:10px;box-shadow:var(--shad)">
+          <div style="font-size:13.5px;font-weight:700;color:var(--txt);word-break:break-word">${s.kind==="bldg"?"🏢 ":(s.kind==="walk"?"🚶 ":"")}${escHtml(s.name)}</div>
+          ${s.street?`<div style="font-size:11.5px;color:var(--sub);margin-top:2px">${escHtml(s.street)}</div>`:""}
+          <div style="margin-top:3px">${s.walks.map(x=>`<button class="handWkHit" data-w="${encodeURIComponent(x.walk)}" style="display:inline-block;padding:4px 9px;margin:3px 5px 0 0;background:#e8f0fe;border:1px solid #b7cdf5;border-radius:9px;font-size:11.5px;font-weight:800;color:var(--pri);cursor:pointer">${escHtml(x.walk)}${x.n?" · "+x.n:""}</button>`).join("")}</div>
         </div>`).join("")+(out.length>shown.length?`<div style="font-size:11px;color:var(--sub);margin-top:6px">…and ${out.length-shown.length} more — keep typing.</div>`:""):
-        `<div style="font-size:12px;color:var(--sub);margin-top:8px">No street matches “${escHtml(q)}”.</div>`;
+        `<div style="font-size:12px;color:var(--sub);margin-top:8px">Nothing matches &ldquo;${escHtml(q)}&rdquo; — try a street, a building name or a walk number.</div>`;
       hits.querySelectorAll(".handWkHit").forEach(b=>{
         b.onclick=function(){showHandWalkStreets(decodeURIComponent(b.dataset.w),null);};
       });
@@ -5176,6 +5256,7 @@ function handDropDataIndexes(){
   handSearchIdx=null;handSearchIdxFor=-1;
   try{handStreetIdx=null;}catch(e){}
   try{handSplitCache=null;}catch(e){}      // v2.9: the split-postcode audit is derived from the data too
+  try{handFindIdx=null;}catch(e){}         // v3.3: the walks-search list is derived from the data too
   try{knownPostcodeSet._cache=null;knownPostcodeSet._for=null;}catch(e){}
   try{tokenStreetCount=null;}catch(e){}
   try{dropRecTokenCache();}catch(e){}
