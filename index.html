@@ -597,17 +597,17 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=112;
+const THIS_BUILD_NUM = 116;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
 // DATA (58 is not > 59), quietly reverting address fixes.
-const BAKED_DATA_BUILD=57;
+const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v3.7";
+const BUILD_NAME = "v4.1";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -623,13 +623,13 @@ const BUILD_NAME="v3.7";
 const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
-const REPO_DATA_BUILD=100;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD=97;                  // build of the WildApp.apk beside this file
+const REPO_DATA_BUILD=116;                 // build of the wild_data.json beside this file
+const REPO_APK_BUILD = 115;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
-const REPO_DATA_HASH="b3956e1b";
-const REPO_DATA_ROWS=24149;
+const REPO_DATA_HASH="06248e81";
+const REPO_DATA_ROWS=24148;
 const APK_BUILD_KEY="wildApkBuild_v1";    // versionCode of the APK on this device
 const REPO_APK_SEEN_KEY="wildRepoApk_v1"; // newest APK build seen in the repo
 const LIVE_CODE_KEY="wildLive_v1";        // {b:build, gz:base64 gzipped HTML}
@@ -3347,6 +3347,7 @@ function showHandTypeIn(keep){
 function showHandSound(){
   const box=document.getElementById("handResult");
   if(!box)return;
+  handNav("sound",function(){showHandSound();});   // v4.0: so BACK returns to Options
   try{box.dataset.sub="sound";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
   const v=soundLevel();
@@ -3444,6 +3445,21 @@ function handNavBack(){
   try{prev.fn();}catch(e){}
   handNavReplay=false;
   return true;
+}
+// v4.0: put the result box back to whatever was under a sheet — the last scan
+// if there was one, otherwise the idle screen. Deliberately does NOT reset the
+// trail (handGoIdle does), because this runs WHILE walking back along it.
+function handCollapseToResult(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{delete box.dataset.sub;}catch(e){}
+  try{
+    if(typeof handLastRaw!=="undefined"&&handLastRaw&&typeof renderHandheld==="function"){
+      renderHandheld(handLastRaw,false);return;
+    }
+  }catch(e){}
+  box.style.justifyContent="center";
+  box.innerHTML=handIdleHtml();
 }
 function handGoIdle(){
   const box=document.getElementById("handResult");
@@ -4594,6 +4610,7 @@ function otherWalksOnStreet(street,walk){
 // "came from the walks list" so that screen's Back returns here rather than
 // to a scan.
 const WALKS_LIST_BACK="\u0001walks";
+const SHARED_LIST_BACK="\u0001shared";   // v4.1: came in from the Shared streets list
 function walksInRound(){
   const idx=streetWalkIndex();
   const m=Object.create(null);
@@ -4719,6 +4736,56 @@ function showHandSplitRows(pc){
   </div>`;
   const bk=document.getElementById("handSrBack");
   if(bk)bk.onclick=function(){try{showHandSplits();}catch(e){}};
+}
+/* ── SHARED STREETS (v4.1) ─────────────────────────────────────
+   The street-level twin of Split postcodes: every street in the round whose
+   addresses are spread over two or more walks. Built straight off
+   streetWalkIndex(), so it always agrees with what the Walks screens show,
+   and cached until the data changes (handDropDataIndexes clears the index it
+   reads). Tapping a walk chip opens that walk's streets, and its Back comes
+   straight back here. */
+function sharedStreetList(){
+  const idx=streetWalkIndex();
+  const out=[];
+  for(const k in idx){
+    const rec=idx[k];
+    const ws=Object.keys(rec.walks);
+    if(ws.length<2)continue;
+    const walks=ws.map(w=>({walk:w,n:rec.walks[w]})).sort((a,b)=>b.n-a.n||String(a.walk).localeCompare(String(b.walk)));
+    out.push({key:k,name:rec.name,walks:walks,rows:walks.reduce((a,b)=>a+b.n,0)});
+  }
+  out.sort((a,b)=>b.walks.length-a.walks.length||b.rows-a.rows||a.name.localeCompare(b.name));
+  return out;
+}
+function showHandShared(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{openHand();}catch(e){}
+  handNav("shared",function(){showHandShared();});
+  try{box.dataset.sub="shared";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const list=sharedStreetList();
+  const rows=list.map(x=>{
+    const chips=x.walks.map(w=>`<button class="handShW" data-w="${encodeURIComponent(w.walk)}" style="display:inline-block;padding:5px 9px;margin:4px 5px 0 0;background:#e8f0fe;border:none;border-radius:8px;font-size:11.5px;font-weight:800;color:var(--pri);cursor:pointer">${escHtml(w.walk)} · ${w.n} ›</button>`).join("");
+    return `<div style="padding:11px 13px;margin-top:7px;background:var(--sur);border-left:6px solid var(--pri);border-radius:11px;box-shadow:var(--shad)">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <div style="font-size:15px;font-weight:800;color:var(--txt);word-break:break-word">${escHtml(x.name)}</div>
+        <div style="font-size:11px;color:var(--sub);white-space:nowrap">${x.walks.length} walks · ${x.rows}</div>
+      </div>
+      <div style="margin-top:2px">${chips}</div>
+    </div>`;
+  }).join("");
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Shared streets</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.45">${list.length} street${list.length===1?"":"s"} in the round are split between two or more walks. Tap a walk to see everything it has on that street.</div>
+    ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">No shared streets.</div>'}
+    <button id="handShBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>
+  </div>`;
+  box.querySelectorAll(".handShW").forEach(b=>{
+    b.onclick=function(){showHandWalkStreets(decodeURIComponent(b.dataset.w),SHARED_LIST_BACK);};
+  });
+  const bk=document.getElementById("handShBack");
+  if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
 }
 /* v3.3: the Walks search used to look ONLY at streetWalkIndex keys, and only
    as a plain substring. So a named building ("HALL TOWER") found nothing even
@@ -5033,7 +5100,7 @@ function showHandWalkStreets(walk,backTo){
     ${sharedNote}
     ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">No streets found for this walk.</div>'}
     ${azSection}
-    <button id="handStBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">${backTo===WALKS_LIST_BACK?"Back to all walks":(backTo?"Back to "+escHtml(String(backTo)):"Back")}</button>
+    <button id="handStBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">${backTo===WALKS_LIST_BACK?"Back to all walks":(backTo===SHARED_LIST_BACK?"Back to shared streets":(backTo?"Back to "+escHtml(String(backTo)):"Back"))}</button>
   </div>`;
   box.querySelectorAll(".handStOther").forEach(b=>{
     b.onclick=function(){showHandWalkStreets(decodeURIComponent(b.dataset.w),walk);};
@@ -5043,6 +5110,7 @@ function showHandWalkStreets(walk,backTo){
     // Followed a shared street into another walk? Step back to the one you
     // came from. Otherwise return to the scan that was on screen.
     if(backTo===WALKS_LIST_BACK){showHandWalksList();return;}
+    if(backTo===SHARED_LIST_BACK){showHandShared();return;}
     if(backTo){showHandWalkStreets(backTo,null);return;}
     if(handLastRaw)renderHandheld(handLastRaw,false);
     else if(typeof handGoIdle==="function")handGoIdle();
@@ -6046,7 +6114,7 @@ function showHandRecent(){
     box.innerHTML=`<div style="width:100%;text-align:left">
       <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Recent scans</div>
       <div style="font-size:13px;color:var(--sub);margin-top:10px">Nothing scanned yet on this device.</div>
-      <button id="handRecBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+      <button id="handRecBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>
     </div>`;
   }else{
     const rows=h.map((e,i)=>{
@@ -6080,7 +6148,7 @@ function showHandRecent(){
       <div style="font-size:12px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:18px">The scans</div>
       ${rows}
       <button id="handRecClear" style="margin-top:14px;width:100%;padding:12px;background:transparent;border:1px solid #e0b4b4;border-radius:12px;font-size:13px;font-weight:700;color:#c62828;cursor:pointer">Clear recent scans</button>
-      <button id="handRecBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+      <button id="handRecBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>
     </div>`;
     box.querySelectorAll(".handRecPick").forEach(b=>{
       b.onclick=()=>{
@@ -6112,7 +6180,7 @@ function showHandRecent(){
     },4000);
   };
   const back=document.getElementById("handRecBack");
-  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}};
+  if(back)back.onclick=()=>{try{openOptionsMenu();}catch(e){}};   // v4.0: match Walks and Split postcodes
 }
 // Render every saved correction as plain text — a backup Ash can keep, or send
 // on so the fixes can be built into the app permanently.
@@ -6215,6 +6283,14 @@ const PIN_GRACE_MS=0;
 let handPinOkUntil=0;
 function handPinFresh(){return PIN_GRACE_MS>0 && Date.now()<handPinOkUntil;}
 function handPinClear(){handPinOkUntil=0;}
+/* v4.1: the hardware BACK key on a PIN screen used to fall through to the
+   trail (empty at that point, because the PIN is not a trail screen) and
+   collapse to the scan — so cancelling the corrections PIN with the on-screen
+   Cancel returned to Options, but with the BACK key went home. BACK now does
+   exactly what Cancel does. Cleared as soon as the pad is answered either way,
+   and only fires while that same PIN screen is still the one showing. */
+let handPinBack=null,handPinBackSub="";
+function handPinBackClear(){handPinBack=null;handPinBackSub="";}
 function requireHandPin(opts){
   opts=opts||{};
   /* v2.3: opts.force asks EVEN IF the PIN was typed moments ago. Used by
@@ -6260,6 +6336,8 @@ function showHandPin(opts){
   const box=document.getElementById("handResult");
   if(!box)return;
   try{box.dataset.sub=opts.sub||"pin";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  handPinBack=(typeof opts.onCancel==="function")?opts.onCancel:null;
+  handPinBackSub=opts.sub||"pin";
   let buf="";
   const kb="padding:15px 0;border:1px solid var(--div);border-radius:12px;background:var(--sur);"+
            "font-size:21px;font-weight:800;color:var(--txt);cursor:pointer;"+
@@ -6285,6 +6363,7 @@ function showHandPin(opts){
       b.onclick=()=>{
         const k=b.getAttribute("data-k");
         if(k==="cancel"){
+          handPinBackClear();
           if(opts.onCancel){opts.onCancel();return;}
           handGoIdle();return;
         }
@@ -6292,7 +6371,7 @@ function showHandPin(opts){
         if(buf.length>=4)return;
         buf+=k;
         if(buf.length<4){draw("");return;}
-        if(buf===WILD_PIN){onOk();return;}
+        if(buf===WILD_PIN){handPinBackClear();onOk();return;}
         buf="";draw("Wrong PIN — try again");
       };
     });
@@ -8038,6 +8117,13 @@ function speakPrefs(){
 // existing screen for that setting. Add a row here when a new setting is
 // added elsewhere, rather than growing this into its own settings surface. ----
 function openOptionsMenu(){
+  /* v4.0: the Options sheet is now a STEP ON THE BROWSING TRAIL. Without this
+     it left no mark, so backing out of Walks / Recent scans / Split postcodes
+     found an empty trail and collapsed straight to the scan, skipping Options.
+     Replaying it first clears whatever sub-screen was underneath, so the NEXT
+     back press closes the sheet onto the scan rather than revealing the screen
+     you just left. */
+  try{handNav("options",function(){handCollapseToResult();openOptionsMenu();});}catch(e){}
   const ov=document.createElement("div");
   ov.id="wildOptSheet";        // v1.91: so the version pill can dismiss it
   ov.style.cssText="position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column";
@@ -8060,6 +8146,7 @@ function openOptionsMenu(){
       +item("🕒","Recent scans","The last 40 scans, and what each one gave")
       +item("🚶","Walks","Every walk, and the streets and buildings on it")
       +item("⚠️","Split postcodes","Postcodes that go to more than one walk")
+      +item("🔀","Shared streets","Streets split between two or more walks")
     +'</div>';
   document.body.appendChild(ov);
   const cl=ov.querySelector("#optClose");if(cl)cl.onclick=()=>ov.remove();
@@ -8089,6 +8176,12 @@ function openOptionsMenu(){
     ov.remove();
     try{if(typeof openHand==="function")openHand();}catch(e){}
     try{showHandSplits();}catch(e){}
+  };
+  /* v4.1: appended LAST so every index above stays where it was. */
+  if(rows[7])rows[7].onclick=()=>{
+    ov.remove();
+    try{if(typeof openHand==="function")openHand();}catch(e){}
+    try{showHandShared();}catch(e){}
   };
   /* v2.4: appended LAST so every index above stays where it was. */
   if(rows[5])rows[5].onclick=()=>{
@@ -11225,6 +11318,15 @@ document.addEventListener("visibilitychange",()=>{
       var hr=document.getElementById("handResult");
       if(hr && hr.dataset && hr.dataset.sub){
         var sub=hr.dataset.sub;
+        // v4.1: a PIN screen answers BACK exactly as its own Cancel does.
+        try{
+          if(typeof handPinBack!=="undefined" && handPinBack && sub===handPinBackSub){
+            var _pinCancel=handPinBack;
+            handPinBackClear();
+            _pinCancel();
+            return true;
+          }
+        }catch(e){}
         // v2.8: one step back along the browsing trail, if there is one.
         // Only the trail screens leave marks, so a wizard step still falls
         // through to the collapse below.
