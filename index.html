@@ -208,7 +208,7 @@ body.addr-locked #rl .lockmsg{display:flex}
 .camArrow:active{background:rgba(0,0,0,.8)}
 #camBtnRow>button{width:62px!important;height:62px!important;min-width:62px!important;flex:0 0 auto!important;font-size:20px!important}
 #camBtnRow>button span{font-size:11px!important}
-.qrbar{min-height:70px!important}
+.qrbar{min-height:52px!important;padding-top:3px!important;padding-bottom:3px!important}
 /* Scanner toggle strip lives in the top bar next to the title — one
    horizontally-scrollable line, scrollbar hidden (drag to reach the rest). */
 
@@ -495,15 +495,11 @@ body.addr-locked #rl .lockmsg{display:flex}
 <!-- HANDHELD PANEL — no camera; results driven by the Bluetooth/USB handheld scanner -->
 <div id="handPanel">
   <div class="qrbar">
-    <h1 style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:18px;font-weight:600;color:#fff;margin:0;display:flex;align-items:center"><svg width="20" height="22" viewBox="0 0 24 26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7.4 1.9 L6.2 0.6 M12 1.6 L12 0.4 M16.6 1.9 L17.8 0.6"/><rect x="8" y="2.6" width="8" height="2.8" rx="1"/><rect x="4.8" y="5.4" width="14.4" height="20.1" rx="2.6"/><rect x="7.4" y="8" width="9.2" height="6" rx="1"/><path d="M19.4 13 h1.5 a1.1 1.1 0 0 1 1.1 1.1 v2.3 a1.1 1.1 0 0 1 -1.1 1.1 h-1.5"/><path d="M8.2 17.6 h7.6 M8.2 21.6 h7.6"/></svg>Handheld Scanner</h1>
+    <!-- v3.7: the title is the website version now. "Handheld Scanner" and its
+         icon are gone at Ash's request; this block keeps the h1 so the
+         tap-to-go-home wiring below is untouched. -->
+    <h1 style="flex:1;min-width:0;overflow:hidden;color:#fff;margin:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;font-weight:600"><span style="font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:16px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1>
     <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;margin-right:44px;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button><button type="button" id="wildResetBtn" aria-label="Reset app" style="flex:0 0 auto;padding:6px 10px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET</span><span id="wildResetL2" style="font-size:9.5px;letter-spacing:.06em;opacity:.9">APP</span></button>
-  </div>
-  <!-- v1.98: the website version, at the top of the main screen where it is
-       always in view. Fixed markup outside #handResult, so no scan, screen or
-       Back can wipe it. Tap it to copy the address. -->
-  <div id="wildSiteBar" style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--sur);border-bottom:1px solid var(--div)">
-    <div style="font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Website version</div>
-    <div id="wildSiteBarUrl" style="flex:1;min-width:0;font-size:13px;font-weight:800;color:var(--pri);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">wildapp.gt.tc</div>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
@@ -601,7 +597,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=111;
+const THIS_BUILD_NUM=112;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -611,7 +607,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v3.6";
+const BUILD_NAME="v3.7";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
