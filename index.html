@@ -496,7 +496,7 @@ body.addr-locked #rl .lockmsg{display:flex}
 <div id="handPanel">
   <div class="qrbar">
     <h1 style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:18px;font-weight:600;color:#fff;margin:0;display:flex;align-items:center"><svg width="20" height="22" viewBox="0 0 24 26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7.4 1.9 L6.2 0.6 M12 1.6 L12 0.4 M16.6 1.9 L17.8 0.6"/><rect x="8" y="2.6" width="8" height="2.8" rx="1"/><rect x="4.8" y="5.4" width="14.4" height="20.1" rx="2.6"/><rect x="7.4" y="8" width="9.2" height="6" rx="1"/><path d="M19.4 13 h1.5 a1.1 1.1 0 0 1 1.1 1.1 v2.3 a1.1 1.1 0 0 1 -1.1 1.1 h-1.5"/><path d="M8.2 17.6 h7.6 M8.2 21.6 h7.6"/></svg>Handheld Scanner</h1>
-    <button type="button" id="wildResetBtn" aria-label="Reset app" style="flex:0 0 auto;padding:6px 10px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET</span><span id="wildResetL2" style="font-size:9.5px;letter-spacing:.06em;opacity:.9">APP</span></button>
+    <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button><button type="button" id="wildResetBtn" aria-label="Reset app" style="flex:0 0 auto;padding:6px 10px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET</span><span id="wildResetL2" style="font-size:9.5px;letter-spacing:.06em;opacity:.9">APP</span></button>
   </div>
   <!-- v1.98: the website version, at the top of the main screen where it is
        always in view. Fixed markup outside #handResult, so no scan, screen or
@@ -601,7 +601,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=105;
+const THIS_BUILD_NUM=106;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -611,7 +611,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v3.0";
+const BUILD_NAME="v3.1";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -905,10 +905,12 @@ function flagUpdateReadyPill(){
     const tg=document.getElementById("wildOptBtn");   // v1.95: was the version pill
     if(!tg||tg._updFlagged)return;
     tg._updFlagged=true;
-    tg.textContent=tg.textContent.split(" — ")[0]+" — update ready";
+    /* v3.1: the Settings button is an icon in the title bar now, so a text
+       badge no longer fits — it turns GREEN instead, and says why on hover. */
     tg.style.color="#fff";
     tg.style.background="#2e7d32";
     tg.style.borderColor="rgba(0,0,0,.2)";
+    tg.title="Options — update ready";
   }catch(e){}
 }
 /* An update the person can act on right now: one already downloaded and
@@ -10839,6 +10841,22 @@ document.addEventListener("visibilitychange",()=>{
     btn.addEventListener("touchend",function(e){e.preventDefault();fullRestart();});
   })();
 
+  /* ── ⚙️ SETTINGS button — moved to the TOP RIGHT (v3.1) ────────────────
+     It used to float bottom-left in #wildTagRow. Ash asked for it beside
+     RESET in the title bar as a plain gear icon. The row is gone; this is
+     real markup in .qrbar, so it only needs wiring. Because it is now an
+     ICON, the two update badges recolour it instead of appending text
+     (see flagUpdateReadyPill / flagApkUpdate). */
+  (function(){
+    var g=document.getElementById("wildOptBtn");
+    if(!g||g._wired)return;
+    g._wired=true;
+    g.addEventListener("click",function(e){
+      e.preventDefault();
+      try{if(typeof openOptionsMenu==="function")openOptionsMenu();}catch(err){}
+    });
+  })();
+
   /* ── BUILD STAMP + cache-buster ───────────────────────────────────────
      1. Show the build number in the corner so it's instantly obvious on the
         device WHICH build is running (a silent failed install, or a WebView
@@ -10861,41 +10879,9 @@ document.addEventListener("visibilitychange",()=>{
     // Whatever is running has now started cleanly, so the live copy (if any)
     // is good — drop the loader's watchdog flag. (v1.45)
     try{liveConfirmBoot();}catch(e){}
-    if(document.getElementById("wildTagRow"))return;
-    /* v1.95: the bottom-left VERSION PILL is gone at Ash's request — the App
-       version screen it opened is already one tap inside ⚙️ Settings, so the
-       corner had two doors to the same place. The pill was also the only
-       visible sign of a waiting update, so that badge now rides on the
-       Settings button instead (see flagUpdateReadyPill / flagApkUpdate). */
-    var row=document.createElement("div");
-    row.id="wildTagRow";
-    row.style.cssText=["position:fixed","bottom:6px","left:8px","z-index:2147483647",
-      "display:flex","align-items:center","gap:6px","pointer-events:none"].join(";");
-    var pill=["font-size:11px","font-weight:800","font-family:inherit","color:#33383d",
-      "background:rgba(255,255,255,.86)","border:1px solid rgba(0,0,0,.14)",
-      "border-radius:8px","padding:2px 8px","letter-spacing:.04em",
-      "box-shadow:0 1px 3px rgba(0,0,0,.18)"];
-    // v1.79: ⚙️ Options — the one door in this corner since v1.95, and the
-    // only thing left in the row. App version, Sound, Voice and corrections
-    // all live behind it.
-    var o=document.createElement("button");
-    o.id="wildOptBtn";
-    o.type="button";
-    o.textContent="⚙️ Settings";
-    o.title="Options";
-    o.setAttribute("aria-label","Options");
-    o.style.cssText=pill.concat(["position:static","pointer-events:auto","cursor:pointer",
-      "white-space:nowrap","-webkit-tap-highlight-color:transparent","touch-action:manipulation"]).join(";");
-    o.onclick=function(){try{if(typeof openOptionsMenu==="function")openOptionsMenu();}catch(e){}};
-    /* v1.89: the ⟳ Update button has been REMOVED from this row at Ash's
-       request. Updating now lives on the App version screen (⚙️ Settings →
-       App version), behind the PIN. Nothing else here changes — the checks
-       still run on their own, and when one is waiting the Settings button
-       itself turns green (amber for a new APK), so a ready update is still
-       visible from the scanning screen. updBtnIdle/updBtnReady/
-       wireUpdateButton all no-op safely when the button is absent. */
-    row.appendChild(o);
-    (document.body||document.documentElement).appendChild(row);
+    /* v3.1: the bottom-left #wildTagRow is GONE — the ⚙️ Settings button it
+       held now lives in the top-right title bar next to RESET (built as real
+       markup, wired above). Nothing else was left in the row. */
     try{wireUpdateButton();}catch(e){}
   })();
 
@@ -10942,7 +10928,7 @@ document.addEventListener("visibilitychange",()=>{
       try{
         var tg=document.getElementById("wildOptBtn");   // v1.95: was the version pill
         if(tg){
-          tg.textContent=tg.textContent.split(" — ")[0]+" — build "+latest+" available";
+          tg.title="Options — build "+latest+" available";
           tg.style.color="#8a5300";
           tg.style.background="rgba(255,248,225,.95)";
           tg.style.borderColor="#f9a825";
