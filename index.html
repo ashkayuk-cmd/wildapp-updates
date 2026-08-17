@@ -597,7 +597,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 129;
+const THIS_BUILD_NUM = 131;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -607,7 +607,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.15";
+const BUILD_NAME = "v4.17";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -623,12 +623,12 @@ const BUILD_NAME = "v4.15";
 const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
-const REPO_DATA_BUILD=120;                 // build of the wild_data.json beside this file
+const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside this file
 const REPO_APK_BUILD = 115;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
-const REPO_DATA_HASH="558c362f";
+const REPO_DATA_HASH="a5195d2e";
 const REPO_DATA_ROWS=24102;
 const APK_BUILD_KEY="wildApkBuild_v1";    // versionCode of the APK on this device
 const REPO_APK_SEEN_KEY="wildRepoApk_v1"; // newest APK build seen in the repo
@@ -4669,6 +4669,138 @@ function walksInRound(){
     return a.walk.localeCompare(b.walk);
   });
 }
+// ──── TODAY'S WALK (v4.16) ───────────────────────────────────────────────
+// Pick the walk you're on today and every scan that lands somewhere else says
+// so — on screen and out loud — instead of quietly showing a walk number that
+// looks exactly like a right one. The setting carries the date it was made and
+// expires by itself at midnight, so yesterday's walk can never shout at
+// today's mail.
+const TODAY_WALK_KEY="wildTodayWalk_v1";
+function todayStamp(d){
+  d=d||new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function todayWalkGet(){
+  try{
+    const r=JSON.parse(localStorage.getItem(TODAY_WALK_KEY)||"null");
+    if(!r||!r.w)return "";
+    if(String(r.d||"")!==todayStamp())return "";      // set on an earlier day
+    return String(r.w).trim();
+  }catch(e){return "";}
+}
+function todayWalkSet(w){
+  try{
+    if(!w)localStorage.removeItem(TODAY_WALK_KEY);
+    else localStorage.setItem(TODAY_WALK_KEY,JSON.stringify({w:String(w).trim(),d:todayStamp()}));
+  }catch(e){}
+}
+function sameWalkName(a,b){
+  return String(a||"").trim().toUpperCase()===String(b||"").trim().toUpperCase();
+}
+// Scans logged since midnight, split by where they landed.
+function todayScanTally(){
+  const out={total:0,mine:0,other:0,none:0};
+  try{
+    const h=(typeof loadScanHistory==="function")?loadScanHistory():[];
+    const mid=new Date();mid.setHours(0,0,0,0);
+    const t0=mid.getTime(),my=todayWalkGet();
+    h.forEach(function(e){
+      if(!e||!(Number(e.t)>=t0))return;
+      out.total++;
+      const w=(typeof histWalkOf==="function")?histWalkOf(e):"";
+      if(!w){out.none++;return;}
+      if(my&&sameWalkName(w,my))out.mine++;else out.other++;
+    });
+  }catch(e){}
+  return out;
+}
+/* The banner rides on afterRender — the observer that already runs after every
+   handheld render — so none of the ten result-rendering branches has to know
+   about it. It MUST be idempotent: writing into the box mutates it, which
+   calls this again; the signature check is what stops that looping. */
+function todayWalkBanner(){
+  var box=document.getElementById("handResult");
+  if(!box)return;
+  var old=document.getElementById("wildTodayBan");
+  var el=document.getElementById("handWalkBig");
+  var mine=todayWalkGet();
+  var sub=(box.dataset&&box.dataset.sub)||"";
+  var name=el?String(el.textContent||"").trim():"";
+  // Live results only: a real walk name, and either the scan screen or a walk
+  // picked out of a picker list. Every other sub-screen clears the banner.
+  var live=!!(el&&mine&&name&&name!=="\u2014"&&(!sub||sub==="pick"));
+  if(!live){if(old&&old.parentNode)old.parentNode.removeChild(old);return;}
+  var match=sameWalkName(name,mine);
+  var sig=name+"\u0001"+mine+"\u0001"+(match?"1":"0");
+  if(old&&old._sig===sig)return;                     // unchanged — leave the DOM alone
+  var b=old||document.createElement("div");
+  b.id="wildTodayBan";
+  b._sig=sig;
+  b.style.cssText="align-self:stretch;width:100%;box-sizing:border-box;border-radius:12px;text-align:center;"+
+    (match?"padding:6px 10px;background:#e8f5e9;color:#2e7d32;font-size:12px;font-weight:800;letter-spacing:.05em"
+          :"padding:10px 12px;background:"+ALT_WALK_RED+";color:#fff;letter-spacing:.03em");
+  b.innerHTML=match
+    ? "\u2713 YOUR WALK"
+    : '<div style="font-size:19px;font-weight:900;line-height:1.15">\u26a0\ufe0f NOT YOUR WALK</div>'+
+      '<div style="font-size:12px;font-weight:700;opacity:.95;margin-top:3px">you\u2019re on '+escHtml(mine)+'</div>';
+  if(!old)box.insertBefore(b,box.firstChild);
+}
+// Speaks the walk — saying so first when it isn't the walk you're on today.
+function handSpeakWalk(w){
+  try{
+    var mine=todayWalkGet();
+    if(mine&&w&&!sameWalkName(w,mine)){speakText("Not your walk. "+w);return;}
+  }catch(e){}
+  speakText(w);
+}
+function showHandTodayWalk(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{openHand();}catch(e){}
+  handNav("today",function(){showHandTodayWalk();});
+  try{box.dataset.sub="today";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const mine=todayWalkGet();
+  const t=todayScanTally();
+  const rows=walksInRound().map(function(x){
+    const on=sameWalkName(x.walk,mine);
+    return '<button class="handTdW" data-w="'+encodeURIComponent(x.walk)+'" style="display:block;width:100%;text-align:left;'+
+      'padding:15px 14px;margin-top:8px;background:'+(on?"#e8f5e9":"var(--sur)")+';border:'+(on?"2px solid #2e7d32":"none")+';'+
+      'border-radius:12px;box-shadow:var(--shad);font-size:19px;font-weight:800;color:var(--txt);cursor:pointer">'+
+      escHtml(x.walk)+
+      (on?'<span style="float:right;color:#2e7d32;font-weight:900">\u2713</span>'
+         :'<span style="float:right;color:var(--sub);font-weight:400">\u203a</span>')+'</button>';
+  }).join("");
+  const head=mine
+    ? '<div style="background:#e8f5e9;border-radius:12px;padding:12px;text-align:center">'+
+        '<div style="font-size:11px;font-weight:800;color:#2e7d32;letter-spacing:.08em">TODAY YOU\u2019RE ON</div>'+
+        '<div style="font-size:26px;font-weight:900;color:#2e7d32;margin-top:2px">'+escHtml(mine)+'</div>'+
+        '<div style="font-size:11.5px;color:#2e7d32;margin-top:5px">'+t.total+' scanned today \u00b7 '+
+          t.mine+' on your walk \u00b7 '+t.other+' not yours'+(t.none?' \u00b7 '+t.none+' unresolved':'')+'</div>'+
+      '</div>'
+    : '<div style="font-size:13px;color:var(--sub);line-height:1.5">No walk set for today. Pick one below and any scan for a '+
+      'different walk turns red and says <b>\u201cnot your walk\u201d</b> out loud. It clears itself at midnight.</div>';
+  box.innerHTML='<div style="width:100%;text-align:left">'+
+    handTopBar("Today\u2019s walk")+
+    head+
+    (mine?'<button id="handTdClear" style="margin-top:10px;width:100%;padding:11px;background:transparent;border:1px solid var(--div);'+
+      'border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Clear today\u2019s walk</button>':"")+
+    rows+
+    '<button id="handTdBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);'+
+      'border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>'+
+  '</div>';
+  box.querySelectorAll(".handTdW").forEach(function(b){
+    b.onclick=function(){
+      var w=decodeURIComponent(b.dataset.w||"");
+      todayWalkSet(sameWalkName(w,todayWalkGet())?"":w);   // tapping the set walk clears it
+      showHandTodayWalk();
+    };
+  });
+  var cl=document.getElementById("handTdClear");
+  if(cl)cl.onclick=function(){todayWalkSet("");showHandTodayWalk();};
+  var bk=document.getElementById("handTdBack");
+  if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
+}
 // ──── SPLIT POSTCODES (v2.9) ─────────────────────────────────────────────
 // Postcodes where the round delivers to more than one walk. Some are honest
 // splits (a genuine firm alongside houses); some are one stray row carrying
@@ -7057,7 +7189,7 @@ function renderPickedWalk(raw,w,addr,speak){
     ${rawResultBlock(raw)}`;
   try{box.dataset.sub="pick";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   wireHandFixButtons(raw);
-  if(speak&&handSpeakEnabled)speakText(w);
+  if(speak&&handSpeakEnabled)handSpeakWalk(w);
 }
 function wireHandAltPicks(raw,byWalk){
   const box=document.getElementById("handResult");
@@ -7294,7 +7426,7 @@ function renderHandheld(raw,fromScanner){
       <div style="font-size:16px;color:var(--txt);line-height:1.4;max-width:92%">${ovAddr}</div>
       ${ovPcLine}
       ${rawResultBlock(raw)}`;
-    if(fromScanner&&handSpeakEnabled)speakText(uOv.walk);
+    if(fromScanner&&handSpeakEnabled)handSpeakWalk(uOv.walk);
     wireHandFixButtons(raw);
     return;
   }
@@ -7355,7 +7487,7 @@ function renderHandheld(raw,fromScanner){
           ${fromCard}${rawResultBlock(raw)}`;
         if(fromCard)wireHandAltPicks(raw,fromBy);
         wireHandFixButtons(raw);
-        if(fromScanner&&handSpeakEnabled)speakText(w2w);
+        if(fromScanner&&handSpeakEnabled)handSpeakWalk(w2w);
         return;
       }
       let byWalk={},cards="";
@@ -7388,7 +7520,7 @@ function renderHandheld(raw,fromScanner){
         <div style="font-size:13px;margin-top:8px;line-height:1.5">${cards?"That's the postcode on the label — but see below.":"This postcode isn't on any of your W2 walks."}</div>
       </div>${cards}${rawResultBlock(raw)}`;
       if(cards){wireHandAltPicks(raw,byWalk);wireHandFixButtons(raw);}
-      if(fromScanner&&handSpeakEnabled&&spoken)speakText(spoken);
+      if(fromScanner&&handSpeakEnabled&&spoken)handSpeakWalk(spoken);
       return;
     }
   }
@@ -7501,7 +7633,7 @@ function renderHandheld(raw,fromScanner){
         <div id="handWalkBig">${ov.walk}</div>
         <div style="font-size:16px;color:var(--txt);line-height:1.4;max-width:92%">${ov.addr}</div>
         ${rawResultBlock(raw)}`;
-      if(fromScanner&&handSpeakEnabled)speakText(ov.walk);
+      if(fromScanner&&handSpeakEnabled)handSpeakWalk(ov.walk);
       return;
     }
   }
@@ -7546,7 +7678,7 @@ function renderHandheld(raw,fromScanner){
           ${rawResultBlock(raw)}`;
         try{box.dataset.sub="pick";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
         wireHandFixButtons(raw);
-        if(handSpeakEnabled)speakText(o.walk);
+        if(handSpeakEnabled)handSpeakWalk(o.walk);
       };
     });
     return;
@@ -7757,7 +7889,7 @@ function renderHandheld(raw,fromScanner){
           ${rawResultBlock(raw)}`;
         try{box.dataset.sub="pick";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
         wireHandFixButtons(raw);
-        if(handSpeakEnabled&&r.r)speakText(r.r);
+        if(handSpeakEnabled&&r.r)handSpeakWalk(r.r);
       };
     });
     return;
@@ -7806,7 +7938,7 @@ function renderHandheld(raw,fromScanner){
       ${altCard}
       ${rawResultBlock(raw)}`;
     if(altCard){box.style.justifyContent="flex-start";wireHandAltPicks(raw,altBy);wireHandFixButtons(raw);}
-    if(fromScanner&&handSpeakEnabled)speakText(walk);
+    if(fromScanner&&handSpeakEnabled)handSpeakWalk(walk);
     return;
   }
 
@@ -7854,7 +7986,7 @@ function renderHandheld(raw,fromScanner){
         ${rawResultBlock(raw)}`;
       try{box.dataset.sub="pick";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
       wireHandFixButtons(raw);
-      if(handSpeakEnabled)speakText(w);
+      if(handSpeakEnabled)handSpeakWalk(w);
     };
   });
 }
@@ -8364,6 +8496,7 @@ function openOptionsMenu(){
     {e:"🔀",label:"Shared streets",sub:"Streets split between two or more walks",go:goHand(()=>showHandShared())},
     {e:"🔊",label:"Sound",sub:"How loud the scan beeps are",go:goHand(()=>showHandSound())},
     {e:"⚠️",label:"Split postcodes",sub:"Postcodes that go to more than one walk",go:goHand(()=>showHandSplits())},
+    {e:"📍",label:"Today's walk",sub:"Warn me when a scan isn't for my walk",go:goHand(()=>showHandTodayWalk())},
     {e:"🗣️",label:"Voice",sub:"Which voice reads the walk aloud, speed &amp; pitch",go:()=>{ov.remove();try{openVoiceSheet();}catch(e){}}},
     {e:"✏️",label:"Walk corrections",sub:"Walks you've fixed, and addresses you've added",go:()=>{
       ov.remove();
@@ -11261,6 +11394,7 @@ document.addEventListener("visibilitychange",()=>{
     fitWalk();
     try{if(typeof wireHandWalkTap==="function")wireHandWalkTap();}catch(e){}
     try{walkHint();}catch(e){}
+    try{if(typeof todayWalkBanner==="function")todayWalkBanner();}catch(e){}
   }
   var hb=document.getElementById("handBody");
   if(hb&&window.MutationObserver){

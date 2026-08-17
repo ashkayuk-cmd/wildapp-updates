@@ -1,109 +1,79 @@
-# Wild App — build 104 (v2.9)
+# Wild App v4.17 — build 131 — Today's walk + the Cleveland Terrace fix
 
-**15 August 2026 · content update only — no APK, no install.**
+**Upload BOTH files to the repo: `index.html` and `wild_data.json`.**
+No APK. The data file is only accepted when the stamps inside `index.html`
+match it, so the two must go up together.
 
-This one file carries every change from build 99 onwards. If you never uploaded
-99–103, uploading this covers all of them at once.
+Watch the filenames — if your phone saves either as `index (1).html` or
+`wild_data (1).json` the upload does nothing — and press the green
+**Commit changes** button.
 
----
+This replaces the build 130 file from earlier; it contains everything in it.
 
-## What to upload
-
-| File | Where | Needed? |
-|---|---|---|
-| `index.html` | repo root, replacing the existing one | **yes** |
-| `wild_data.json` | repo root, replacing the existing one | only if you haven't already uploaded it today |
-
-Both go in `ashkayuk-cmd/wildapp-updates`, on `main`, under exactly those names.
-
-Two things that have caught us out before:
-
-- **The file must be named `index.html`.** A mobile upload that lands as
-  `index (1).html` publishes nothing.
-- **Press the green "Commit changes" button.** Choosing the file isn't the
-  upload.
-
-Then on the PDA: ⚙️ Settings → App version → **Check now**. The first check
-after a publish is done by the *old* code, so if a new button doesn't appear
-straight away, check once more.
-
-Stamps in this file: build **104**, name **v2.9**, data build **100**, data hash
-**b3956e1b**, 24,149 rows, APK build **97**.
+| | |
+|---|---|
+| Code build | 131 (v4.17) |
+| Data build | 131 — 24,102 rows, hash `a5195d2e` |
+| APK | still 115, unchanged |
 
 ---
 
-## What's new
+## 1. The data fix
 
-### Walks (⚙️ Settings → Walks) — build 99
-Every walk in the round, in order with FIRM last, showing its street and
-address counts. Tap one for its streets.
+**22, Cleveland Terrace, W2 6QH** moved from **18 GLOUCESTER** to
+**16 WESTBOURNE TCE**. One row changed, nothing else — 19, 20, 25, 25a, 27a,
+27b and 27c were already on 16.
 
-Your A‑Z list's street column is now used: a named building sits **under the
-street it stands on** (`🏢 ASTLEY HOUSE · BRINDLEY HOUSE`) instead of dropping
-into the loose list at the bottom. That list went from 325 entries across all
-walks down to 62, and those 62 show their street when the sheet gave one.
+The knock-on: **W2 6QH is no longer a split postcode.** A bare W2 6QH label
+used to give you a two-walk picker; it now answers 16 WESTBOURNE TCE outright.
+It has also dropped off the Split postcodes screen.
 
-### Street search — build 104
-A search box on the Walks screen. Type two letters of a street and it tells you
-which walk has it, with the walks as tappable chips. Southwick Street comes back
-as 11 NORFOLK and 13 RADNOR.
+> Your master `wild_data.xlsx` still has this row on 18, along with the
+> duplicates and deletions from v4.1/v4.3/v4.5. If you ever re-upload the
+> master it will quietly undo all of them. Worth letting me rebuild it to
+> match.
 
-### Data fix — build 100
-Roman Catholic Church of Our Lady, Queen of Heaven, 4a Inverness Place,
-W2 3RS → **23 INVERNESS**.
+## 2. Today's walk (carried over from build 130)
 
-Knock-on effect worth knowing: W2 3RS is now 7 Queensway addresses on walk 24
-plus this one church on 23, so a label carrying **only** the bare postcode will
-offer both walks. Anything naming 4a, Inverness Place or the church resolves to
-23 outright.
+**⚙️ Options → 📍 Today's walk.** Pick the walk you're on. Every scan that
+lands on a different walk gets a red band across the top of the result:
 
-### Scans per walk (⚙️ Settings → Recent scans) — builds 101, 102
-A tally above the scan list: every walk you've scanned, busiest first, counted
-over your whole saved history rather than the 40 shown.
+> ⚠️ **NOT YOUR WALK**
+> you're on 12 WESTCLIFFE
 
-Tap a walk for **just its scans**, each with the raw barcode/QR code printed
-underneath. Tap one of those to replay it.
+and the voice says **"Not your walk"** before the walk name, so you don't have
+to be looking at the screen. A scan that *is* yours gets a thin green
+**✓ YOUR WALK** strip, so you can see at a glance the warning is switched on.
+The screen also shows the day's tally — scanned today, yours, not yours.
 
-Also on that screen: **Clear recent scans**, two taps (the first arms it, and it
-disarms itself after 4 seconds).
-
-### Didn't resolve — build 104
-The "N scans didn't land on a single walk" line is now a button. It lists the
-pick-lists, no-matches and out-of-area labels with their raw codes, and has a
-**Copy the list** button. Send a week of those over and the gaps can be fixed in
-the data properly.
-
-### Split postcodes (⚙️ Settings → Split postcodes) — build 104
-The app now finds the postcodes that cause pick-lists, instead of you finding
-them on the doorstep.
-
-16 of the round's 1,086 postcodes go to more than one walk. Fourteen are marked
-**amber** — a tiny minority of addresses on a *different street* from the rest,
-which is the shape that caused the Leinster/Craven and 114 Queensway problems.
-W2 3SS (one Seymour Street among 82 Queensborough Terrace) and W2 3RS are both
-there.
-
-W2 1NJ and W2 5PN aren't flagged: those are the same street split between a
-walk and FIRM, which is honest, not an error.
-
-Tap any postcode for every address at it with its walk.
-
-### Back button — build 103
-BACK used to send you home from any screen, however deep you'd gone. It now
-steps back one screen at a time: Options → Walks → walk 11 → its shared walk 13
-takes four presses to get home, in the order you came.
-
-The correction flow deliberately still closes straight to the result — a stray
-press shouldn't drop you back into a half-finished fix. A new scan clears the
-trail.
+**It clears itself at midnight**, so yesterday's walk can never shout at
+today's mail. Tapping the walk you already have set clears it too, as does the
+Clear button. With no walk set, the app behaves exactly as build 129 did.
 
 ---
 
-## Not changed
+## How it was checked
 
-The resolver, the scanner, the correction flow, sound and voice are all
-untouched. A 250-label comparison against the running build shows no difference
-in what a scan reports — every change here is a screen you go looking for.
+- **t54.cjs — 25/25** on the corrected data. The same suite on build 129 fails
+  24 of the 25, so it is testing the change.
+- **250-label render diff, build 130 vs 131 on the same data — 0 differences**,
+  so the data build changed no code.
+- **250-label render diff vs build 129 — 0 differences** with no walk set;
+  with a walk set, the banner appears on 223 and, once the banner element is
+  removed, the markup is identical on all 250.
+- Data file re-hashed with a port of the app's own `wildHash`: `a5195d2e`,
+  24,102 rows — matching the stamps in `index.html`, which is what the app
+  requires before it will accept a data download.
+- Build 115's `liveHtmlLooksSane` accepts the file; loader gates pass.
 
-Your saved corrections, added addresses and scan history all survive this
-update.
+## Still waiting on you
+
+- **W2 1HQ** — The Premier League, 57 North Wharf Road (FIRM) vs Tournament
+  House, Praed Street (12 WESTCLIFFE). Same building or two?
+- **W2 1LA** — 22 North Wharf Road rows are FIRM, but The Gym Group (33-35) and
+  Heist Bank (5) on the same street sit on 6 SHELDON. Should those be FIRM?
+- **W2 1RH** — Caffe Nero Paddington Station on 11 NORFOLK, while 18 Praed
+  Street rows are on 12 WESTCLIFFE.
+- **W2 5PN** — 2a/2b/2c Shrewsbury Mews on 32 BRUNEL, the rest of the mews on
+  30 CHEPSTOW.
+- **W2 5TL** — 86 Senior Street on 1 ALFRED, the school on 2 WOODCHESTER.
