@@ -385,7 +385,7 @@ body.addr-locked #rl .lockmsg{display:flex}
   <div class="scanbar"><div class="msg" id="lockScanMsg">Point at a QR or barcode</div><button id="lockScanCancel">Cancel</button></div>
 </div>
 <div class="abar"><button class="ibt">☰</button><h1>Wild App</h1><span class="badge">v2.5</span></div>
-<div class="tabs">
+<div class="tabs" style="display:none">
   <button class="tab active" data-tab="search"><span class="ti">🔍</span>Search</button>
   <button class="tab" data-tab="routes"><span class="ti">🗺️</span>Walks</button>
   <button class="tab" id="qrTab"><span class="ti">📷</span>Mobile<br>QR Scanner</button>
@@ -432,7 +432,7 @@ body.addr-locked #rl .lockmsg{display:flex}
 
 <!-- QR PANEL -->
 <div id="qrPanel">
-  <div class="qrbar">
+  <div class="qrbar" style="display:none">
     <button class="ibt" id="qrClose">✕</button>
     <button id="camScrollL" class="camArrow" title="Scroll buttons left" aria-label="Scroll buttons left">‹</button>
     <div id="camBtnRow" style="flex:1;min-width:0;display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;align-items:center;padding:5px 2px;-webkit-overflow-scrolling:touch">
@@ -494,7 +494,7 @@ body.addr-locked #rl .lockmsg{display:flex}
 
 <!-- HANDHELD PANEL — no camera; results driven by the Bluetooth/USB handheld scanner -->
 <div id="handPanel">
-  <div class="qrbar">
+  <div class="qrbar" style="display:none">
     <!-- v3.7: the title is the website version now. "Handheld Scanner" and its
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
@@ -597,17 +597,17 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 132;
+const THIS_BUILD_NUM = 135;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
 // DATA (58 is not > 59), quietly reverting address fixes.
-const BAKED_DATA_BUILD = 57;
+const BAKED_DATA_BUILD = 135;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.18";
+const BUILD_NAME = "v4.21";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -624,7 +624,7 @@ const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
 const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD = 115;                  // build of the WildApp.apk beside this file
+const REPO_APK_BUILD  = 135;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -3399,6 +3399,8 @@ function showHandSound(){
     </div>
     <button type="button" id="handVolTest" style="margin-top:14px;width:100%;padding:13px;border:none;border-radius:12px;
       background:var(--pri,#1565C0);color:#fff;font-size:14px;font-weight:800;cursor:pointer">▶ Test beep</button>
+    <button type="button" id="handVolMine" style="margin-top:8px;width:100%;padding:13px;border:1px solid var(--div);border-radius:12px;
+      background:var(--sur);color:var(--txt);font-size:13.5px;font-weight:800;cursor:pointer">&#9654; Test &ldquo;not your walk&rdquo; beep</button>
     <button type="button" id="handVolBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;
       border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
   </div>`;
@@ -3421,6 +3423,9 @@ function showHandSound(){
   if(up)up.onclick=()=>apply(soundLevel()+10,true);
   const t=document.getElementById("handVolTest");
   if(t)t.onclick=()=>{const n=soundLevel();if(!n){show(0);return;}try{outcomeTone("exact");}catch(e){}};
+  // Hear the warning without having to scan somebody else's parcel to get it.
+  const tm=document.getElementById("handVolMine");
+  if(tm)tm.onclick=()=>{try{outcomeTone("notmine");}catch(e){}};
   const back=document.getElementById("handVolBack");
   if(back)back.onclick=()=>handGoIdle();
 }
@@ -3568,9 +3573,14 @@ let pendingDpsLearn=null;
 // low "look at the screen"; no match = flat low buzz. A FIRM walk adds a
 // low tail so commercial stops stand out. Vibration mirrors the pattern.
 function outcomeTone(kind,walkText){
+  /* v4.20: a scan that isn't for a walk you're on gets its own harsh tone.
+     Decided HERE rather than at the call sites, so every route into the
+     scanner — result branches, picker, replay — sounds the same. */
+  const notMine=(kind==="notmine")||todayWalkMismatch(walkText);
   try{
     if(navigator.vibrate){
-      const v=({exact:60,building:80,picker:[40,60,40],none:[30,50,140]})[kind];
+      const v=notMine?[70,70,70,70,70]
+                     :({exact:60,building:80,picker:[40,60,40],none:[30,50,140]})[kind];
       if(v)navigator.vibrate(v);
     }
   }catch(e){}
@@ -3579,6 +3589,26 @@ function outcomeTone(kind,walkText){
     if(!peak)return;                      // sound off — the buzz above still fired
     audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();
     if(audioCtx.state==="suspended")audioCtx.resume();
+    if(notMine){
+      /* Three short square blats, 880 Hz, 70 ms each 35 ms apart. The bite is
+         in the wave and the rhythm, NOT the volume: the peak is still
+         beepPeak(), so the sound slider governs this like every other tone.
+         The held level between the attack and decay ramps is what makes it
+         read as a blat rather than a chirp. No FIRM tail on a warning. */
+      let tw=audioCtx.currentTime+0.01;
+      for(let i=0;i<3;i++){
+        const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+        o.type="square";o.frequency.value=880;
+        g.gain.setValueAtTime(0.0001,tw);
+        g.gain.exponentialRampToValueAtTime(peak,tw+0.008);
+        g.gain.setValueAtTime(peak,tw+0.018);
+        g.gain.exponentialRampToValueAtTime(0.0001,tw+0.07);
+        o.connect(g);g.connect(audioCtx.destination);
+        o.start(tw);o.stop(tw+0.09);
+        tw+=0.105;
+      }
+      return;
+    }
     const seq=({
       exact:[[1500,.09],[1900,.11]],
       building:[[1400,.14]],
@@ -4783,10 +4813,119 @@ function todayWalkBanner(){
         escHtml(mine.join(" \u00b7 "))+'</div>';
   if(!old)box.insertBefore(b,box.firstChild);
 }
+
+/* ──── MY-WALK BAR (v4.19) ────────────────────────────────────────────────
+   While a walk is set, the scanning screen carries a standing bar naming it,
+   a running count, and a way to switch the mode off without going into
+   Options. It sits in #handBody OUTSIDE #handResult, because every screen
+   rewrites that box wholesale and would take the bar with it.
+   Rides on afterRender like the banner, and like the banner it MUST be
+   idempotent — inserting into handBody mutates it, which calls this again;
+   the _sig check is what stops that looping.
+   The red border is tracked with a FLAG, never by reading style.border back:
+   a browser normalises that string, so comparing it is a coin toss. */
+let myWalkArm=0, myWalkArmT=null;
+function myWalkRefresh(){
+  try{myWalkBar();}catch(e){}
+  try{todayWalkBanner();}catch(e){}
+}
+function myWalkBar(){
+  var hb=document.getElementById("handBody");
+  var box=document.getElementById("handResult");
+  if(!hb||!box)return;
+  var old=document.getElementById("wildMyWalkBar");
+  var mine=todayWalksGet();
+  var subs=(box.dataset&&box.dataset.sub)||"";
+  var live=!!(mine.length&&(!subs||subs==="pick"));
+  if(!live){
+    if(old&&old.parentNode)old.parentNode.removeChild(old);
+    if(box._mwOn){box.style.border="";box.style.borderRadius="";box._mwOn=false;}
+    return;
+  }
+  /* ALT_WALK_RED is declared far further down this same script block, so
+     reading it at TOP LEVEL would run inside its dead zone and throw, taking
+     every later declaration in the block down with it. Read it in here. */
+  var RED="#d32f2f";try{RED=ALT_WALK_RED;}catch(e){}
+  if(!box._mwOn){
+    box.style.boxSizing="border-box";
+    box.style.border="3px solid "+RED;
+    box.style.borderRadius="14px";
+    box._mwOn=true;
+  }
+  var many=mine.length>1;
+  var col=many?TODAY_MANY:TODAY_ONE, bg=many?TODAY_MANY_BG:TODAY_ONE_BG;
+  var t=todayScanTally();
+  var sig=mine.join("\u0002")+"\u0001"+t.total+"\u0001"+t.other+"\u0001"+(myWalkArm?"1":"0");
+  if(old&&old._sig===sig)return;                 // unchanged — leave the DOM alone
+  var b=old||document.createElement("div");
+  b.id="wildMyWalkBar";
+  b._sig=sig;
+  b.style.cssText="flex-shrink:0;display:flex;align-items:center;gap:8px;margin-bottom:10px;"+
+    "padding:8px 10px;border-radius:12px;background:"+bg+";border:1px solid "+col;
+  b.innerHTML='<div id="wildMwName" style="flex:1;min-width:0;text-align:left;cursor:pointer">'+
+      '<div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;color:'+col+'">MY '+(many?"WALKS":"WALK")+' \u203a</div>'+
+      '<div style="font-size:15px;font-weight:900;color:'+col+';line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+        escHtml(mine.join(" \u00b7 "))+'</div>'+
+      '<div style="font-size:10.5px;color:'+col+';opacity:.9;margin-top:1px">'+t.total+' scanned since you picked \u00b7 '+
+        t.other+' not yours</div>'+
+    '</div>'+
+    '<button type="button" id="wildMwOff" style="flex-shrink:0;padding:9px 10px;border-radius:10px;cursor:pointer;'+
+      'font-size:10.5px;font-weight:800;letter-spacing:.03em;line-height:1.25;'+
+      (myWalkArm?'border:none;background:'+RED+';color:#fff">Tap again<br>to turn off'
+               :'border:1px solid '+col+';background:transparent;color:'+col+'">\u2715 TURN<br>OFF')+
+    '</button>';
+  if(!old)hb.insertBefore(b,hb.firstChild);
+  var nm=b.querySelector("#wildMwName");
+  if(nm)nm.onclick=function(){try{showHandTodayWalk();}catch(e){}};
+  var off=b.querySelector("#wildMwOff");
+  if(off)off.onclick=function(){
+    /* TWO taps. One stray tap would silently switch off every not-your-walk
+       warning for the rest of the round and restart the tally with it. */
+    if(!myWalkArm){
+      myWalkArm=1;
+      clearTimeout(myWalkArmT);
+      myWalkArmT=setTimeout(function(){myWalkArm=0;myWalkRefresh();},4000);
+      myWalkRefresh();
+      return;
+    }
+    clearTimeout(myWalkArmT);myWalkArm=0;
+    try{todayWalksSet([]);}catch(e){}
+    myWalkRefresh();
+  };
+}
+
+/* ──── IS THIS SCAN OFF MY WALK? (v4.20) ──────────────────────────────────
+   The judgement sits here, next to the storage it reads, and the tone asks it
+   once — so every caller of outcomeTone gets the warning without any of the
+   ten result branches knowing about it.
+   knownWalkName is the guard that matters: some callers pass a whole result
+   LINE rather than a bare walk name, and a warning must never fire on text
+   that isn't a walk in the round at all. */
+let handWalkNameSet=null;
+function knownWalkName(w){
+  var n=String(w||"").trim();
+  if(!n)return false;
+  try{
+    if(!handWalkNameSet){
+      handWalkNameSet=Object.create(null);
+      walksInRound().forEach(function(x){handWalkNameSet[String(x.walk).trim().toUpperCase()]=1;});
+    }
+    return !!handWalkNameSet[n.toUpperCase()];
+  }catch(e){return false;}
+}
+function todayWalkMismatch(walkText){
+  try{
+    var mine=todayWalksGet();
+    if(!mine.length)return false;               // no walk set — nothing to be off
+    var n=String(walkText||"").trim();
+    if(!n||!knownWalkName(n))return false;      // not a walk name — say nothing
+    return !todayHasWalk(n);
+  }catch(e){return false;}
+}
 // Speaks the walk — saying so first when it isn't one of today's walks.
 function handSpeakWalk(w){
   try{
-    if(todayWalksGet().length&&w&&!todayHasWalk(w)){speakText("Not your walk. "+w);return;}
+    if(todayWalksGet().length&&w&&!todayHasWalk(w)){speakText(w);return;}
   }catch(e){}
   speakText(w);
 }
@@ -5802,6 +5941,7 @@ function handDropDataIndexes(){
   try{handSplitCache=null;}catch(e){}      // v2.9: the split-postcode audit is derived from the data too
   try{handFindIdx=null;}catch(e){}         // v3.3: the walks-search list is derived from the data too
   try{handStPartsCache=null;}catch(e){}    // v3.5: so is the per-street breakdown
+  try{handWalkNameSet=null;}catch(e){}     // v4.20: the walk-name set is derived from the data too
   try{knownPostcodeSet._cache=null;knownPostcodeSet._for=null;}catch(e){}
   try{tokenStreetCount=null;}catch(e){}
   try{dropRecTokenCache();}catch(e){}
@@ -8595,7 +8735,25 @@ function openVoiceSheet(){
     +(sub?'<div style="font-size:11px;color:var(--sub,#5f6368);margin-top:2px">'+escHtml(sub)+'</div>':"")
     +'</div><div style="font-size:11px;color:var(--sub,#5f6368);flex-shrink:0">▶ tap to hear</div></div>';
   const divider=t=>'<div style="padding:9px 14px;background:#f7f8fa;border-top:1px solid #e8ebef;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--sub,#5f6368);text-transform:uppercase">'+t+'</div>';
-  let rows=row("",'Auto — best available','Prefers the louder Google British voice'+(auto?' · currently '+auto.name:''),!saved);
+  /* v4.19: the voice actually in use is pinned to the top under its own
+     divider, so it doesn't have to be hunted for in a list of forty. It stays
+     listed in its own section below as well — the row indexes map into vs[],
+     and re-ordering that list would break the mapping and the A-Z shape. */
+  const inUse=saved?vs.find(x=>x.name===saved):null;
+  const gone=!!(saved&&!inUse);          // saved a voice the phone no longer has
+  const vsub=x=>x.lang+(x.localService?" · on-device":" · online");
+  let rows="";
+  if(inUse){
+    rows+=divider("Using now");
+    rows+=row(vs.indexOf(inUse),inUse.name,vsub(inUse),true);
+    rows+=divider("All voices");
+  }
+  if(gone){
+    rows+='<div style="padding:11px 14px;background:#fff8e1;border-top:1px solid #f0e2b6;'+
+      'font-size:12px;line-height:1.45;color:#8a6100">\u26a0\ufe0f <b>'+escHtml(saved)+'</b> isn\u2019t installed on '+
+      'this device any more, so the automatic pick is being used. Choose another below.</div>';
+  }
+  rows+=row("",'Auto — best available','Prefers the louder Google British voice'+(auto?' · currently '+auto.name:''),!saved||gone);
   rows+=en.map((x,i)=>row(i,x.name,x.lang+(x.localService?" · on-device":" · online"),saved===x.name)).join("");
   if(other.length){
     rows+=divider("Other languages — read English with an accent");
@@ -11435,6 +11593,7 @@ document.addEventListener("visibilitychange",()=>{
     try{if(typeof wireHandWalkTap==="function")wireHandWalkTap();}catch(e){}
     try{walkHint();}catch(e){}
     try{if(typeof todayWalkBanner==="function")todayWalkBanner();}catch(e){}
+    try{if(typeof myWalkBar==="function")myWalkBar();}catch(e){}
   }
   var hb=document.getElementById("handBody");
   if(hb&&window.MutationObserver){
