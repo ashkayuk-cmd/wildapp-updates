@@ -597,7 +597,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 131;
+const THIS_BUILD_NUM = 132;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -607,7 +607,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.17";
+const BUILD_NAME = "v4.18";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4669,47 +4669,82 @@ function walksInRound(){
     return a.walk.localeCompare(b.walk);
   });
 }
-// ──── TODAY'S WALK (v4.16) ───────────────────────────────────────────────
-// Pick the walk you're on today and every scan that lands somewhere else says
-// so — on screen and out loud — instead of quietly showing a walk number that
-// looks exactly like a right one. The setting carries the date it was made and
-// expires by itself at midnight, so yesterday's walk can never shout at
-// today's mail.
+// ──── TODAY'S WALK (v4.18) ───────────────────────────────────────────────
+// Pick the walk (or walks) you're on today and every scan that lands anywhere
+// else says so — on screen and out loud — instead of quietly showing a walk
+// number that looks exactly like a right one. The setting carries the date it
+// was made and expires by itself at midnight, so yesterday's walks can never
+// shout at today's mail.
+//   v4.18: several walks can be on at once; the marker turns BLUE when more
+//   than one is picked, so a glance tells you which mode you're in. The day's
+//   tally counts from the moment you started picking, and resets when you
+//   clear the lot.
 const TODAY_WALK_KEY="wildTodayWalk_v1";
+const TODAY_ONE="#2e7d32", TODAY_ONE_BG="#e8f5e9";      // one walk  → green
+const TODAY_MANY="#1a73e8", TODAY_MANY_BG="#e8f0fe";    // several   → blue
 function todayStamp(d){
   d=d||new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
-function todayWalkGet(){
+function todayWalkRec(){
   try{
     const r=JSON.parse(localStorage.getItem(TODAY_WALK_KEY)||"null");
-    if(!r||!r.w)return "";
-    if(String(r.d||"")!==todayStamp())return "";      // set on an earlier day
-    return String(r.w).trim();
-  }catch(e){return "";}
+    if(!r)return null;
+    if(String(r.d||"")!==todayStamp())return null;      // set on an earlier day
+    // v4.16 stored a single name; read it as a list of one.
+    const w=Array.isArray(r.w)?r.w:(r.w?[r.w]:[]);
+    return {w:w.map(x=>String(x).trim()).filter(Boolean),d:r.d,t:Number(r.t)||0};
+  }catch(e){return null;}
 }
-function todayWalkSet(w){
+// Every walk switched on today, in round order. Empty when nothing is set.
+function todayWalksGet(){
+  const r=todayWalkRec();
+  return r?r.w.slice():[];
+}
+function todayWalkSince(){
+  const r=todayWalkRec();
+  return r?r.t:0;
+}
+function todayWalksSet(list){
+  const w=(list||[]).map(x=>String(x).trim()).filter(Boolean);
   try{
-    if(!w)localStorage.removeItem(TODAY_WALK_KEY);
-    else localStorage.setItem(TODAY_WALK_KEY,JSON.stringify({w:String(w).trim(),d:todayStamp()}));
+    if(!w.length){localStorage.removeItem(TODAY_WALK_KEY);return;}
+    // The count runs from when you started picking. ADDING a walk part-way
+    // through the round keeps the morning's count; taking one off — or
+    // clearing the lot — starts the tally again from zero, because the
+    // numbers on screen would otherwise be counting a walk you're no longer
+    // doing.
+    const had=todayWalkRec();
+    const kept=had&&had.w.length&&had.w.every(x=>w.some(y=>sameWalkName(x,y)));
+    const t=kept?had.t:Date.now();
+    localStorage.setItem(TODAY_WALK_KEY,JSON.stringify({w:w,d:todayStamp(),t:t}));
   }catch(e){}
+}
+function todayWalkToggle(w){
+  const cur=todayWalksGet();
+  const i=cur.findIndex(x=>sameWalkName(x,w));
+  if(i>=0)cur.splice(i,1);else cur.push(String(w));
+  todayWalksSet(cur);
 }
 function sameWalkName(a,b){
   return String(a||"").trim().toUpperCase()===String(b||"").trim().toUpperCase();
 }
-// Scans logged since midnight, split by where they landed.
+function todayHasWalk(w){
+  return todayWalksGet().some(x=>sameWalkName(x,w));
+}
+// Scans logged since you picked, split by where they landed.
 function todayScanTally(){
   const out={total:0,mine:0,other:0,none:0};
   try{
+    const since=todayWalkSince();
+    if(!since)return out;
     const h=(typeof loadScanHistory==="function")?loadScanHistory():[];
-    const mid=new Date();mid.setHours(0,0,0,0);
-    const t0=mid.getTime(),my=todayWalkGet();
     h.forEach(function(e){
-      if(!e||!(Number(e.t)>=t0))return;
+      if(!e||!(Number(e.t)>=since))return;
       out.total++;
       const w=(typeof histWalkOf==="function")?histWalkOf(e):"";
       if(!w){out.none++;return;}
-      if(my&&sameWalkName(w,my))out.mine++;else out.other++;
+      if(todayHasWalk(w))out.mine++;else out.other++;
     });
   }catch(e){}
   return out;
@@ -4723,33 +4758,35 @@ function todayWalkBanner(){
   if(!box)return;
   var old=document.getElementById("wildTodayBan");
   var el=document.getElementById("handWalkBig");
-  var mine=todayWalkGet();
-  var sub=(box.dataset&&box.dataset.sub)||"";
+  var mine=todayWalksGet();
+  var subs=(box.dataset&&box.dataset.sub)||"";
   var name=el?String(el.textContent||"").trim():"";
   // Live results only: a real walk name, and either the scan screen or a walk
   // picked out of a picker list. Every other sub-screen clears the banner.
-  var live=!!(el&&mine&&name&&name!=="\u2014"&&(!sub||sub==="pick"));
+  var live=!!(el&&mine.length&&name&&name!=="\u2014"&&(!subs||subs==="pick"));
   if(!live){if(old&&old.parentNode)old.parentNode.removeChild(old);return;}
-  var match=sameWalkName(name,mine);
-  var sig=name+"\u0001"+mine+"\u0001"+(match?"1":"0");
+  var match=todayHasWalk(name);
+  var many=mine.length>1;
+  var sig=name+"\u0001"+mine.join("\u0002")+"\u0001"+(match?"1":"0");
   if(old&&old._sig===sig)return;                     // unchanged — leave the DOM alone
   var b=old||document.createElement("div");
   b.id="wildTodayBan";
   b._sig=sig;
   b.style.cssText="align-self:stretch;width:100%;box-sizing:border-box;border-radius:12px;text-align:center;"+
-    (match?"padding:6px 10px;background:#e8f5e9;color:#2e7d32;font-size:12px;font-weight:800;letter-spacing:.05em"
+    (match?"padding:6px 10px;font-size:12px;font-weight:800;letter-spacing:.05em;background:"+
+             (many?TODAY_MANY_BG:TODAY_ONE_BG)+";color:"+(many?TODAY_MANY:TODAY_ONE)
           :"padding:10px 12px;background:"+ALT_WALK_RED+";color:#fff;letter-spacing:.03em");
   b.innerHTML=match
-    ? "\u2713 YOUR WALK"
+    ? "\u2713 "+(many?"ONE OF YOUR WALKS":"YOUR WALK")
     : '<div style="font-size:19px;font-weight:900;line-height:1.15">\u26a0\ufe0f NOT YOUR WALK</div>'+
-      '<div style="font-size:12px;font-weight:700;opacity:.95;margin-top:3px">you\u2019re on '+escHtml(mine)+'</div>';
+      '<div style="font-size:12px;font-weight:700;opacity:.95;margin-top:3px">you\u2019re on '+
+        escHtml(mine.join(" \u00b7 "))+'</div>';
   if(!old)box.insertBefore(b,box.firstChild);
 }
-// Speaks the walk — saying so first when it isn't the walk you're on today.
+// Speaks the walk — saying so first when it isn't one of today's walks.
 function handSpeakWalk(w){
   try{
-    var mine=todayWalkGet();
-    if(mine&&w&&!sameWalkName(w,mine)){speakText("Not your walk. "+w);return;}
+    if(todayWalksGet().length&&w&&!todayHasWalk(w)){speakText("Not your walk. "+w);return;}
   }catch(e){}
   speakText(w);
 }
@@ -4760,44 +4797,47 @@ function showHandTodayWalk(){
   handNav("today",function(){showHandTodayWalk();});
   try{box.dataset.sub="today";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
-  const mine=todayWalkGet();
+  const mine=todayWalksGet();
+  const many=mine.length>1;
+  const col=many?TODAY_MANY:TODAY_ONE, bg=many?TODAY_MANY_BG:TODAY_ONE_BG;
   const t=todayScanTally();
   const rows=walksInRound().map(function(x){
-    const on=sameWalkName(x.walk,mine);
+    const on=todayHasWalk(x.walk);
     return '<button class="handTdW" data-w="'+encodeURIComponent(x.walk)+'" style="display:block;width:100%;text-align:left;'+
-      'padding:15px 14px;margin-top:8px;background:'+(on?"#e8f5e9":"var(--sur)")+';border:'+(on?"2px solid #2e7d32":"none")+';'+
+      'padding:15px 14px;margin-top:8px;background:'+(on?bg:"var(--sur)")+';border:'+(on?"2px solid "+col:"none")+';'+
       'border-radius:12px;box-shadow:var(--shad);font-size:19px;font-weight:800;color:var(--txt);cursor:pointer">'+
       escHtml(x.walk)+
-      (on?'<span style="float:right;color:#2e7d32;font-weight:900">\u2713</span>'
+      (on?'<span style="float:right;color:'+col+';font-weight:900">\u2713</span>'
          :'<span style="float:right;color:var(--sub);font-weight:400">\u203a</span>')+'</button>';
   }).join("");
-  const head=mine
-    ? '<div style="background:#e8f5e9;border-radius:12px;padding:12px;text-align:center">'+
-        '<div style="font-size:11px;font-weight:800;color:#2e7d32;letter-spacing:.08em">TODAY YOU\u2019RE ON</div>'+
-        '<div style="font-size:26px;font-weight:900;color:#2e7d32;margin-top:2px">'+escHtml(mine)+'</div>'+
-        '<div style="font-size:11.5px;color:#2e7d32;margin-top:5px">'+t.total+' scanned today \u00b7 '+
-          t.mine+' on your walk \u00b7 '+t.other+' not yours'+(t.none?' \u00b7 '+t.none+' unresolved':'')+'</div>'+
+  const head=mine.length
+    ? '<div style="background:'+bg+';border-radius:12px;padding:12px;text-align:center">'+
+        '<div style="font-size:11px;font-weight:800;color:'+col+';letter-spacing:.08em">TODAY YOU\u2019RE ON</div>'+
+        '<div style="font-size:'+(many?"20px":"26px")+';font-weight:900;color:'+col+';margin-top:2px;line-height:1.25">'+
+          escHtml(mine.join(" \u00b7 "))+'</div>'+
+        '<div style="font-size:11.5px;color:'+col+';margin-top:5px">'+t.total+' scanned since you picked \u00b7 '+
+          t.mine+' on your '+(many?"walks":"walk")+' \u00b7 '+t.other+' not yours'+(t.none?' \u00b7 '+t.none+' unresolved':'')+'</div>'+
       '</div>'
-    : '<div style="font-size:13px;color:var(--sub);line-height:1.5">No walk set for today. Pick one below and any scan for a '+
-      'different walk turns red and says <b>\u201cnot your walk\u201d</b> out loud. It clears itself at midnight.</div>';
+    : '<div style="font-size:13px;color:var(--sub);line-height:1.5">No walk set for today. Pick one below \u2014 or several \u2014 and any scan '+
+      'for a different walk turns red and says <b>\u201cnot your walk\u201d</b> out loud. It clears itself at midnight.</div>';
   box.innerHTML='<div style="width:100%;text-align:left">'+
     handTopBar("Today\u2019s walk")+
     head+
-    (mine?'<button id="handTdClear" style="margin-top:10px;width:100%;padding:11px;background:transparent;border:1px solid var(--div);'+
-      'border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Clear today\u2019s walk</button>':"")+
+    (mine.length?'<button id="handTdClear" style="margin-top:10px;width:100%;padding:11px;background:transparent;border:1px solid var(--div);'+
+      'border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Clear '+
+      (many?"all "+mine.length+" walks":"today\u2019s walk")+'</button>':"")+
     rows+
     '<button id="handTdBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);'+
       'border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>'+
   '</div>';
   box.querySelectorAll(".handTdW").forEach(function(b){
     b.onclick=function(){
-      var w=decodeURIComponent(b.dataset.w||"");
-      todayWalkSet(sameWalkName(w,todayWalkGet())?"":w);   // tapping the set walk clears it
+      todayWalkToggle(decodeURIComponent(b.dataset.w||""));
       showHandTodayWalk();
     };
   });
   var cl=document.getElementById("handTdClear");
-  if(cl)cl.onclick=function(){todayWalkSet("");showHandTodayWalk();};
+  if(cl)cl.onclick=function(){todayWalksSet([]);showHandTodayWalk();};
   var bk=document.getElementById("handTdBack");
   if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
 }
