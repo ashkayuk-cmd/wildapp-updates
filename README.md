@@ -77,3 +77,44 @@ Clear button. With no walk set, the app behaves exactly as build 129 did.
 - **W2 5PN** — 2a/2b/2c Shrewsbury Mews on 32 BRUNEL, the rest of the mews on
   30 CHEPSTOW.
 - **W2 5TL** — 86 Senior Street on 1 ALFRED, the school on 2 WOODCHESTER.
+
+---
+
+# wild_data.xlsx — your master workbook, rebuilt
+
+**This one does NOT go to the repo.** It replaces the `wild_data.xlsx` you keep
+and edit. The repo still only ever gets `index.html` and `wild_data.json`.
+
+It is the shipped data exactly — 24,102 rows — so the two are back in step and
+a future upload of the master can't quietly undo anything.
+
+## What it puts right
+
+Your old copy was 24,149 rows. The 47 differences, all of them changes already
+live in the app:
+
+| | |
+|---|---|
+| 45 rows | duplicate addresses removed (v4.3) — 41 addresses that appeared 2 or 3 times: Buck Hill Lodge, Rangers Cottage, Flat 32 Saxon Hall, 84 Kensington Gardens Square, most of Paddington Square, and the rest |
+| 1 row | `24, Seymour Street, W2 3SS` deleted (v4.1) |
+| 1 row | `Buckhill Lodge, Bayswater Road` deleted (v4.5) — the misspelled second copy of Buck Hill Lodge |
+
+Plus the two walk changes: `22, Cleveland Terrace, W2 6QH` → 16 WESTBOURNE TCE
+(today), and the Inverness Place church → 23 INVERNESS (v2.5).
+
+## Format
+
+Same as before — **Data** and **Walks** sheets, columns
+Address | Walk | Street | Folder | Subfolder, the Walk dropdown on column B
+off the `WalkList` name, autofilter, header row frozen. The four rows carrying
+a Folder value (Paddington Station, Hallfield Estate, Bayswater Road, Kingdom
+Street) are carried across untouched.
+
+**Checked:** converted the workbook back the way the app does and it reproduces
+`wild_data.json` byte-for-byte — same hash `a5195d2e`, same 24,102 rows. Opens
+clean in LibreOffice.
+
+> One thing to check at your end: if your master also had a **Walk Order**
+> column and a **Sorted View** sheet, they aren't in this one — the copy I had
+> to work from (the one baked into the APK) doesn't carry them. Send me your
+> real master and I'll fold the same 47 changes into that instead.
