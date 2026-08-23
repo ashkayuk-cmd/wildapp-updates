@@ -494,17 +494,17 @@ body.addr-locked #rl .lockmsg{display:flex}
 
 <!-- HANDHELD PANEL — no camera; results driven by the Bluetooth/USB handheld scanner -->
 <div id="handPanel">
-  <div class="qrbar" style="display:none">
+  <div class="qrbar">
     <!-- v3.7: the title is the website version now. "Handheld Scanner" and its
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
     <h1 style="flex:1;min-width:0;overflow:hidden;color:#fff;margin:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;font-weight:600"><span style="font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:16px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1>
-    <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;margin-right:44px;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button><button type="button" id="wildResetBtn" aria-label="Reset app" style="flex:0 0 auto;padding:6px 10px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET</span><span id="wildResetL2" style="font-size:9.5px;letter-spacing:.06em;opacity:.9">APP</span></button>
+    <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;margin-right:44px;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button><button type="button" id="wildResetBtn" aria-label="Reset app if the scanner doesn't work" style="flex:0 0 auto;padding:5px 9px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:8px;letter-spacing:.02em;opacity:.92;font-weight:700">IF SCANNER</span><span id="wildResetL3" style="font-size:8px;letter-spacing:.02em;opacity:.92;font-weight:700">DOESN&#8217;T WORK</span></button>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
   <input id="handCatch" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="none" style="position:absolute;opacity:0;pointer-events:none;height:0;width:0;border:0;padding:0">
-  <div id="handBody" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;padding:18px 16px 28px">
+  <div id="handBody" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:flex;flex-direction:column;padding:18px 16px 28px">
     <div id="handResult" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px">
       <div id="handEmpty" style="color:var(--sub)">
         <div style="max-width:340px;margin:0 auto;text-align:center;line-height:1.55">
@@ -597,17 +597,17 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 135;
+const THIS_BUILD_NUM = 143;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
 // DATA (58 is not > 59), quietly reverting address fixes.
-const BAKED_DATA_BUILD = 135;
+const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.21";
+const BUILD_NAME = "v4.28";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -624,7 +624,7 @@ const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
 const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD  = 135;                  // build of the WildApp.apk beside this file
+const REPO_APK_BUILD  = 137;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -3265,9 +3265,16 @@ function setSoundLevel(v){
 }
 // Peak gain for one beep. Zero means DON'T PLAY: an exponential ramp can
 // never reach zero, so silence has to be a skip, not a quiet tone.
+/* v4.24: with TODAY'S WALK set the beeps are the whole warning, so they run
+   at Web Audio's own ceiling regardless of the slider — measured +4.4 dB
+   A-weighted over the old maximum. Level 0 is an explicit mute and still
+   silences them. */
+const MYWALK_MAX_PEAK=1;
 function beepPeak(){
   const v=soundLevel();
-  return v?0.6*Math.pow(v/100,2):0;
+  if(!v)return 0;
+  try{if(todayWalksGet().length)return MYWALK_MAX_PEAK;}catch(e){}
+  return 0.6*Math.pow(v/100,2);
 }
 const BEEP_WAVE="sine";
 
@@ -3402,7 +3409,7 @@ function showHandSound(){
     <button type="button" id="handVolMine" style="margin-top:8px;width:100%;padding:13px;border:1px solid var(--div);border-radius:12px;
       background:var(--sur);color:var(--txt);font-size:13.5px;font-weight:800;cursor:pointer">&#9654; Test &ldquo;not your walk&rdquo; beep</button>
     <button type="button" id="handVolBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;
-      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>
   </div>`;
   const sl=document.getElementById("handVol"), num=document.getElementById("handVolNum");
   const show=(n)=>{if(num)num.textContent=n?n+"%":"Off";};
@@ -3427,7 +3434,8 @@ function showHandSound(){
   const tm=document.getElementById("handVolMine");
   if(tm)tm.onclick=()=>{try{outcomeTone("notmine");}catch(e){}};
   const back=document.getElementById("handVolBack");
-  if(back)back.onclick=()=>handGoIdle();
+  // v4.26: went to the scanning screen, unlike every other settings screen.
+  if(back)back.onclick=()=>{try{handBackToOptions();}catch(e){}};
 }
 
 /* The idle scanning screen, in one place (v1.65) — it used to be a literal
@@ -3499,6 +3507,17 @@ function handCollapseToResult(){
   }catch(e){}
   box.style.justifyContent="center";
   box.innerHTML=handIdleHtml();
+}
+/* ── BACK TO OPTIONS (v4.26) ──────────────────────────────────────────────
+   Every "Back to Options" button used to call openOptionsMenu() on its own,
+   which lays the sheet OVER the screen you were on and leaves it there. Close
+   Options again and the screen you had just left came back instead of the
+   scan — the same loop v4.0 had to fix for the hardware BACK key, which is
+   why the trail replay already collapses first. One helper now, so a new
+   settings screen can't be wired the old way. */
+function handBackToOptions(){
+  try{handCollapseToResult();}catch(e){}
+  try{openOptionsMenu();}catch(e){}
 }
 function handGoIdle(){
   const box=document.getElementById("handResult");
@@ -4924,8 +4943,11 @@ function todayWalkMismatch(walkText){
 }
 // Speaks the walk — saying so first when it isn't one of today's walks.
 function handSpeakWalk(w){
+  /* v4.24: while TODAY'S WALK is set, nothing is spoken at all — the beeps
+     already say it (quiet = yours, three blats = not), and the voice on top
+     of every scan is noise. Speech resumes the moment the mode is off. */
   try{
-    if(todayWalksGet().length&&w&&!todayHasWalk(w)){speakText(w);return;}
+    if(todayWalksGet().length)return;
   }catch(e){}
   speakText(w);
 }
@@ -4978,7 +5000,7 @@ function showHandTodayWalk(){
   var cl=document.getElementById("handTdClear");
   if(cl)cl.onclick=function(){todayWalksSet([]);showHandTodayWalk();};
   var bk=document.getElementById("handTdBack");
-  if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
+  if(bk)bk.onclick=function(){try{handBackToOptions();}catch(e){}};
 }
 // ──── SPLIT POSTCODES (v2.9) ─────────────────────────────────────────────
 // Postcodes where the round delivers to more than one walk. Some are honest
@@ -5054,7 +5076,7 @@ function showHandSplits(){
     b.onclick=function(){showHandSplitRows(decodeURIComponent(b.dataset.p));};
   });
   const bk=document.getElementById("handSpBack");
-  if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
+  if(bk)bk.onclick=function(){try{handBackToOptions();}catch(e){}};
 }
 function showHandSplitRows(pc){
   const box=document.getElementById("handResult");
@@ -5208,7 +5230,7 @@ function showHandWalksSimple(){
     };
   }
   const bk=document.getElementById("handSiBack");
-  if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
+  if(bk)bk.onclick=function(){try{handBackToOptions();}catch(e){}};
 }
 function showHandWalkSimple(key){
   const box=document.getElementById("handResult");
@@ -5308,7 +5330,7 @@ function showHandShared(){
     b.onclick=function(){showHandWalkStreets(decodeURIComponent(b.dataset.w),SHARED_LIST_BACK);};
   });
   const bk=document.getElementById("handShBack");
-  if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
+  if(bk)bk.onclick=function(){try{handBackToOptions();}catch(e){}};
 }
 /* v3.3: the Walks search used to look ONLY at streetWalkIndex keys, and only
    as a plain substring. So a named building ("HALL TOWER") found nothing even
@@ -5444,7 +5466,7 @@ function showHandWalksList(){
     };
   }
   const bk=document.getElementById("handWkBack");
-  if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
+  if(bk)bk.onclick=function(){try{handBackToOptions();}catch(e){}};
 }
 /* v3.5: what this walk ACTUALLY delivers on a street, worked out from the
    address data instead of the A-Z sheet's wording. The sheet's qualifier can
@@ -6299,7 +6321,7 @@ function showHandManage(){
   // Opened from the App version screen? Go back THERE, not to the scan.
   if(back)back.onclick=()=>{
     if(handMgFrom==="version"){handMgFrom="";showAppVersion();return;}
-    if(handMgFrom==="settings"){handMgFrom="";openOptionsMenu();return;}
+    if(handMgFrom==="settings"){handMgFrom="";handBackToOptions();return;}
     if(handLastRaw)renderHandheld(handLastRaw,false);
     else{box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}
   };
@@ -6321,7 +6343,7 @@ function openAppVersion(){
     title:"PIN for app version",
     note:"This screen can change which version of the app runs.",
     onOk:()=>{try{showAppVersion();}catch(e){}},
-    onCancel:()=>{try{openOptionsMenu();}catch(e){}}
+    onCancel:()=>{try{handBackToOptions();}catch(e){}}
   });
 }
 function showAppVersion(){
@@ -6387,7 +6409,7 @@ function showAppVersion(){
     ${VER_BTNS}
     ${corrHtml}
     ${logHtml}
-    <button id="handVerBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+    <button id="handVerBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>
   </div>`;
   const info=document.getElementById("handLiveInfo");
   if(info){
@@ -6440,7 +6462,9 @@ function showAppVersion(){
   const mg=document.getElementById("handVerManage");
   if(mg)mg.onclick=()=>{handMgFrom="version";showHandManage();};
   const back=document.getElementById("handVerBack");
-  if(back)back.onclick=()=>{if(handLastRaw)renderHandheld(handLastRaw,false);else{try{delete box.dataset.sub;}catch(e){}box.style.justifyContent="center";box.innerHTML=(typeof handIdleHtml==="function"?handIdleHtml():'<div style="color:var(--sub)">Ready to scan.</div>');}};
+  // v4.26: went to the scanning screen; the hardware BACK key already came
+  // back here to Options, so the two disagreed.
+  if(back)back.onclick=()=>{try{handBackToOptions();}catch(e){}};
 }
 /* ── "USE BUILT-IN VERSION" — ARE YOU SURE, THEN THE PIN AGAIN (v2.3) ────
    This button restarts the app on the version inside the APK, so it is the
@@ -6704,7 +6728,7 @@ function showHandRecent(){
     },4000);
   };
   const back=document.getElementById("handRecBack");
-  if(back)back.onclick=()=>{try{openOptionsMenu();}catch(e){}};   // v4.0: match Walks and Split postcodes
+  if(back)back.onclick=()=>{try{handBackToOptions();}catch(e){}};   // v4.0: match Walks and Split postcodes
 }
 // Render every saved correction as plain text — a backup Ash can keep, or send
 // on so the fixes can be built into the app permanently.
@@ -6807,6 +6831,32 @@ const PIN_GRACE_MS=0;
 let handPinOkUntil=0;
 function handPinFresh(){return PIN_GRACE_MS>0 && Date.now()<handPinOkUntil;}
 function handPinClear(){handPinOkUntil=0;}
+/* ── ⚙️ IS A PIN DOOR NOW (v4.26) ─────────────────────────────────────────
+   Ash: "when pressing the gear icon it will require the password", and
+   "i dont want it to re ask unless i go to home screen and then back in to
+   gear". So the PIN is typed ONCE at the gear and the whole settings tree
+   stays open behind it — App version and Walk corrections don't ask again
+   during that visit. Coming back to the scanning screen re-locks it, by any
+   route out (a Back button, the hardware key, HOME, a scan), which is why
+   the lock is worked out from what is actually on screen rather than wired
+   into each exit. In memory only: a restart re-locks too.
+   "Use built-in version" still asks a second time — it passes force. */
+let handOptUnlocked=false;
+function handOptUnlock(){handOptUnlocked=true;}
+function handOptLock(){handOptUnlocked=false;}
+function handOptSettingsOpen(){
+  try{
+    if(document.getElementById("wildOptSheet"))return true;
+    if(document.getElementById("wildVoiceSheet"))return true;
+    if(document.querySelector(".wm-overlay"))return true;
+    var hr=document.getElementById("handResult");
+    if(hr&&hr.dataset&&hr.dataset.sub)return true;
+  }catch(e){}
+  return false;
+}
+function handOptLockTick(){
+  if(handOptUnlocked&&!handOptSettingsOpen())handOptLock();
+}
 /* v4.1: the hardware BACK key on a PIN screen used to fall through to the
    trail (empty at that point, because the PIN is not a trail screen) and
    collapse to the scan — so cancelling the corrections PIN with the on-screen
@@ -6820,7 +6870,8 @@ function requireHandPin(opts){
   /* v2.3: opts.force asks EVEN IF the PIN was typed moments ago. Used by
      the second gate on "Use built-in version" — a grace-window skip would
      make the double check a single check. */
-  if(!opts.force && handPinFresh()){opts.onOk&&opts.onOk();return;}
+  // v4.26: already through the gear door on this visit — don't ask again.
+  if(!opts.force && (handOptUnlocked||handPinFresh())){opts.onOk&&opts.onOk();return;}
   showHandPin({
     sub:opts.subName||"pin",
     title:opts.title||"Enter PIN",
@@ -7361,6 +7412,11 @@ function renderPickedWalk(raw,w,addr,speak){
   if(!box)return;
   const shown=displayAddrText(addr||"");
   handLastWalk=w; handLastAddr=shown;
+  // v4.22: picking a card used to render and speak the walk with NO tone at
+  // all — so a wrong-walk warning could never fire from here, only from a
+  // fresh scan that resolved on its own. This is the walk being CONFIRMED,
+  // same footing as a direct exact-address hit.
+  if(speak)try{outcomeTone("exact",w);}catch(e){}
   box.style.justifyContent="center";
   box.innerHTML=`
     <div style="font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.12em;text-transform:uppercase">Walk</div>
@@ -8061,6 +8117,8 @@ function renderHandheld(raw,fromScanner){
       btn.onclick=()=>{
         const r=closest[+btn.dataset.i];
         handLastWalk=r.r||""; handLastAddr=displayAddrText(r.d);
+        // v4.22: same gap — a picked closest-match had no tone either.
+        if(r.r)try{outcomeTone("building",r.r);}catch(e){}
         box.style.justifyContent="center";
         box.innerHTML=`
           <div style="font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.12em;text-transform:uppercase">Walk</div>
@@ -8118,7 +8176,10 @@ function renderHandheld(raw,fromScanner){
       ${altCard}
       ${rawResultBlock(raw)}`;
     if(altCard){box.style.justifyContent="flex-start";wireHandAltPicks(raw,altBy);wireHandFixButtons(raw);}
-    if(fromScanner&&handSpeakEnabled)handSpeakWalk(walk);
+    /* v4.24: an "also possible" card means the label disagrees with itself —
+       showing the walk is right, announcing it with the confidence of a clean
+       hit is not. */
+    if(fromScanner&&handSpeakEnabled&&!altCard)handSpeakWalk(walk);
     return;
   }
 
@@ -8158,6 +8219,8 @@ function renderHandheld(raw,fromScanner){
       // v1.43: picking a walk off this list used to end on a dead screen — no
       // fix button, and BACK did nothing. It's now a sub-screen (BACK returns
       // to the list) and carries the correction options like any other result.
+      // v4.22: also had no tone at all — same gap as renderPickedWalk.
+      try{outcomeTone("exact",w);}catch(e){}
       box.style.justifyContent="center";
       box.innerHTML=`
         <div style="font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.12em;text-transform:uppercase">Walk</div>
@@ -8641,7 +8704,25 @@ function speakPrefs(){
 // A plain list, not a settings screen itself — each row just opens the
 // existing screen for that setting. Add a row here when a new setting is
 // added elsewhere, rather than growing this into its own settings surface. ----
+/* The GEAR'S opener — the only PIN'd way in (v4.26). Every other caller
+   (a Back button, a trail replay) goes straight to openOptionsMenu, so
+   stepping back into Options never asks again. */
+function openOptionsGated(){
+  try{handOptLockTick();}catch(e){}      // re-lock first if we're back at the scan
+  if(handOptUnlocked){try{openOptionsMenu();}catch(e){}return;}
+  try{if(typeof openHand==="function")openHand();}catch(e){}
+  requireHandPin({
+    subName:"optpin",
+    title:"PIN for settings",
+    note:"Stays unlocked until you're back on the scanning screen.",
+    force:true,
+    onOk:()=>{handOptUnlock();try{handBackToOptions();}catch(e){}},
+    onCancel:()=>{try{handCollapseToResult();}catch(e){}}
+  });
+}
 function openOptionsMenu(){
+  // v4.26: reopen, never stack — two sheets would take two Backs to clear.
+  try{var _prev=document.getElementById("wildOptSheet");if(_prev)_prev.remove();}catch(e){}
   /* v4.0: the Options sheet is now a STEP ON THE BROWSING TRAIL. Without this
      it left no mark, so backing out of Walks / Recent scans / Split postcodes
      found an empty trail and collapsed straight to the scan, skipping Options.
@@ -8689,7 +8770,7 @@ function openOptionsMenu(){
           handMgFrom="settings";    // so its Back returns to Settings, not the scan
           try{showHandManage();}catch(e){}
         },
-        onCancel:()=>{try{openOptionsMenu();}catch(e){}}
+        onCancel:()=>{try{handBackToOptions();}catch(e){}}
       });
     }},
     {e:"🚶",label:"Walks",sub:"Every walk, and the streets and buildings on it",go:goHand(()=>showHandWalksList())},
@@ -8765,6 +8846,7 @@ function openVoiceSheet(){
     +'<div id="'+id+'Val" style="width:38px;text-align:right;font-size:12px;color:var(--sub,#5f6368)">'+val.toFixed(2)+'</div></div>';
   const ov=document.createElement("div");
   ov.id="wildVoiceSheet";      // v1.91: dismissable by the version pill
+  try{ov.dataset.wildBackTo="options";}catch(e){}   // v4.26: BACK returns to Options
   ov.style.cssText="position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column";
   ov.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:16px 14px;border-bottom:1px solid #e8ebef;flex-shrink:0">'
       +'<button id="vcClose" type="button" style="border:none;background:#f1f3f4;border-radius:8px;padding:9px 13px;font-size:13px;font-weight:700;color:#202124;cursor:pointer">‹ Back</button>'
@@ -8781,7 +8863,10 @@ function openVoiceSheet(){
     +'</div>';
   document.body.appendChild(ov);
   const preview=()=>speakText("14 Westbourne Terrace");
-  ov.querySelector("#vcClose").onclick=()=>ov.remove();
+  /* v4.26: this closed to the SCANNING screen, not to Options — the one
+     settings screen that dropped you home. The mark below is what the
+     hardware BACK key reads, so both routes agree. */
+  ov.querySelector("#vcClose").onclick=()=>{ov.remove();try{handBackToOptions();}catch(e){}};
   ov.querySelector("#vcRefresh").onclick=()=>{
     // v1.89: on the PDA the list comes from the native text-to-speech engine
     // through the bridge and is cached, so Refresh has to drop that cache —
@@ -11641,8 +11726,16 @@ document.addEventListener("visibilitychange",()=>{
     g._wired=true;
     g.addEventListener("click",function(e){
       e.preventDefault();
-      try{if(typeof openOptionsMenu==="function")openOptionsMenu();}catch(err){}
+      // v4.26: the PIN door. Falls back to the plain menu only if the gated
+      // opener somehow isn't there, so the gear can never become a dead key.
+      try{
+        if(typeof openOptionsGated==="function"){openOptionsGated();return;}
+        if(typeof openOptionsMenu==="function")openOptionsMenu();
+      }catch(err){}
     });
+    // Re-lock whenever the settings tree is no longer on screen, whichever
+    // way it was left. Cheap: it returns immediately while locked.
+    try{setInterval(function(){try{handOptLockTick();}catch(e){}},1000);}catch(e){}
   })();
 
   /* ── BUILD STAMP + cache-buster ───────────────────────────────────────
@@ -11897,7 +11990,14 @@ document.addEventListener("visibilitychange",()=>{
       }
       if(ovs.length){
         var top=ovs[ovs.length-1];
+        var backTo="";
+        try{ backTo=(top.dataset&&top.dataset.wildBackTo)||""; }catch(e){}
         try{ top.remove(); }catch(e){}
+        // v4.26: a sheet that belongs UNDER Options reopens it, so the key
+        // does what the sheet's own Back button does.
+        if(backTo==="options"){
+          try{ if(typeof handBackToOptions==="function"){handBackToOptions();return true;} }catch(e){}
+        }
         return true;
       }
 
