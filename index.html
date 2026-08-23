@@ -499,7 +499,7 @@ body.addr-locked #rl .lockmsg{display:flex}
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
     <h1 style="flex:1;min-width:0;overflow:hidden;color:#fff;margin:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;font-weight:600"><span style="font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:16px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1>
-    <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;margin-right:44px;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button><button type="button" id="wildResetBtn" aria-label="Reset app if the scanner doesn't work" style="flex:0 0 auto;padding:5px 9px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:8px;letter-spacing:.02em;opacity:.92;font-weight:700">IF SCANNER</span><span id="wildResetL3" style="font-size:8px;letter-spacing:.02em;opacity:.92;font-weight:700">DOESN&#8217;T WORK</span></button>
+    <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;margin-right:44px;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button><button type="button" id="wildResetBtn" aria-label="Reset app if the scanner doesn't work — tap here to reset" style="flex:0 0 auto;padding:4px 8px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:7.5px;letter-spacing:.02em;opacity:.9;font-weight:700">IF SCANNER</span><span id="wildResetL3" style="font-size:7.5px;letter-spacing:.02em;opacity:.9;font-weight:700">DOESN&#8217;T WORK</span><span id="wildResetL4" style="font-size:7.5px;letter-spacing:.04em;opacity:1;font-weight:800;margin-top:1px">TAP HERE TO RESET</span></button>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
@@ -597,7 +597,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 143;
+const THIS_BUILD_NUM = 145;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -607,7 +607,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.28";
+const BUILD_NAME = "v4.30";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -6924,7 +6924,7 @@ function showHandPin(opts){
     const keys=[1,2,3,4,5,6,7,8,9].map(n=>'<button data-k="'+n+'" style="'+kb+'">'+n+'</button>').join("");
     box.innerHTML=`<div style="width:100%;max-width:320px;margin:0 auto;text-align:center;padding:8px 4px">
       <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">${escHtml(opts.title||"Enter PIN")}</div>
-      <div style="font-size:12px;color:var(--sub);margin-top:5px">${escHtml(opts.note||"")}</div>
+      ${opts.note?`<div style="font-size:12px;color:var(--sub);margin-top:5px">${escHtml(opts.note)}</div>`:""}
       <div style="margin:18px 0 2px">${dots}</div>
       <div style="font-size:12px;min-height:17px;font-weight:700;color:#e53935">${err||""}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px">
@@ -8714,7 +8714,6 @@ function openOptionsGated(){
   requireHandPin({
     subName:"optpin",
     title:"PIN for settings",
-    note:"Stays unlocked until you're back on the scanning screen.",
     force:true,
     onOk:()=>{handOptUnlock();try{handBackToOptions();}catch(e){}},
     onCancel:()=>{try{handCollapseToResult();}catch(e){}}
