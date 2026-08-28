@@ -500,7 +500,7 @@ body.addr-locked #rl .lockmsg{display:flex}
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
     <h1 style="flex:1;min-width:0;overflow:hidden;color:#fff;margin:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;font-weight:600"><span style="font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:16px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1>
-    <button type="button" id="wildResetBtn" aria-label="Reset app if the scanner doesn't work — tap here to reset" style="flex:0 0 auto;width:184px;max-width:54%;padding:4px 8px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:15px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:8.5px;letter-spacing:.02em;opacity:.9;font-weight:700">IF SCANNER DOESN&#8217;T WORK</span><span id="wildResetL3" style="font-size:9px;letter-spacing:.04em;opacity:1;font-weight:800;margin-top:1px">TAP HERE TO RESET</span></button>
+    <button type="button" id="wildResetBtn" aria-label="Reset app if the scanner stops working — tap here to reset" style="flex:0 0 auto;width:184px;max-width:54%;padding:4px 8px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:15px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:8.5px;letter-spacing:.02em;opacity:.9;font-weight:700">IF SCANNER STOPS WORKING</span><span id="wildResetL3" style="font-size:9px;letter-spacing:.04em;opacity:1;font-weight:800;margin-top:1px">TAP HERE TO RESET</span></button>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
@@ -598,7 +598,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 149;
+const THIS_BUILD_NUM = 150;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -608,7 +608,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.34";
+const BUILD_NAME = "v4.35";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
