@@ -513,7 +513,7 @@ body.addr-locked #rl .lockmsg{display:flex}
           <div style="font-size:12.5px">The scanner reads the <b>postcode</b> from the label and shows the walk. It's usually right, but <b>not 100% accurate</b> — a 2D barcode often carries the postcode with odd spacing or extra characters, sometimes the wrong postcode is printed, and one postcode can cover more than one walk. When a scan looks wrong, check the address and use <b>“Wrong walk?”</b> to set it right.</div>
         </div>
         <div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">
-          <button type="button" onclick="try{showHandTypeIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button>
+          <button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button><button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a street</button>
         </div>
       </div>
     </div>
@@ -598,7 +598,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 150;
+const THIS_BUILD_NUM = 151;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -608,7 +608,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.35";
+const BUILD_NAME = "v4.36";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3385,6 +3385,316 @@ function showHandTypeIn(keep){
   handTypeRefresh();
 }
 
+
+/* ── TYPE A STREET (v4.36) ────────────────────────────────────────────────
+   Ash: "on main screen it says type a postcode have another on to the right
+   saying type a street. have a page to search street addresses."
+   Drawn keypad, same reason as the postcode screen: an <input> summons
+   Android's keyboard, which takes the window focus, and the kiosk answers a
+   focus loss by pulling itself back — so the two fight. Letters find the
+   street; digits typed on the end are carried through as the house number,
+   so "EDGWARE 145" opens Edgware Road already narrowed to 145.
+   Everything below is derived from wild_data, so a corrected or added
+   address shows here as soon as it is saved (handDropDataIndexes clears the
+   cache). Tapping an address goes through renderHandheld exactly like the
+   postcode keypad does — silent, unlogged, and every result screen behaves
+   as it always does. */
+let handStreetBuf="";
+let handStAddrCache=null;
+
+// The bit of the address sitting in front of the street name — "1 372",
+// "Ralph Court", "Flat 3, Peninsula Apartments 4". Same reading as
+// walkStreetParts, so the two screens can never disagree about a row.
+function handStOwnPart(d,K){
+  const parts=String(d||"").split(",").map(x=>x.trim());
+  for(let i=0;i<parts.length;i++){if(parts[i].toUpperCase()===K)return i>0?parts[i-1]:"";}
+  for(let i=0;i<parts.length;i++){
+    const at=parts[i].toUpperCase().indexOf(K);
+    if(at>0)return parts[i].slice(0,at).trim().replace(/,$/,"");
+  }
+  return "";
+}
+function handStPcOf(d){
+  const m=String(d||"").match(/([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\s*$/i);
+  return m?m[1].toUpperCase().replace(/\s+/g," "):"";
+}
+// A house number ("372", "420a", "145-147") or a named building. A flat
+// number or letter in front of a name is folded away, so one block counts
+// once — the same fold handStreetSummary uses.
+function handStGroupOf(own){
+  const tk=String(own||"").split(/\s+/).filter(Boolean);
+  if(!tk.length)return {key:"?",label:"(no number)",num:null};
+  const last=tk[tk.length-1];
+  const rest=tk.slice(0,-1).join(" ").replace(/\b(flat|apartment|apt|unit|studio|room|no)\b\.?/ig,"").trim();
+  const rng=last.match(/^(\d+[a-z]?)\s*-\s*(\d+[a-z]?)$/i);
+  if(rng&&!/[a-z]{2}/i.test(rest))
+    return {key:"n:"+last.toUpperCase(),label:last,num:parseInt(rng[1],10)};
+  if(/^\d+[a-z]?$/i.test(last)&&!/[a-z]{2}/i.test(rest))
+    return {key:"n:"+last.toUpperCase(),label:last,num:parseInt(last,10)};
+  let base=String(own).replace(/^(flat|apartment|apt|unit|studio|room)\s+\S+\s+/i,"").replace(/^(\d+[a-z]?|[a-z])\s+/i,"");
+  if(!/[a-z]{3}/i.test(base))base=String(own);
+  return {key:"b:"+base.toUpperCase(),label:base,num:null};
+}
+// Every address on a street, grouped, numbers first in order then names A-Z.
+function handStAddrsFor(street){
+  const K=String(street||"").trim().toUpperCase();
+  if(!K)return [];
+  handStAddrCache=handStAddrCache||Object.create(null);
+  if(handStAddrCache[K])return handStAddrCache[K];
+  const groups=Object.create(null),order=[];
+  if(typeof allData!=="undefined"&&Array.isArray(allData)){
+    for(const e of allData){
+      if(String((e&&e.s)||"").trim().toUpperCase()!==K)continue;
+      const g=handStGroupOf(handStOwnPart(String((e&&e.d)||""),K));
+      let rec=groups[g.key];
+      if(!rec){rec=groups[g.key]={key:g.key,label:g.label,num:g.num,rows:[],walks:Object.create(null)};order.push(rec);}
+      const w=String((e&&e.r)||"").trim();
+      rec.rows.push({d:String((e&&e.d)||""),r:w,pc:handStPcOf(e&&e.d)});
+      if(w)rec.walks[w]=(rec.walks[w]||0)+1;
+    }
+  }
+  order.forEach(function(g){
+    g.rows.sort((a,b)=>a.d.localeCompare(b.d,undefined,{numeric:true}));
+    g.walkList=Object.keys(g.walks).sort((a,b)=>g.walks[b]-g.walks[a]||a.localeCompare(b));
+  });
+  order.sort(function(a,b){
+    if(a.num!==null&&b.num!==null)return a.num-b.num||String(a.label).localeCompare(String(b.label));
+    if(a.num!==null)return -1;
+    if(b.num!==null)return 1;
+    // Named blocks: the one with the most doors first — on Queensway that is
+    // Ralph Court, not whichever shop starts with an A.
+    return b.rows.length-a.rows.length||String(a.label).localeCompare(String(b.label));
+  });
+  handStAddrCache[K]=order;
+  return order;
+}
+function handStGroupMatches(g,filt){
+  if(!filt)return true;
+  const L=String(g.label).toUpperCase();
+  if(g.num!==null)return L.indexOf(filt)===0;
+  return L.split(/[^0-9A-Z]+/).some(t=>t&&t.indexOf(filt)===0);
+}
+// The round's streets, with the walks that deliver each one.
+function handStreetAll(){
+  const idx=streetWalkIndex(),out=[];
+  for(const k in idx){
+    const rec=idx[k];
+    const walks=Object.keys(rec.walks).map(w=>({walk:w,n:rec.walks[w]})).sort((a,b)=>b.n-a.n);
+    out.push({key:k,name:rec.name,n:walks.reduce((a,x)=>a+x.n,0),walks:walks});
+  }
+  return out.sort((a,b)=>a.name.localeCompare(b.name));
+}
+// Plain substring first — a clean spelling must never be beaten by a fuzzy
+// neighbour (v3.3). Only when that finds nothing do we forgive one typo.
+function handStreetHits(q){
+  const s=String(q||"").trim().toLowerCase();
+  const all=handStreetAll();
+  if(!s)return {list:[],loose:false};
+  let out=all.filter(t=>t.key.indexOf(s)>=0),loose=false;
+  if(!out.length){
+    const qs=s.split(/[^a-z0-9]+/).filter(Boolean);
+    if(qs.length){out=all.filter(t=>handFindLoose(t.name,qs));loose=out.length>0;}
+  }
+  const rank=t=>(t.key===s?0:(t.key.indexOf(s)===0?1:2));
+  return {list:out.sort((a,b)=>(rank(a)-rank(b))||a.name.localeCompare(b.name)),loose:loose};
+}
+// "EDGWARE 145" -> street "edgware", number "145".
+function handStreetParse(buf){
+  const t=String(buf||"").trim();
+  const m=t.match(/^(.*?)\s*(\d+[a-z]?)$/i);
+  if(m&&m[1].replace(/[^a-z]/ig,"").length>=2)return {q:m[1].trim(),num:m[2].toUpperCase()};
+  return {q:t,num:""};
+}
+function handStreetSet(v){
+  handStreetBuf=String(v||"").toUpperCase().replace(/[^A-Z0-9 ]/g,"").replace(/\s{2,}/g," ").slice(0,28);
+  handStreetRefresh();
+}
+function handStreetRefresh(){
+  const d=document.getElementById("handStDisp");
+  if(d){
+    d.textContent=handStreetBuf||"Street…";
+    d.style.color=handStreetBuf?"var(--txt)":"var(--sub)";
+  }
+  const hits=document.getElementById("handStHits");
+  if(!hits)return;
+  const p=handStreetParse(handStreetBuf);
+  if(p.q.replace(/[^A-Z0-9]/gi,"").length<2){
+    hits.innerHTML='<div style="font-size:12px;color:var(--sub);margin-top:9px;line-height:1.45">Type two or more letters of the street. Put the house number on the end &mdash; <b>EDGWARE 145</b> &mdash; and it opens there.</div>';
+    return;
+  }
+  const r=handStreetHits(p.q);
+  const shown=r.list.slice(0,12);
+  hits.innerHTML=shown.length?
+    (r.loose?'<div style="font-size:11.5px;color:var(--sub);margin-top:8px">No exact match for &ldquo;'+escHtml(p.q)+'&rdquo; — closest spellings:</div>':"")+
+    shown.map(st=>'<button type="button" class="handStHit" data-st="'+encodeURIComponent(st.name)+'" style="display:block;width:100%;text-align:left;padding:11px 12px;margin-top:7px;background:var(--sur);border:none;border-radius:11px;box-shadow:var(--shad);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'+
+      '<div style="font-size:15px;font-weight:800;color:var(--pri);word-break:break-word">'+escHtml(st.name)+'</div>'+
+      '<div style="font-size:11.5px;color:var(--sub);margin-top:3px">'+st.n+' address'+(st.n===1?"":"es")+'</div>'+
+      '<div style="margin-top:4px">'+st.walks.map(x=>'<span style="display:inline-block;padding:3px 8px;margin:3px 5px 0 0;background:#e8f0fe;border:1px solid #b7cdf5;border-radius:9px;font-size:11.5px;font-weight:800;color:var(--pri)">'+escHtml(x.walk)+' · '+x.n+'</span>').join("")+'</div>'+
+    '</button>').join("")+
+    (r.list.length>shown.length?'<div style="font-size:11px;color:var(--sub);margin-top:6px">…and '+(r.list.length-shown.length)+' more — keep typing.</div>':"")
+    :'<div style="font-size:12px;color:var(--sub);margin-top:9px">No street matches &ldquo;'+escHtml(p.q)+'&rdquo;.</div>';
+  hits.querySelectorAll(".handStHit").forEach(b=>{
+    b.onclick=function(){showHandStreetAddrs(decodeURIComponent(b.dataset.st),handStreetParse(handStreetBuf).num);};
+  });
+}
+function showHandStreetIn(keep){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{openHand();}catch(e){}
+  handNav("streetin",function(){showHandStreetIn(true);});
+  if(!keep)handStreetBuf="";
+  try{box.dataset.sub="streetin";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const rows=["1234567890","QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
+  const key="flex:1;min-width:0;padding:11px 0;border:1px solid var(--div);border-radius:9px;"+
+            "background:var(--sur);font-size:15px;font-weight:800;color:var(--txt);cursor:pointer;"+
+            "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
+  const pad=rows.map(r=>'<div style="display:flex;gap:5px;margin-top:5px">'+
+    r.split("").map(ch=>'<button type="button" class="handStKey" data-k="'+ch+'" style="'+key+'">'+ch+'</button>').join("")+
+    '</div>').join("");
+  const nStreets=handStreetAll().length;
+  box.innerHTML=`<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:10px 2px 4px">
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Type a street</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">${nStreets} streets in the round. Tap one to see its addresses and which walk each is on.</div>
+    <div id="handStDisp" style="margin-top:10px;padding:12px;border:2px solid var(--div);border-radius:12px;
+      font-size:19px;font-weight:800;letter-spacing:.04em;text-align:center;min-height:26px;color:var(--sub);word-break:break-word">Street…</div>
+    <div id="handStHits"></div>
+    ${pad}
+    <div style="display:flex;gap:5px;margin-top:5px">
+      <button type="button" id="handStSpace" style="${key};flex:2">space</button>
+      <button type="button" id="handStDel" style="${key};flex:1">⌫</button>
+      <button type="button" id="handStClr" style="${key};flex:1">clear</button>
+    </div>
+    <button type="button" id="handStBack" style="margin-top:10px;width:100%;padding:12px;background:transparent;
+      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+  </div>`;
+  box.querySelectorAll(".handStKey").forEach(b=>{
+    b.onclick=()=>handStreetSet(handStreetBuf+b.dataset.k);
+  });
+  const sp=document.getElementById("handStSpace");
+  if(sp)sp.onclick=()=>handStreetSet(handStreetBuf+" ");
+  const del=document.getElementById("handStDel");
+  if(del)del.onclick=()=>handStreetSet(handStreetBuf.slice(0,-1));
+  const clr=document.getElementById("handStClr");
+  if(clr)clr.onclick=()=>handStreetSet("");
+  const back=document.getElementById("handStBack");
+  if(back)back.onclick=()=>handGoIdle();
+  handStreetRefresh();
+}
+// A result opened from the street list: BACK returns to that list, with the
+// number filter still on it (v1.97's one-step __wildBackTo).
+function handStOpen(d,street,filt){
+  try{renderHandheld(String(d||""),false);}catch(e){}
+  try{window.__wildBackTo=function(){showHandStreetAddrs(street,filt);};}catch(e){}
+}
+function showHandStreetAddrs(street,num){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{openHand();}catch(e){}
+  const NAME=String(street||"").trim();
+  handNav("staddr:"+NAME.toUpperCase(),function(){showHandStreetAddrs(NAME,num);});
+  try{box.dataset.sub="staddr";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const filt=String(num||"").replace(/[^0-9A-Za-z]/g,"").toUpperCase();
+  const groups=handStAddrsFor(NAME);
+  const total=groups.reduce((a,g)=>a+g.rows.length,0);
+  const rec=streetWalkIndex()[NAME.toLowerCase()];
+  const walks=rec?Object.keys(rec.walks).map(w=>({walk:w,n:rec.walks[w]})).sort((a,b)=>b.n-a.n):[];
+  const match=groups.filter(g=>handStGroupMatches(g,filt));
+  // Numbered doors and named blocks are listed apart: on a street the length
+  // of Edgware Road the numbers alone run past any sane cap, and a block
+  // sorted in behind 700 of them could never be reached.
+  const nums=match.filter(g=>g.num!==null), names=match.filter(g=>g.num===null);
+  const shownN=nums.slice(0,60), shownB=names.slice(0,40);
+  const shown=shownN.concat(shownB);
+  const key="flex:1;min-width:0;padding:9px 0;border:1px solid var(--div);border-radius:9px;"+
+            "background:var(--sur);font-size:14px;font-weight:800;color:var(--txt);cursor:pointer;"+
+            "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
+  // Which walk has which part of the street, worked out from the addresses
+  // themselves (v3.5's handStreetSummary) — the answer he is usually after.
+  const walkRows=walks.map(function(x){
+    let sum="";
+    try{sum=handStreetSummary(x.walk,NAME);}catch(e){}
+    return '<div style="padding:9px 11px;margin-top:6px;background:var(--sur);border-radius:10px;box-shadow:var(--shad)">'+
+      '<div style="font-size:14px;font-weight:800;color:var(--pri)">'+escHtml(x.walk)+' · '+x.n+'</div>'+
+      (sum?'<div style="font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.4">'+escHtml(sum)+'</div>':"")+
+    '</div>';
+  }).join("");
+  const rowHtml=function(g,i){
+    const chips=(g.walkList||[]).map(w=>'<span style="display:inline-block;padding:3px 8px;margin:3px 5px 0 0;background:#e8f0fe;border:1px solid #b7cdf5;border-radius:9px;font-size:11.5px;font-weight:800;color:var(--pri)">'+escHtml(w)+'</span>').join("");
+    const pcs=[];
+    g.rows.forEach(function(r){if(r.pc&&pcs.indexOf(r.pc)<0&&pcs.length<3)pcs.push(r.pc);});
+    return '<div style="margin-top:7px">'+
+      '<button type="button" class="handStGrp" data-i="'+i+'" style="display:block;width:100%;text-align:left;padding:11px 12px;background:var(--sur);border:none;border-radius:11px;box-shadow:var(--shad);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'+
+        '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">'+
+          '<div class="handStLab" style="font-size:15px;font-weight:800;color:var(--txt);flex:1;min-width:0;word-break:break-word">'+escHtml(g.label)+'</div>'+
+          '<div style="font-size:11.5px;color:var(--sub);white-space:nowrap">'+(g.rows.length>1?g.rows.length+" ›":"›")+'</div>'+
+        '</div>'+
+        (pcs.length?'<div style="font-size:11.5px;color:var(--sub);margin-top:2px">'+escHtml(pcs.join(" · "))+'</div>':"")+
+        '<div>'+chips+'</div>'+
+      '</button>'+
+      '<div id="handStSub'+i+'" data-open="0"></div>'+
+    '</div>';
+  };
+  const head=function(t){return '<div style="font-size:12px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-top:14px">'+t+'</div>';};
+  const more=function(all,cut){return all>cut?'<div style="font-size:11.5px;color:var(--sub);margin-top:8px">…and '+(all-cut)+' more — type a number to narrow it down.</div>':"";};
+  const rowsHtml=
+    (shownN.length?head("Numbers")+shownN.map((g,i)=>rowHtml(g,i)).join("")+more(nums.length,shownN.length):"")+
+    (shownB.length?head("Buildings &amp; businesses")+shownB.map((g,i)=>rowHtml(g,i+shownN.length)).join("")+more(names.length,shownB.length):"");
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    ${handTopBar(NAME)}
+    <div style="font-size:12px;color:var(--sub);margin-top:4px">${total} address${total===1?"":"es"} · ${walks.length} walk${walks.length===1?"":"s"}</div>
+    ${walkRows}
+    <div style="font-size:12px;font-weight:800;color:var(--txt);margin-top:14px">House number</div>
+    <div id="handStNum" style="margin-top:6px;padding:9px;border:2px solid var(--div);border-radius:11px;text-align:center;
+      font-size:17px;font-weight:800;letter-spacing:.05em;color:${filt?"var(--txt)":"var(--sub)"}">${filt?escHtml(filt):"all"}</div>
+    <div style="display:flex;gap:5px;margin-top:5px">${"1234567890".split("").map(c=>'<button type="button" class="handStN" data-k="'+c+'" style="'+key+'">'+c+'</button>').join("")}</div>
+    <div style="display:flex;gap:5px;margin-top:5px">
+      <button type="button" id="handStNDel" style="${key};flex:1">⌫</button>
+      <button type="button" id="handStNAll" style="${key};flex:1">show all</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--sub);margin-top:12px">${filt?("Showing "+match.length+" of "+groups.length+" — starting with "+escHtml(filt)):(groups.length+" entries")}</div>
+    ${rowsHtml||'<div style="font-size:13px;color:var(--sub);margin-top:10px">Nothing on this street starts with '+escHtml(filt)+'.</div>'}
+    <button type="button" id="handStABack" style="margin-top:16px;width:100%;padding:12px;background:transparent;
+      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to street search</button>
+  </div>`;
+  // Tapping a number keeps you on the same street; it is the filter, not a
+  // new screen, so the trail is unchanged (handNav truncates on the same key).
+  box.querySelectorAll(".handStN").forEach(b=>{
+    b.onclick=function(){showHandStreetAddrs(NAME,filt+b.dataset.k);};
+  });
+  const nd=document.getElementById("handStNDel");
+  if(nd)nd.onclick=function(){showHandStreetAddrs(NAME,filt.slice(0,-1));};
+  const na=document.getElementById("handStNAll");
+  if(na)na.onclick=function(){showHandStreetAddrs(NAME,"");};
+  // One address in the group opens straight away; several expand in place,
+  // built on demand so a 685-flat estate isn't rendered until it is asked for.
+  box.querySelectorAll(".handStGrp").forEach(b=>{
+    b.onclick=function(){
+      const i=parseInt(b.dataset.i,10), g=shown[i];
+      if(!g)return;
+      if(g.rows.length===1){handStOpen(g.rows[0].d,NAME,filt);return;}
+      const holder=document.getElementById("handStSub"+i);
+      if(!holder)return;
+      if(holder.dataset.open==="1"){holder.innerHTML="";holder.dataset.open="0";return;}
+      holder.dataset.open="1";
+      holder.innerHTML=g.rows.map((r,ri)=>'<button type="button" class="handStAddr" data-r="'+ri+'" style="display:block;width:100%;text-align:left;padding:9px 12px;margin-top:4px;background:var(--bg);border:1px solid var(--div);border-radius:9px;font-size:12.5px;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'+
+        '<div style="word-break:break-word">'+escHtml(r.d)+'</div>'+
+        (r.r?'<div style="font-size:11px;font-weight:800;color:var(--pri);margin-top:2px">'+escHtml(r.r)+'</div>':"")+
+      '</button>').join("");
+      holder.querySelectorAll(".handStAddr").forEach(a=>{
+        a.onclick=function(ev){
+          try{ev.stopPropagation();}catch(e){}
+          const r=g.rows[parseInt(a.dataset.r,10)];
+          if(r)handStOpen(r.d,NAME,filt);
+        };
+      });
+    };
+  });
+  const bk=document.getElementById("handStABack");
+  if(bk)bk.onclick=function(){showHandStreetIn(true);};
+}
+
 /* ── SOUND SCREEN (v1.65) ─────────────────────────────────────────────── */
 function showHandSound(){
   const box=document.getElementById("handResult");
@@ -3443,8 +3753,12 @@ function showHandSound(){
    repeated in six spots, so anything added to it went missing on whichever
    route back wasn't updated. */
 function handIdleActionsHtml(){
+  var b="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);"+
+        "font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;"+
+        "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
   return '<div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">'+
-    '<button type="button" onclick="try{showHandTypeIn()}catch(e){}" style="'+"+HAND_IDLE_BTN+"+'">⌨ Type a postcode</button>'+
+    '<button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="'+b+'">⌨ Type a postcode</button>'+
+    '<button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="'+b+'">⌨ Type a street</button>'+
     '</div>';
 }
 /* v1.99: the REAL idle screen — the "Scan a barcode" panel with the
@@ -5964,6 +6278,7 @@ function handDropDataIndexes(){
   try{handSplitCache=null;}catch(e){}      // v2.9: the split-postcode audit is derived from the data too
   try{handFindIdx=null;}catch(e){}         // v3.3: the walks-search list is derived from the data too
   try{handStPartsCache=null;}catch(e){}    // v3.5: so is the per-street breakdown
+  try{handStAddrCache=null;}catch(e){}     // v4.36: and the street address list
   try{handWalkNameSet=null;}catch(e){}     // v4.20: the walk-name set is derived from the data too
   try{knownPostcodeSet._cache=null;knownPostcodeSet._for=null;}catch(e){}
   try{tokenStreetCount=null;}catch(e){}
