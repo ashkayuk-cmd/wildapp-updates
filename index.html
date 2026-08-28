@@ -495,11 +495,12 @@ body.addr-locked #rl .lockmsg{display:flex}
 <!-- HANDHELD PANEL — no camera; results driven by the Bluetooth/USB handheld scanner -->
 <div id="handPanel">
   <div class="qrbar">
+    <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button>
     <!-- v3.7: the title is the website version now. "Handheld Scanner" and its
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
     <h1 style="flex:1;min-width:0;overflow:hidden;color:#fff;margin:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;font-weight:600"><span style="font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:16px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1>
-    <button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;margin-right:44px;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button><button type="button" id="wildResetBtn" aria-label="Reset app if the scanner doesn't work — tap here to reset" style="flex:0 0 auto;padding:4px 8px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:11px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:7.5px;letter-spacing:.02em;opacity:.9;font-weight:700">IF SCANNER</span><span id="wildResetL3" style="font-size:7.5px;letter-spacing:.02em;opacity:.9;font-weight:700">DOESN&#8217;T WORK</span><span id="wildResetL4" style="font-size:7.5px;letter-spacing:.04em;opacity:1;font-weight:800;margin-top:1px">TAP HERE TO RESET</span></button>
+    <button type="button" id="wildResetBtn" aria-label="Reset app if the scanner doesn't work — tap here to reset" style="flex:0 0 auto;width:184px;max-width:54%;padding:4px 8px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:15px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:8.5px;letter-spacing:.02em;opacity:.9;font-weight:700">IF SCANNER DOESN&#8217;T WORK</span><span id="wildResetL3" style="font-size:9px;letter-spacing:.04em;opacity:1;font-weight:800;margin-top:1px">TAP HERE TO RESET</span></button>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
@@ -597,7 +598,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 145;
+const THIS_BUILD_NUM = 149;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -607,7 +608,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.30";
+const BUILD_NAME = "v4.34";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -8753,6 +8754,16 @@ function openOptionsMenu(){
   const MENU=[
     {e:"ℹ️",label:"App version",sub:"Which build is running, and updates",go:goHand(()=>openAppVersion())},
     {e:"🕒",label:"Recent scans",sub:"The last 40 scans, and what each one gave",go:goHand(()=>showHandRecent())},
+    {e:"🔌",label:"Restart scanner",sub:"If the trigger lights nothing. Takes about a second",go:()=>{
+      ov.remove();
+      try{if(typeof openHand==="function")openHand();}catch(e){}
+      // Falls back to the full app restart only if the bridge isn't there.
+      try{
+        if(window.wildScanner&&window.wildScanner.fix()){window.wildScanner.hud("↻ Scanner restarted");return;}
+        if(window.WildReset&&WildReset.hard){WildReset.hard();return;}
+        location.reload();
+      }catch(e){}
+    }},
     {e:"🔀",label:"Shared streets",sub:"Streets split between two or more walks",go:goHand(()=>showHandShared())},
     {e:"🔊",label:"Sound",sub:"How loud the scan beeps are",go:goHand(()=>showHandSound())},
     {e:"⚠️",label:"Split postcodes",sub:"Postcodes that go to more than one walk",go:goHand(()=>showHandSplits())},
@@ -11687,6 +11698,101 @@ document.addEventListener("visibilitychange",()=>{
   afterRender();
   window.addEventListener("resize",fitWalk);
 
+
+  /* ── SCANNER RECOVERY (v4.34) ──────────────────────────────────────────
+     The scan engine can lose its armed read and go dead — you pull the
+     trigger, no aimer light, nothing happens, and only restarting the whole
+     app brings it back.  The APK's bridge has had a scanner-ONLY restart on
+     it all along (WildReset.scanner -> ZebraScanner.restart, or a full
+     re-create if the scanner object is gone) and nothing in here ever called
+     it.  It re-acquires the scanner in about a second WITHOUT reloading the
+     app, so the screen, the result and the history all survive.
+
+     What this CANNOT do is ask whether a read is actually armed — only
+     native EMDK can see that, so it can't be silently automatic the way a
+     native watchdog would be.  It covers the two moments that matter
+     instead: a tap (the RESET box, or Options → Restart scanner), and the
+     app coming back after the device has been asleep, which is when the
+     arming is most often lost — the screen going off pauses and re-enables
+     the scanner, and that is one of the places it wedges. */
+  window.wildScanner=(function(){
+    var LAST_SCAN=0, LAST_FIX=0, BUSY=false;
+    var QUIET_MS=300000;   // only auto-fix when nothing has scanned for 5 min
+    var COOL_MS=120000;    // and never more than once every 2 min
+    function have(){try{return !!(window.WildReset&&WildReset.scanner);}catch(e){return false;}}
+    function seen(){LAST_SCAN=Date.now();}
+    function fix(){
+      if(!have())return false;
+      /* A restart already in flight is the SAME answer as starting one — say
+         yes.  Returning false here would have sent a tap landing inside the
+         2.5 s window (or just after an automatic fix on wake) all the way to a
+         full app restart, which is the one thing this is meant to avoid. */
+      if(BUSY)return true;
+      BUSY=true;LAST_FIX=Date.now();
+      try{WildReset.scanner();}catch(e){BUSY=false;return false;}
+      setTimeout(function(){BUSY=false;},2500);
+      return true;
+    }
+    function maybe(){
+      var now=Date.now();
+      if(now-LAST_FIX<COOL_MS)return false;               // just did one
+      if(LAST_SCAN&&now-LAST_SCAN<QUIET_MS)return false;   // it is plainly alive
+      return fix();
+    }
+    /* Same shape as the volume HUD: a centred pill that fades by itself.
+       Only the DELIBERATE restarts show it — the automatic one stays silent,
+       or waking the device would flash a message at him every time. */
+    function hud(msg){
+      try{
+        var el=document.getElementById("wildScanHud");
+        if(!el){
+          el=document.createElement("div");
+          el.id="wildScanHud";
+          el.style.cssText="position:fixed;left:50%;top:26%;transform:translate(-50%,-50%);"+
+            "z-index:2147483646;background:rgba(20,22,25,.92);color:#fff;border-radius:14px;"+
+            "padding:14px 18px;min-width:190px;text-align:center;font-weight:800;font-size:14px;"+
+            "letter-spacing:.02em;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.45);"+
+            "transition:opacity .18s";
+          document.body.appendChild(el);
+        }
+        el.textContent=msg;
+        el.style.opacity="1";
+        clearTimeout(window.__wildScanHudT);
+        window.__wildScanHudT=setTimeout(function(){try{el.style.opacity="0";}catch(e){}},1600);
+      }catch(e){}
+    }
+    /* The wrapper never calls WebView.onPause(), so visibilitychange may never
+       fire in here.  A timer that should have ticked and didn't is the
+       reliable sign the device was asleep. */
+    var tick=Date.now();
+    try{setInterval(function(){
+      var now=Date.now();
+      if(now-tick>20000){try{maybe();}catch(e){}}
+      tick=now;
+    },5000);}catch(e){}
+    try{document.addEventListener("visibilitychange",function(){
+      if(!document.hidden){try{maybe();}catch(e){}}
+    });}catch(e){}
+    try{window.addEventListener("pageshow",function(){try{maybe();}catch(e){}});}catch(e){}
+    return {fix:fix,seen:seen,have:have,maybe:maybe,hud:hud,
+            quiet:function(){return LAST_SCAN?Date.now()-LAST_SCAN:-1;}};
+  })();
+
+  /* Any scan that came from the trigger proves the scanner is alive, so it
+     both suppresses the automatic fix and restarts the quiet clock.  The
+     native side calls window.renderHandheld by name, so wrapping the window
+     property catches the real scan path and nothing else. */
+  (function(){
+    if(typeof window.renderHandheld!=="function")return;
+    var orig=window.renderHandheld;
+    if(orig._scanNoted)return;
+    window.renderHandheld=function(raw,fromScanner){
+      if(fromScanner){try{window.wildScanner.seen();}catch(e){}}
+      return orig.apply(this,arguments);
+    };
+    window.renderHandheld._scanNoted=true;
+  })();
+
   /* ── RESET button — baked into the top bar (v1.83) ─────────────────────
      Used to be created here and floated position:fixed over the title bar
      (needing a measured padding-reserve hack so it didn't cover anything).
@@ -11696,21 +11802,52 @@ document.addEventListener("visibilitychange",()=>{
     var btn=document.getElementById("wildResetBtn");
     if(!btn||btn._wired)return;
     btn._wired=true;
-    var busy=false;
-    function labelLine(){return document.getElementById("wildResetL1")||btn;}
-    function flash(txt){var el=labelLine();var o=el.textContent;el.textContent=txt;setTimeout(function(){el.textContent=o;},1100);}
-    // Any tap = full app restart. On this device only a full process restart
-    // clears a stuck scan engine, so RESET always does the hard restart.
+    var busy=false, armed=0, revert=null, lastTap=0;
+    var L1=document.getElementById("wildResetL1"),
+        L2=document.getElementById("wildResetL2"),
+        L3=document.getElementById("wildResetL3");
+    var T1=L1?L1.innerHTML:"", T2=L2?L2.innerHTML:"", T3=L3?L3.innerHTML:"";
+    function put(a,b,c){if(L1)L1.textContent=a;if(L2)L2.textContent=b;if(L3)L3.textContent=c;}
+    function normal(){
+      armed=0;
+      try{clearTimeout(revert);}catch(e){}
+      if(L1)L1.innerHTML=T1; if(L2)L2.innerHTML=T2; if(L3)L3.innerHTML=T3;
+      btn.style.background="#c62828";
+    }
+    function arm(){
+      armed=Date.now();
+      btn.style.background="#8e1f1f";
+      put("\u21bb SCANNER RESET","STILL NOT WORKING?","TAP AGAIN TO RESET APP");
+      try{clearTimeout(revert);}catch(e){}
+      revert=setTimeout(normal,20000);
+    }
+    // The old behaviour, still one tap away: a full process restart. On this
+    // device that is the only thing that clears a truly stuck scan engine.
     function fullRestart(){
-      if(busy)return;busy=true;flash("⟳ …");
+      if(busy)return;busy=true;
+      try{clearTimeout(revert);}catch(e){}
+      put("\u21bb \u2026","","");
       try{
         if(window.WildReset&&WildReset.hard){WildReset.hard();}
         else{location.reload();}
       }catch(e){try{location.reload();}catch(_){}}
       setTimeout(function(){busy=false;},2000);
     }
-    btn.addEventListener("click",function(e){e.preventDefault();fullRestart();});
-    btn.addEventListener("touchend",function(e){e.preventDefault();fullRestart();});
+    /* First tap restarts just the SCANNER — about a second, and the screen,
+       the result and the history all survive. If that didn't do it, a second
+       tap inside 20 s does the full app restart exactly as before. With no
+       bridge to talk to (a browser, or an APK without it) the first tap goes
+       straight to the full restart, so the button can never become a dead key. */
+    function tap(){
+      var now=Date.now();
+      if(now-lastTap<500)return;     // touchend + click both fire
+      lastTap=now;
+      if(busy)return;
+      if(armed||!(window.wildScanner&&window.wildScanner.have())){fullRestart();return;}
+      if(window.wildScanner.fix()){arm();}else{fullRestart();}
+    }
+    btn.addEventListener("click",function(e){e.preventDefault();tap();});
+    btn.addEventListener("touchend",function(e){e.preventDefault();tap();});
   })();
 
   /* ── ⚙️ SETTINGS button — moved to the TOP RIGHT (v3.1) ────────────────
