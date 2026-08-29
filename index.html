@@ -24,7 +24,7 @@
     var html="<span style=\"float:right;padding:2px 10px;border:1px solid #f88;"+
       "border-radius:6px\" onclick=\"var p=this.parentNode;p.parentNode.removeChild(p)\">"+
       "close &#10005;</span>";
-    html+="<b>Wild App could not start properly</b><br>";
+    html+="<b>Royal Snail could not start properly</b><br>";
     html+="WebView engine: "+(v?("Chrome "+v):"unknown")+"<br>";
     if(v&&v<80){
       html+="<b>This engine is too old — the app needs Chrome 80 or newer."+
@@ -49,7 +49,7 @@
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Wild App</title>
+<title>Royal Snail</title>
 <script>
 /* ── Offline-first library loader ──
    Every external library now loads: 1) from a ./libs/ folder sitting next to
@@ -367,10 +367,10 @@ body.addr-locked #rl .lockmsg{display:flex}
 </head>
 <body>
 <div id="app">
-<div id="loader"><div class="licon">📦</div><div class="ltxt">Wild App</div><div class="lbar"><div class="lfill"></div></div></div>
+<div id="loader"><img class="licon" id="bootLogo" src="data:image/jpeg;base64,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rXeqGrt/B7YoaylqKWXzlWu2J4nRuwWRb8EA4VUV5+fYO5ToiCxxHSd/cUREUFbRERETmWd5/vA/xe597k8SwUWQbKLmNd5wus7z/eO2Ln3uTxJ5/vHbFz73J4lgomsVHYx9ELO8/wB47Yufe5PEnn+8dsXPvcniWCiaxTYx9ELO8/3jti597k8Sef7x2xc+9yeJYKJrFNjH0Qtl8CF3uVXwhU0NTca2eI005LJah72kgDG4lek8LzDwEfnIpf4Wf7AvTy61Efy+1eZfbBobXAAfxHeUwmERXF8omEwiIiYTCIiLybr693WHXF/iiulwjjZXytaxlVI0NG1zAA7goHz/AHjti597k8SkeEL5e6i9YTfeUAuA9x1ivb6OJnJ4/JHmjuWd5/vHbFz73J4k8/3jti597k8SwUUNYqzsY+iFnef7x2xc+9yeJPP947Yufe5PEsFE1imxj6IWd5/vHbFz73J4k8/3jti597k8SwUTWKbGPohd9VcKyu2fK6ypqdn4vHTOfs/RtE4XQiIpgACwRERYWURERERERERERERERERERFI6e1FctLXVl0tUscVUxjow58YeMO59xVt93TXfaNH3NioKKbZHNFmlVJ6CmndrzRhx4gFX73dNd9o0fc2J7umu+0aPubFQUUttJ0j7Vp+56H0LfdHgr97umu+0aPubE93TXfaNH3NioKJtpOkfan3PQ+hb7o8Ffvd0132jR9zYvnu6a77Ro+5sVCRNtJ0j7U+56H0LfdHgsi5XCpu9xqrjWPa+pqpXTSua3ZBcec46Fjoi1roNaGgAZBERFhZREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREX/9k=" alt="Royal Snail" style="width:200px;max-width:70%;height:auto;display:block;border-radius:10px"><div class="ltxt">Royal Snail</div><div class="lbar"><div class="lfill"></div></div></div>
 <div id="lock">
   <div class="licon">🔒</div>
-  <div class="ltxt">Wild App</div>
+  <div class="ltxt">Royal Snail</div>
   <div class="lsub">Enter password to unlock the address database.</div>
   <input id="lpw" class="lin" type="password" placeholder="Password" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text">
   <div id="lerr" class="lerr"></div>
@@ -384,7 +384,7 @@ body.addr-locked #rl .lockmsg{display:flex}
   <div class="scanframe"></div>
   <div class="scanbar"><div class="msg" id="lockScanMsg">Point at a QR or barcode</div><button id="lockScanCancel">Cancel</button></div>
 </div>
-<div class="abar"><button class="ibt">☰</button><h1>Wild App</h1><span class="badge">v2.5</span></div>
+<div class="abar"><button class="ibt">☰</button><h1>Royal Snail</h1><span class="badge">v2.5</span></div>
 <div class="tabs" style="display:none">
   <button class="tab active" data-tab="search"><span class="ti">🔍</span>Search</button>
   <button class="tab" data-tab="routes"><span class="ti">🗺️</span>Walks</button>
@@ -509,7 +509,7 @@ body.addr-locked #rl .lockmsg{display:flex}
     <div id="handResult" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px">
       <div id="handEmpty" style="color:var(--sub)">
         <div style="max-width:340px;margin:0 auto;text-align:center;line-height:1.55">
-          <svg viewBox="0 0 16 16" width="76" height="76" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" focusable="false" style="display:block;margin:0 auto 10px"><rect width="16" height="16" fill="#fff"/><path d="M0 0h1v1h-1zM2 0h1v1h-1zM4 0h1v1h-1zM6 0h1v1h-1zM8 0h1v1h-1zM10 0h1v1h-1zM12 0h1v1h-1zM14 0h1v1h-1zM0 1h4v1h-4zM6 1h1v1h-1zM11 1h5v1h-5zM0 2h2v1h-2zM4 2h1v1h-1zM6 2h1v1h-1zM9 2h2v1h-2zM13 2h1v1h-1zM0 3h1v1h-1zM3 3h1v1h-1zM6 3h2v1h-2zM13 3h1v1h-1zM15 3h1v1h-1zM0 4h1v1h-1zM3 4h1v1h-1zM5 4h1v1h-1zM8 4h1v1h-1zM10 4h1v1h-1zM12 4h3v1h-3zM0 5h1v1h-1zM2 5h1v1h-1zM4 5h2v1h-2zM8 5h2v1h-2zM11 5h5v1h-5zM0 6h2v1h-2zM3 6h1v1h-1zM8 6h3v1h-3zM13 6h1v1h-1zM0 7h1v1h-1zM4 7h1v1h-1zM7 7h1v1h-1zM10 7h6v1h-6zM0 8h3v1h-3zM4 8h1v1h-1zM7 8h1v1h-1zM9 8h1v1h-1zM13 8h2v1h-2zM0 9h1v1h-1zM2 9h1v1h-1zM5 9h1v1h-1zM8 9h1v1h-1zM11 9h2v1h-2zM15 9h1v1h-1zM0 10h1v1h-1zM2 10h1v1h-1zM4 10h2v1h-2zM7 10h5v1h-5zM13 10h2v1h-2zM0 11h1v1h-1zM3 11h3v1h-3zM8 11h2v1h-2zM13 11h3v1h-3zM0 12h3v1h-3zM4 12h4v1h-4zM13 12h1v1h-1zM0 13h4v1h-4zM5 13h3v1h-3zM10 13h4v1h-4zM15 13h1v1h-1zM0 14h2v1h-2zM3 14h1v1h-1zM5 14h2v1h-2zM8 14h2v1h-2zM11 14h1v1h-1zM14 14h1v1h-1zM0 15h16v1h-16z" fill="#111"/></svg><div style="font-size:15px;font-weight:800;color:var(--txt);margin-bottom:8px">Scan a QR to show the walk</div></div>
+          <svg viewBox="0 0 16 16" width="76" height="76" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" focusable="false" style="display:block;margin:0 auto 10px"><rect width="16" height="16" fill="#fff"/><path d="M0 0h1v1h-1zM2 0h1v1h-1zM4 0h1v1h-1zM6 0h1v1h-1zM8 0h1v1h-1zM10 0h1v1h-1zM12 0h1v1h-1zM14 0h1v1h-1zM0 1h4v1h-4zM6 1h1v1h-1zM11 1h5v1h-5zM0 2h2v1h-2zM4 2h1v1h-1zM6 2h1v1h-1zM9 2h2v1h-2zM13 2h1v1h-1zM0 3h1v1h-1zM3 3h1v1h-1zM6 3h2v1h-2zM13 3h1v1h-1zM15 3h1v1h-1zM0 4h1v1h-1zM3 4h1v1h-1zM5 4h1v1h-1zM8 4h1v1h-1zM10 4h1v1h-1zM12 4h3v1h-3zM0 5h1v1h-1zM2 5h1v1h-1zM4 5h2v1h-2zM8 5h2v1h-2zM11 5h5v1h-5zM0 6h2v1h-2zM3 6h1v1h-1zM8 6h3v1h-3zM13 6h1v1h-1zM0 7h1v1h-1zM4 7h1v1h-1zM7 7h1v1h-1zM10 7h6v1h-6zM0 8h3v1h-3zM4 8h1v1h-1zM7 8h1v1h-1zM9 8h1v1h-1zM13 8h2v1h-2zM0 9h1v1h-1zM2 9h1v1h-1zM5 9h1v1h-1zM8 9h1v1h-1zM11 9h2v1h-2zM15 9h1v1h-1zM0 10h1v1h-1zM2 10h1v1h-1zM4 10h2v1h-2zM7 10h5v1h-5zM13 10h2v1h-2zM0 11h1v1h-1zM3 11h3v1h-3zM8 11h2v1h-2zM13 11h3v1h-3zM0 12h3v1h-3zM4 12h4v1h-4zM13 12h1v1h-1zM0 13h4v1h-4zM5 13h3v1h-3zM10 13h4v1h-4zM15 13h1v1h-1zM0 14h2v1h-2zM3 14h1v1h-1zM5 14h2v1h-2zM8 14h2v1h-2zM11 14h1v1h-1zM14 14h1v1h-1zM0 15h16v1h-16z" fill="#111"/></svg><div style="font-size:15px;font-weight:800;color:var(--txt);margin-bottom:8px">Scan a QR code to show walk</div></div>
         <div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px">
           <button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="padding:14px 18px;border:1px solid #1558B0;border-radius:12px;background:#1A73E8;font-size:15.5px;font-weight:800;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button><button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="padding:14px 18px;border:1px solid #1558B0;border-radius:12px;background:#1A73E8;font-size:15.5px;font-weight:800;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a Street or Building name</button>
         
@@ -598,7 +598,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 159;
+const THIS_BUILD_NUM = 161;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -608,7 +608,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.44";
+const BUILD_NAME = "v4.46";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -7199,7 +7199,7 @@ function showHandUnresolved(){
       </div>
       <div style="margin-top:4px;font-size:10.5px;color:var(--sub);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all">${escHtml(e.raw||"")}</div>
     </button>`).join("");
-  const txt=h.length?("Wild App — scans that didn't resolve ("+h.length+")\n"+
+  const txt=h.length?("Royal Snail — scans that didn't resolve ("+h.length+")\n"+
     h.map(e=>fmtWhen(e.t||0)+"  |  "+String(e.res||"")+"  |  "+String(e.raw||"")).join("\n")):"";
   box.innerHTML=`<div style="width:100%;text-align:left">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Didn't resolve</div>
@@ -7350,7 +7350,7 @@ function overridesAsText(){
   const addedBlock=added.length?"\n\nAddresses I added ("+added.length+")\n"+
     "address  |  walk\n----------------------------------------------------------------\n"+
     added.slice().reverse().map(u=>u.d+"  |  "+(u.r||"")).join("\n"):"";
-  if(!keys.length)return added.length?("Wild App — my corrections\n\nNo walk corrections saved."+addedBlock):"No corrections saved.";
+  if(!keys.length)return added.length?("Royal Snail — my corrections\n\nNo walk corrections saved."+addedBlock):"No corrections saved.";
   const lines=keys.sort((a,b)=>(m[b].when||0)-(m[a].when||0)).map(k=>{
     const r=m[k];
     const pcFmt=r.pc&&r.pc.length>3?r.pc.slice(0,-3)+" "+r.pc.slice(-3):(r.pc||"");
@@ -7361,7 +7361,7 @@ function overridesAsText(){
   });
   const d=new Date();
   const stamp=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-  return "Wild App — my walk corrections ("+keys.length+") — "+stamp+"\n"+
+  return "Royal Snail — my walk corrections ("+keys.length+") — "+stamp+"\n"+
          "postcode  |  flat/number  |  correct walk  |  applies to  |  address\n"+
          "----------------------------------------------------------------\n"+
          lines.join("\n")+addedBlock;
