@@ -518,7 +518,7 @@ body.addr-locked #rl .lockmsg{display:flex}
       </div>
     </div>
   </div>
-<div id="wildSiteBottom" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:7px;padding:7px 10px;min-height:34px"><h1 id="wildSiteTitle" style="margin:0;min-width:0;overflow:hidden;display:flex;align-items:baseline;justify-content:center;gap:7px;color:var(--sub);font-weight:600;cursor:pointer"><span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:13.5px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1></div>
+<div id="wildSiteBottom" style="flex:0 0 auto;display:none;align-items:center;justify-content:center;gap:7px;padding:7px 10px;min-height:34px"><h1 id="wildSiteTitle" style="margin:0;min-width:0;overflow:hidden;display:flex;align-items:baseline;justify-content:center;gap:7px;color:var(--sub);font-weight:600;cursor:pointer"><span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:13.5px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1></div>
 </div>
 
 </div>
@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 166;
+const THIS_BUILD_NUM = 167;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.51";
+const BUILD_NAME = "v4.52";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -12294,17 +12294,35 @@ document.addEventListener("visibilitychange",()=>{
     h.style.cssText="font-size:11px;color:var(--sub);opacity:.7;letter-spacing:.02em;margin-top:2px";
     if(el.parentNode)el.parentNode.insertBefore(h,el.nextSibling);
   }
+  /* v4.52: the website-version bar belongs to the MAIN screen only.
+     It lives outside #handBody so it survived every render, which meant it sat
+     under scan results and every sub-screen too. "Main screen" = the idle
+     template is on show AND no sub-screen has claimed #handResult. */
+  function siteBarVis(){
+    try{
+      var bar=document.getElementById("wildSiteBottom");
+      if(!bar)return;
+      var box=document.getElementById("handResult");
+      var idle=!!(box
+        && !box.dataset.sub
+        && box.querySelector("#handEmpty"));
+      bar.style.display=idle?"flex":"none";
+    }catch(e){}
+  }
+  window.__wildSiteBarVis=siteBarVis;
+
   function afterRender(){
     fitWalk();
     try{if(typeof wireHandWalkTap==="function")wireHandWalkTap();}catch(e){}
     try{walkHint();}catch(e){}
     try{if(typeof todayWalkBanner==="function")todayWalkBanner();}catch(e){}
     try{if(typeof myWalkBar==="function")myWalkBar();}catch(e){}
+    siteBarVis();
   }
   var hb=document.getElementById("handBody");
   if(hb&&window.MutationObserver){
     new MutationObserver(function(){afterRender();})
-      .observe(hb,{childList:true,subtree:true});
+      .observe(hb,{childList:true,subtree:true,attributes:true,attributeFilter:["data-sub"]});
   }
   afterRender();
   window.addEventListener("resize",fitWalk);

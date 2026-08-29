@@ -1,73 +1,58 @@
-# Wild App — v4.51 (content build 166)
+# Wild App — v4.52 (content build 167)
 
 **Upload `index.html` to the repo. No APK, no install.**
 
-All three PDAs pick it up on their next check. Upload as exactly `index.html`
-(not `index (1).html`) and press the green **Commit changes** button.
-
-The change won't show on the *first* check after publishing — the old code runs
+Upload as exactly `index.html` and press the green **Commit changes** button.
+The change won't show on the first check after publishing — the old code runs
 that check. Check again.
 
 ---
 
 ## What changed
 
-### 1. New wording on the scanning screen
+The website-version bar at the bottom now shows **only on the main scanning
+screen**. It disappears as soon as anything else is on screen — a scan result,
+type a postcode, type a street, walks, recent scans, corrections, any sub-screen
+— and comes back when you return to the main screen.
 
-Now three short paragraphs:
+### Why it was on every page
 
-> The PDA reads the **postcode** from the QR code and shows the walk. It is
-> usually correct, but **not 100% accurate**.
->
-> A QR code often contains the postcode with unusual spacing or extra
-> characters. Sometimes the wrong postcode is printed, and one postcode can
-> cover more than one walk.
->
-> Some labels also have a **1D barcode** at the bottom right containing the
-> postcode. You can scan these as well.
+The bar sits outside the scrolling middle of the screen, so it survived every
+render rather than being replaced along with the content. Nothing was
+refreshing it, so it just stayed put.
 
-### 2. Battery moved to the centre
+### How it's done
 
-It now sits midway between the ⚙️ gear and the RESET button, with a spacer on
-each side, so it stays centred whatever the bar width.
+The rule hangs off `afterRender`, the hook that already runs after every
+handheld render, so it covers scans, sub-screens, Back journeys and the
+tap-title-home route without touching any of them individually. The bar shows
+only when the idle template is on screen and no sub-screen has claimed the
+result area.
 
-### 3. Bottom bar no longer blue
+The observer that drives `afterRender` also now watches the sub-screen marker
+attribute, not just the content — otherwise a screen that sets the marker
+without changing the content underneath wouldn't have triggered a refresh.
 
-The blue background is gone — it's plain text on the page background now. The
-text colour changed from white to the app's normal grey, or it would have been
-invisible. Tapping it still takes you home.
-
-### 4. The two type-in buttons
-
-More space between them (8px → 16px gap) and bolder text (15.5px/800 →
-16.5px/900).
+The bar now starts hidden in the markup and is shown once the state is judged,
+so it can't flash on during boot.
 
 ---
 
 ## Checks run
 
-- t51.cjs: 23/23, including a real scan-then-tap-the-title journey proving HOME
-  still works after the bottom bar restyle. Build 165 fails exactly the ten
-  changed checks and passes the rest.
-- 250-label render diff vs build 165: **0 differences.** The resolver and all
-  result rendering are untouched.
+- t52.cjs: 19/19, walking the real journeys — idle, scan, back home via the
+  title, four sub-screens each followed by a return home, and the marker set
+  and cleared directly. Build 166 fails exactly the visibility checks, showing
+  the bar on every one of those screens: the bug reproducing.
+- 250-label render diff vs build 166: **0 differences.**
 - All six script blocks syntax-checked.
-- The app's own update sanity gate accepts this file; the gate function is
-  byte-identical to build 165.
-- 14 changed lines.
-- Stamps: THIS_BUILD_NUM 166, REPO_APK_BUILD 164, BAKED_DATA_BUILD stamped down
-  to 57 so older APKs still accept it. Data untouched (build 131, a5195d2e,
-  24,102 rows) — no `wild_data.json` upload needed.
+- Update sanity gate accepts this file and is byte-identical to build 166.
+- 26 changed lines.
+- Stamps: THIS_BUILD_NUM 167, REPO_APK_BUILD 164, BAKED_DATA_BUILD 57. Data
+  untouched (build 131, a5195d2e, 24,102 rows) — no `wild_data.json` upload.
 
-### Near miss worth recording
+### Test note
 
-The "make the buttons bolder" edit was originally written as a plain
-find-and-replace on the style string. That string matched **three** buttons —
-the two type-in buttons and the 🗺️ map-link button inside the results template
-— plus two more times inside JavaScript template literals. An assertion caught
-it before anything was built. The edit is now keyed on each button's own id,
-with a check that exactly two buttons changed and the map link did not.
-
-This is the second time this exact shape has bitten (the Recent "Back" relabel
-matched 12 unrelated buttons). Style strings in this file are not unique — key
-edits on ids, and always assert the match count.
+Two failures in the first run were my test calling `wildHome()` when the app
+exposes it as `window.__wildHome` — test bug, not app bug. Worth remembering:
+the home routine is not a plain global.
