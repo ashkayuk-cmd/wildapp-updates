@@ -513,7 +513,7 @@ body.addr-locked #rl .lockmsg{display:flex}
           <div style="font-size:12.5px">The scanner reads the <b>postcode</b> from the label and shows the walk. It's usually right, but <b>not 100% accurate</b> — a 2D barcode often carries the postcode with odd spacing or extra characters, sometimes the wrong postcode is printed, and one postcode can cover more than one walk. When a scan looks wrong, check the address and use <b>“Wrong walk?”</b> to set it right.</div>
         </div>
         <div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">
-          <button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button><button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a street</button>
+          <button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button><button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Search a street or building</button>
         </div>
       </div>
     </div>
@@ -598,7 +598,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 154;
+const THIS_BUILD_NUM = 155;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -608,7 +608,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.39";
+const BUILD_NAME = "v4.40";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3728,7 +3728,7 @@ function showHandStreetIn(keep){
   const nStreets=handStreetAll().length;
   let nBldgs=0;try{nBldgs=handStBldgAll().length;}catch(e){}
   box.innerHTML=`<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:10px 2px 4px">
-    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Type a street</div>
+    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Search a street or building</div>
     <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">${nStreets} streets and ${nBldgs} named buildings. Tap one to see its addresses and which walk each is on.</div>
     <div id="handStTop" style="position:-webkit-sticky;position:sticky;top:0;z-index:6;background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
       <div id="handStDisp" style="margin-top:4px;padding:12px;border:2px solid var(--div);border-radius:12px;
@@ -3854,7 +3854,7 @@ function showHandStreetAddrs(street,num,bldg){
     <div style="font-size:11.5px;color:var(--sub);margin-top:12px">${filt?("Showing "+match.length+" of "+groups.length+" — starting with "+escHtml(filt)):(groups.length+" entries")}</div>
     ${rowsHtml||'<div style="font-size:13px;color:var(--sub);margin-top:10px">Nothing on this street starts with '+escHtml(filt)+'.</div>'}
     <button type="button" id="handStABack" style="margin-top:16px;width:100%;padding:12px;background:transparent;
-      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to street search</button>
+      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to search</button>
   </div>`;
   // Tapping a number keeps you on the same street; it is the filter, not a
   // new screen, so the trail is unchanged (handNav truncates on the same key).
@@ -4052,7 +4052,7 @@ function handIdleActionsHtml(){
         "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
   return '<div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">'+
     '<button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="'+b+'">⌨ Type a postcode</button>'+
-    '<button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="'+b+'">⌨ Type a street</button>'+
+    '<button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="'+b+'">⌨ Search a street or building</button>'+
     '</div>';
 }
 /* v1.99: the REAL idle screen — the "Scan a barcode" panel with the
