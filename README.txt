@@ -1,47 +1,80 @@
-WildApp v2.0 — APK build 95
-===========================
+Wild App — v4.42, APK build 157
+================================
 
-WHAT'S NEW
-  * The recents (square) key can no longer take the app off the screen.
-    The app pins itself to the screen every time it starts.
-  * Everything from the content builds 91-94 is baked in, so this APK is
-    fully up to date on its own:
-      - PIN on the way in to App version (once, not on every button)
-      - Website version bar at the top of the main screen (tap to copy)
-      - Recent scans moved off the result screen into Settings
-      - the plug icon gone from the Recent list
-      - Back works on a result screen (Recent list / postcode keypad / idle)
-      - postcode keypad: 3 characters, no space key
-      - the "Scan a barcode" home text no longer disappears after Back
+WHAT CHANGED (native)
+
+The BACK-hold menu is now a list instead of three buttons, and it stays
+open when you toggle kiosk mode.
+
+  Kiosk mode is ON / OFF          <- title tells you the current state
+    Leave kiosk mode  (or  Turn kiosk mode on)
+    Exit app
+    Launch StageNow
+    Android Settings
+    Change launcher (Home app)
+    [ Close ]
+
+- Tapping the kiosk row toggles it and REOPENS the menu, now reading the
+  other way round. So you can turn kiosk off and then hit Exit or Launch
+  StageNow in the same visit, without holding BACK for another 10 seconds.
+
+- "Launch StageNow" turns kiosk off, RELEASES THE SCAN ENGINE, and opens
+  StageNow. Releasing the scanner is the important part: that is what was
+  stopping StageNow from scanning. It finds StageNow by looking through the
+  installed apps for a package name containing "stagenow", so it works on
+  all three PDAs without anyone typing a package name. If it can't find it
+  you get a toast saying so.
+
+- "Exit app" turns kiosk off, releases the scanner and quits properly —
+  same effect as Force stop, without going into Settings. Wild App is the
+  launcher, so pressing HOME afterwards brings it straight back.
+
+- "Android Settings" and "Change launcher" behave exactly as before.
+
 
 INSTALLING
-  Hold BACK for 10 seconds, tap "Leave", then install this file.
-  (The kiosk fights the installer otherwise.)
-  Same signing key as before, so it installs OVER the top: your
-  corrections, added addresses and scan history are all kept.
 
-FIRST LAUNCH AFTER INSTALLING
-  Android will ask once to confirm screen pinning - tap "Got it".
-  If you tap the wrong thing, no harm done: it asks again the next time
-  the app comes to the front.
+Hold BACK 10 s -> Leave, then install as usual. Same signing key, so it
+installs over the top and your corrections, added addresses and scan
+history are kept.
 
-GETTING OUT WHEN YOU NEED TO
-  The 10-second BACK hold still works exactly as before - it unpins the
-  app first, so "Leave" behaves the same as it always has.
-  Android's own way out is holding BACK and RECENTS together.
+After installing, re-pick Wild App as the home app (any install clears it):
+hold BACK -> More options is now the same list -> Change launcher -> pick
+Wild App and choose ALWAYS, not Just once.
 
-UPLOADING
-  Upload this file to the repo as WildApp.apk (exactly that name).
-  You do NOT need to upload index.html - build 95 is baked into this APK
-  and is newer than anything in the repo.
 
-BUILD DETAIL
-  versionCode 95, THIS_BUILD_NUM 95, BAKED_DATA_BUILD 95, REPO_APK_BUILD 95.
-  Address data unchanged (24,149 rows, data build 72).
-  Native change is confined to MainActivity: maybePin() now calls
-  startLockTask() (it had been left calling stopLockTask() since v1.60) and
-  onResume() calls it, so pinning re-arms if Android ever drops it. No
-  device-admin request is made - that was the thing that flashed the bars
-  in v1.60 and it stays removed. Method set is identical to build 86;
-  MainActivity is the only class whose body changed; all 8 other entries
-  are byte-identical to the published APK.
+CONTENT
+
+This APK also refreshes its built-in copy to the current published content
+(repo build 156), restamped as 157. The built-in copy had been stuck on
+build 137, so "Use built-in version" was giving very old behaviour. Baked
+data is unchanged (build 131, a5195d2e, 24,102 rows) — it already matched
+the repo, so there is no 2.1 MB re-download on first run.
+
+No index.html upload is needed for this build.
+
+
+ABOUT YOUR STAGENOW BARCODE
+
+The repo's WildApp.apk is still build 137. If you want the barcode to
+install THIS build, upload WildApp157.apk to the repo as WildApp.apk
+first — the barcode always fetches whatever is at that URL.
+
+Also: keep AppMgr on "Upgrade" for the two PDAs that still have the app
+installed, so their data survives. The PDA you uninstalled from needs
+"Install" once, then you can switch back to Upgrade.
+
+
+VERIFICATION
+
+- dex diff vs build 137: 8 new methods on MainActivity, 2 new inner
+  classes, and exactly one changed body (showKioskDialog). Nothing else
+  touched — confirmed by disassembling the built dex and diffing the
+  smali text method by method.
+- register check on all new methods: no negative locals, no writes into
+  parameter registers.
+- 7 of 11 entries byte-identical to the old APK.
+- versionCode 157; platformBuildVersionCode left at 24.
+- signed v1 + v2 + v3 with your key (SHA-256 2C:3A:BB:7A:B7:00:AF:19...).
+- baked content: 11/11 checks pass, booted from the file actually inside
+  the signed APK; 250-label render diff vs published build 156 = 0.
