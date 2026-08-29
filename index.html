@@ -598,7 +598,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 153;
+const THIS_BUILD_NUM = 154;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -608,7 +608,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.38";
+const BUILD_NAME = "v4.39";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3304,6 +3304,43 @@ function handTypeSuggestions(buf){
   out.sort();
   return out.slice(0,8);
 }
+/* v4.39: which keys can still reach a real postcode. Same idea as the street
+   keypad — for what has been typed so far, collect the character that follows
+   it in every postcode on the round. Returns null when nothing matches at all,
+   meaning "leave every key alive", so a wrong turn never locks the pad. */
+function handTypeNextChars(buf){
+  const q=String(buf||"").replace(/\s+/g,"").toUpperCase();
+  const set=Object.create(null);
+  let any=false;
+  try{
+    knownPostcodeSet().forEach(function(pc){
+      const p=String(pc).replace(/\s+/g,"").toUpperCase();
+      if(p.indexOf(q)!==0)return;
+      any=true;
+      const nx=p.charAt(q.length);
+      if(nx)set[nx]=1;
+    });
+  }catch(e){return null;}
+  return any?set:null;
+}
+function handTypeKeysRefresh(){
+  let ok=null;
+  try{
+    // Three characters is the whole of a W2 postcode, so once they are typed
+    // there is no next key at all — grey the lot rather than leaving them lit.
+    const tail=String(handTypeBuf||"").replace(/\s+/g,"").replace(/^W2/,"");
+    ok=(tail.length>=3)?Object.create(null):handTypeNextChars(handTypeBuf);
+  }catch(e){ok=null;}
+  const live="1px solid var(--div)",dead="1px dashed var(--div)";
+  document.querySelectorAll(".handKey").forEach(function(b){
+    const on=(!ok)||!!ok[b.dataset.k||""];
+    b.disabled=!on;
+    b.style.opacity=on?"1":"0.26";
+    b.style.border=on?live:dead;
+    b.style.color=on?"var(--txt)":"var(--sub)";
+    b.style.cursor=on?"pointer":"default";
+  });
+}
 const HAND_TYPE_LOCK="W2 ";
 function handTypeSet(v){
   /* v1.97: a W2 postcode is W2 + three characters and the W2 is already
@@ -3315,6 +3352,7 @@ function handTypeSet(v){
   handTypeRefresh();
 }
 function handTypeRefresh(){
+  handTypeKeysRefresh();
   const d=document.getElementById("handTypeDisp");
   if(d){
     d.textContent=handTypeBuf||HAND_TYPE_LOCK;
@@ -3357,15 +3395,17 @@ function showHandTypeIn(keep){
     '</div>').join("");
   box.innerHTML=`<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:10px 2px 4px">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Type a postcode</div>
-    <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">Type the three characters after <b>W2</b> — for W2 1PN, tap <b>1PN</b>. Looks it up exactly as if it had been scanned.</div>
-    <div id="handTypeDisp" style="margin-top:10px;padding:12px;border:2px solid var(--div);border-radius:12px;
-      font-size:22px;font-weight:800;letter-spacing:.06em;text-align:center;min-height:26px;color:var(--sub)">Postcode…</div>
-    <div id="handTypeSug" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
-    ${pad}
-    <div style="display:flex;gap:5px;margin-top:5px">
-      <button type="button" id="handTypeDel" style="${key};flex:1">⌫</button>
-      <button type="button" id="handTypeClr" style="${key};flex:1">clear</button>
+    <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">Type the three characters after <b>W2</b> — for W2 1PN, tap <b>1PN</b>. Greyed keys are the ones no postcode on the round uses. Looks it up exactly as if it had been scanned.</div>
+    <div id="handTypeTop" style="position:-webkit-sticky;position:sticky;top:0;z-index:6;background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
+      <div id="handTypeDisp" style="margin-top:4px;padding:12px;border:2px solid var(--div);border-radius:12px;
+        font-size:22px;font-weight:800;letter-spacing:.06em;text-align:center;min-height:26px;color:var(--sub)">Postcode…</div>
+      ${pad}
+      <div style="display:flex;gap:5px;margin-top:5px">
+        <button type="button" id="handTypeDel" style="${key};flex:1">⌫</button>
+        <button type="button" id="handTypeClr" style="${key};flex:1">clear</button>
+      </div>
     </div>
+    <div id="handTypeSug" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
     <button type="button" id="handTypeGo" style="margin-top:10px;width:100%;padding:14px;border:none;border-radius:12px;
       background:var(--pri,#1565C0);color:#fff;font-size:15px;font-weight:800;cursor:pointer">Look up</button>
     <button type="button" id="handTypeBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;
