@@ -598,7 +598,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 152;
+const THIS_BUILD_NUM = 153;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -608,7 +608,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.37";
+const BUILD_NAME = "v4.38";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3484,6 +3484,99 @@ function handStreetAll(){
   }
   return out.sort((a,b)=>a.name.localeCompare(b.name));
 }
+
+/* ── v4.38: STREET + BUILDING SEARCH INDEX ─────────────────────────────────
+   Everything the street keypad can find, in one list. Streets come from
+   streetWalkIndex; buildings are the named groups handStAddrsFor would build,
+   gathered here for the whole round in one pass so the keypad can ask "does
+   any name still contain what he has typed?" without touching allData again.
+   Keys are squashed to A-Z0-9 and single spaces so ST. MARY'S HOUSE is found
+   by typing ST MARYS HOUSE, which is all the keypad can produce. */
+let handStBldgCache=null;
+function handStNorm(v){
+  return String(v||"").toUpperCase().replace(/[^A-Z0-9]+/g," ").replace(/\s{2,}/g," ").trim();
+}
+function handStBldgAll(){
+  if(handStBldgCache)return handStBldgCache;
+  const by=Object.create(null),out=[];
+  if(typeof allData!=="undefined"&&Array.isArray(allData)){
+    for(const e of allData){
+      const nm=String((e&&e.s)||"").trim();
+      if(!nm)continue;
+      const K=nm.toUpperCase();
+      const g=handStGroupOf(handStOwnPart(String((e&&e.d)||""),K));
+      if(!g||g.num!==null)continue;                 // a door number is not a building
+      if(g.key==="b:?"||g.label==="(no number)")continue;
+      const id=K+"\u0001"+String(g.label).toUpperCase();
+      let rec=by[id];
+      if(!rec){
+        rec=by[id]={kind:"bldg",name:String(g.label),street:nm,key:handStNorm(g.label),n:0,walks:Object.create(null)};
+        by[id]=rec;out.push(rec);
+      }
+      rec.n++;
+      const w=String((e&&e.r)||"").trim();
+      if(w)rec.walks[w]=(rec.walks[w]||0)+1;
+    }
+  }
+  out.forEach(function(r){
+    r.walkList=Object.keys(r.walks).map(w=>({walk:w,n:r.walks[w]})).sort((a,b)=>b.n-a.n);
+  });
+  out.sort((a,b)=>a.name.localeCompare(b.name));
+  handStBldgCache=out;
+  return out;
+}
+// Streets and buildings together, in the shape the hit list renders.
+function handStTargets(){
+  const out=[];
+  handStreetAll().forEach(function(t){
+    out.push({kind:"street",name:t.name,key:handStNorm(t.name),n:t.n,walkList:t.walks});
+  });
+  handStBldgAll().forEach(function(b){out.push(b);});
+  return out;
+}
+// Plain substring first — a clean spelling must never be beaten by a fuzzy
+// neighbour (v3.3). Only when that finds nothing do we forgive one typo.
+function handStFindHits(q){
+  const s=handStNorm(q);
+  if(!s)return {list:[],loose:false};
+  const all=handStTargets();
+  let out=all.filter(t=>t.key.indexOf(s)>=0),loose=false;
+  if(!out.length){
+    const qs=s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    if(qs.length){out=all.filter(t=>handFindLoose(t.name,qs));loose=out.length>0;}
+  }
+  const rank=t=>(t.key===s?0:(t.key.indexOf(s)===0?1:2));
+  const kind=t=>(t.kind==="street"?0:1);
+  return {list:out.sort((a,b)=>(rank(a)-rank(b))||(kind(a)-kind(b))||a.name.localeCompare(b.name)),loose:loose};
+}
+/* Which keys can still lead somewhere. For what he has typed so far we look
+   at every place that text appears in every name and collect the character
+   that follows it — type HALL and P survives (Hall Place), X does not.
+   If nothing matches at all we hand back null, meaning "leave every key
+   alive": that is the typo case, and a locked keypad there would trap him. */
+function handStNextChars(q){
+  const s=handStNorm(q);
+  const all=handStTargets(),set=Object.create(null);
+  let any=false;
+  for(let i=0;i<all.length;i++){
+    const k=all[i].key;
+    if(!s){for(let j=0;j<k.length;j++)set[k.charAt(j)]=1;any=true;continue;}
+    let at=k.indexOf(s);
+    if(at<0)continue;
+    any=true;
+    while(at>=0){
+      const nx=k.charAt(at+s.length);
+      if(nx){
+        set[nx]=1;
+        // HALL is followed by a space in HALL PLACE, but he expects P to stay
+        // alive after typing HALL — so a space never hides the letter behind it.
+        if(nx===" "){const nx2=k.charAt(at+s.length+1);if(nx2)set[nx2]=1;}
+      }
+      at=k.indexOf(s,at+1);
+    }
+  }
+  return any?set:null;
+}
 // Plain substring first — a clean spelling must never be beaten by a fuzzy
 // neighbour (v3.3). Only when that finds nothing do we forgive one typo.
 function handStreetHits(q){
@@ -3506,7 +3599,9 @@ function handStreetParse(buf){
   return {q:t,num:""};
 }
 function handStreetSet(v){
-  handStreetBuf=String(v||"").toUpperCase().replace(/[^A-Z0-9 ]/g,"").replace(/\s{2,}/g," ").slice(0,28);
+  // v4.38: letters and spaces only — the number now belongs to the street
+  // page’s own keypad, so a digit can no longer get into this box.
+  handStreetBuf=String(v||"").toUpperCase().replace(/[^A-Z ]/g,"").replace(/\s{2,}/g," ").slice(0,28);
   handStreetRefresh();
 }
 function handStreetRefresh(){
@@ -3515,27 +3610,63 @@ function handStreetRefresh(){
     d.textContent=handStreetBuf||"Street…";
     d.style.color=handStreetBuf?"var(--txt)":"var(--sub)";
   }
+  handStKeysRefresh();
   const hits=document.getElementById("handStHits");
   if(!hits)return;
-  const p=handStreetParse(handStreetBuf);
-  if(p.q.replace(/[^A-Z0-9]/gi,"").length<2){
-    hits.innerHTML='<div style="font-size:12px;color:var(--sub);margin-top:9px;line-height:1.45">Type two or more letters of the street. Put the house number on the end &mdash; <b>EDGWARE 145</b> &mdash; and it opens there.</div>';
+  const q=handStreetBuf;
+  if(handStNorm(q).replace(/[^A-Z0-9]/g,"").length<2){
+    hits.innerHTML='<div style="font-size:12px;color:var(--sub);margin-top:9px;line-height:1.45">Type two or more letters. Streets and buildings both come up &mdash; <b>HALL PLACE</b> or <b>HALL TOWER</b> &mdash; and the greyed keys are the ones nothing is spelt with.</div>';
     return;
   }
-  const r=handStreetHits(p.q);
-  const shown=r.list.slice(0,12);
+  const r=handStFindHits(q);
+  const shown=r.list.slice(0,14);
+  const chip=function(w,c){return '<span style="display:inline-block;padding:3px 8px;margin:3px 5px 0 0;background:#e8f0fe;border:1px solid #b7cdf5;border-radius:9px;font-size:11.5px;font-weight:800;color:var(--pri)">'+escHtml(w)+' · '+c+'</span>';};
   hits.innerHTML=shown.length?
-    (r.loose?'<div style="font-size:11.5px;color:var(--sub);margin-top:8px">No exact match for &ldquo;'+escHtml(p.q)+'&rdquo; — closest spellings:</div>':"")+
-    shown.map(st=>'<button type="button" class="handStHit" data-st="'+encodeURIComponent(st.name)+'" style="display:block;width:100%;text-align:left;padding:11px 12px;margin-top:7px;background:var(--sur);border:none;border-radius:11px;box-shadow:var(--shad);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'+
-      '<div style="font-size:15px;font-weight:800;color:var(--pri);word-break:break-word">'+escHtml(st.name)+'</div>'+
-      '<div style="font-size:11.5px;color:var(--sub);margin-top:3px">'+st.n+' address'+(st.n===1?"":"es")+'</div>'+
-      '<div style="margin-top:4px">'+st.walks.map(x=>'<span style="display:inline-block;padding:3px 8px;margin:3px 5px 0 0;background:#e8f0fe;border:1px solid #b7cdf5;border-radius:9px;font-size:11.5px;font-weight:800;color:var(--pri)">'+escHtml(x.walk)+' · '+x.n+'</span>').join("")+'</div>'+
-    '</button>').join("")+
+    (r.loose?'<div style="font-size:11.5px;color:var(--sub);margin-top:8px">No exact match for &ldquo;'+escHtml(q)+'&rdquo; — closest spellings:</div>':"")+
+    shown.map(function(t,i){
+      const sub=(t.kind==="bldg")
+        ?(escHtml(t.street)+' · '+t.n+' address'+(t.n===1?"":"es"))
+        :(t.n+' address'+(t.n===1?"":"es"));
+      return '<button type="button" class="handStHit" data-i="'+i+'" style="display:block;width:100%;text-align:left;padding:11px 12px;margin-top:7px;background:var(--sur);border:none;border-radius:11px;box-shadow:var(--shad);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'+
+        '<div style="font-size:15px;font-weight:800;color:var(--pri);word-break:break-word">'+(t.kind==="bldg"?"\u{1F3E2} ":"")+escHtml(t.name)+'</div>'+
+        '<div style="font-size:11.5px;color:var(--sub);margin-top:3px">'+sub+'</div>'+
+        '<div style="margin-top:4px">'+(t.walkList||[]).map(x=>chip(x.walk,x.n)).join("")+'</div>'+
+      '</button>';
+    }).join("")+
     (r.list.length>shown.length?'<div style="font-size:11px;color:var(--sub);margin-top:6px">…and '+(r.list.length-shown.length)+' more — keep typing.</div>':"")
-    :'<div style="font-size:12px;color:var(--sub);margin-top:9px">No street matches &ldquo;'+escHtml(p.q)+'&rdquo;.</div>';
+    :'<div style="font-size:12px;color:var(--sub);margin-top:9px">Nothing matches &ldquo;'+escHtml(q)+'&rdquo;.</div>';
   hits.querySelectorAll(".handStHit").forEach(b=>{
-    b.onclick=function(){showHandStreetAddrs(decodeURIComponent(b.dataset.st),handStreetParse(handStreetBuf).num);};
+    b.onclick=function(){
+      const t=shown[parseInt(b.dataset.i,10)];
+      if(!t)return;
+      // A street opens its own page; a building opens straight at its doors.
+      if(t.kind==="bldg")showHandStreetAddrs(t.street,"",t.name);
+      else showHandStreetAddrs(t.name,"");
+    };
   });
+}
+/* v4.38: grey out the keys that cannot lead anywhere. A dead key is left in
+   place rather than removed so the keyboard never reflows under his thumb. */
+function handStKeysRefresh(){
+  let ok=null;
+  try{ok=handStNextChars(handStreetBuf);}catch(e){ok=null;}
+  const live="1px solid var(--div)",dead="1px dashed var(--div)";
+  document.querySelectorAll(".handStKey").forEach(function(b){
+    const k=b.dataset.k||"";
+    const on=(!ok)||!!ok[k];
+    b.disabled=!on;
+    b.style.opacity=on?"1":"0.26";
+    b.style.border=on?live:dead;
+    b.style.color=on?"var(--txt)":"var(--sub)";
+    b.style.cursor=on?"pointer":"default";
+  });
+  const sp=document.getElementById("handStSpace");
+  if(sp){
+    const on=(!ok)||!!ok[" "];
+    sp.disabled=!on;
+    sp.style.opacity=on?"1":"0.26";
+    sp.style.cursor=on?"pointer":"default";
+  }
 }
 function showHandStreetIn(keep){
   const box=document.getElementById("handResult");
@@ -3545,7 +3676,9 @@ function showHandStreetIn(keep){
   if(!keep)handStreetBuf="";
   try{box.dataset.sub="streetin";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
-  const rows=["1234567890","QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
+  // v4.38: letters only. The number is asked for on the next screen, where
+  // it can pick a door or a flat instead of just filtering the street list.
+  const rows=["QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
   const key="flex:1;min-width:0;padding:11px 0;border:1px solid var(--div);border-radius:9px;"+
             "background:var(--sur);font-size:15px;font-weight:800;color:var(--txt);cursor:pointer;"+
             "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
@@ -3553,9 +3686,10 @@ function showHandStreetIn(keep){
     r.split("").map(ch=>'<button type="button" class="handStKey" data-k="'+ch+'" style="'+key+'">'+ch+'</button>').join("")+
     '</div>').join("");
   const nStreets=handStreetAll().length;
+  let nBldgs=0;try{nBldgs=handStBldgAll().length;}catch(e){}
   box.innerHTML=`<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:10px 2px 4px">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Type a street</div>
-    <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">${nStreets} streets in the round. Tap one to see its addresses and which walk each is on.</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">${nStreets} streets and ${nBldgs} named buildings. Tap one to see its addresses and which walk each is on.</div>
     <div id="handStTop" style="position:-webkit-sticky;position:sticky;top:0;z-index:6;background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
       <div id="handStDisp" style="margin-top:4px;padding:12px;border:2px solid var(--div);border-radius:12px;
         font-size:19px;font-weight:800;letter-spacing:.04em;text-align:center;min-height:26px;color:var(--sub);word-break:break-word">Street…</div>
@@ -3589,11 +3723,14 @@ function handStOpen(d,street,filt){
   try{renderHandheld(String(d||""),false);}catch(e){}
   try{window.__wildBackTo=function(){showHandStreetAddrs(street,filt);};}catch(e){}
 }
-function showHandStreetAddrs(street,num){
+function showHandStreetAddrs(street,num,bldg){
   const box=document.getElementById("handResult");
   if(!box)return;
   try{openHand();}catch(e){}
   const NAME=String(street||"").trim();
+  // v4.38: a named block gets its own screen, so its flats can be picked
+  // by number instead of scrolling 180 of them.
+  if(bldg){return showHandStreetBldg(NAME,String(bldg),String(num||""));}
   handNav("staddr:"+NAME.toUpperCase(),function(){showHandStreetAddrs(NAME,num);});
   try{box.dataset.sub="staddr";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
@@ -3607,6 +3744,20 @@ function showHandStreetAddrs(street,num){
   // of Edgware Road the numbers alone run past any sane cap, and a block
   // sorted in behind 700 of them could never be reached.
   const nums=match.filter(g=>g.num!==null), names=match.filter(g=>g.num===null);
+  // Which digits can still narrow this street down — same idea as the
+  // letter keypad, read off the labels that are actually on the street.
+  const numNext=(function(){
+    const set=Object.create(null);let any=false;
+    groups.forEach(function(g){
+      const L=String(g.label).toUpperCase();
+      const toks=(g.num!==null)?[L]:L.split(/[^0-9A-Z]+/).filter(Boolean);
+      toks.forEach(function(t){
+        if(!filt){if(/[0-9]/.test(t.charAt(0))){set[t.charAt(0)]=1;any=true;}return;}
+        if(t.indexOf(filt)===0){any=true;const nx=t.charAt(filt.length);if(nx)set[nx]=1;}
+      });
+    });
+    return any?set:null;
+  })();
   const shownN=nums.slice(0,60), shownB=names.slice(0,40);
   const shown=shownN.concat(shownB);
   const key="flex:1;min-width:0;padding:9px 0;border:1px solid var(--div);border-radius:9px;"+
@@ -3650,7 +3801,10 @@ function showHandStreetAddrs(street,num){
       <div style="font-size:12px;font-weight:800;color:var(--txt);margin-top:4px">House number</div>
       <div id="handStNum" style="margin-top:6px;padding:9px;border:2px solid var(--div);border-radius:11px;text-align:center;
         font-size:17px;font-weight:800;letter-spacing:.05em;color:${filt?"var(--txt)":"var(--sub)"}">${filt?escHtml(filt):"all"}</div>
-      <div style="display:flex;gap:5px;margin-top:5px">${"1234567890".split("").map(c=>'<button type="button" class="handStN" data-k="'+c+'" style="'+key+'">'+c+'</button>').join("")}</div>
+      <div style="display:flex;gap:5px;margin-top:5px">${"1234567890".split("").map(function(c){
+        const live=numNext===null||numNext[c];
+        return '<button type="button" class="handStN" data-k="'+c+'"'+(live?"":" disabled")+' style="'+key+(live?"":";opacity:.26;cursor:default")+'">'+c+'</button>';
+      }).join("")}</div>
       <div style="display:flex;gap:5px;margin-top:5px">
         <button type="button" id="handStNDel" style="${key};flex:1">⌫</button>
         <button type="button" id="handStNAll" style="${key};flex:1">show all</button>
@@ -3678,6 +3832,9 @@ function showHandStreetAddrs(street,num){
       const i=parseInt(b.dataset.i,10), g=shown[i];
       if(!g)return;
       if(g.rows.length===1){handStOpen(g.rows[0].d,NAME,filt);return;}
+      // v4.38: a named block goes to its own screen with a flat keypad;
+      // plain numbered groups still expand in place, they are short.
+      if(g.num===null){showHandStreetBldg(NAME,g.label,"");return;}
       const holder=document.getElementById("handStSub"+i);
       if(!holder)return;
       if(holder.dataset.open==="1"){holder.innerHTML="";holder.dataset.open="0";return;}
@@ -3697,6 +3854,99 @@ function showHandStreetAddrs(street,num){
   });
   const bk=document.getElementById("handStABack");
   if(bk)bk.onclick=function(){showHandStreetIn(true);};
+}
+
+/* ── v4.38: ONE NAMED BLOCK, WITH A FLAT KEYPAD ────────────────────────────
+   Ralph Court has 180 flats and Hall Tower 80; a list that long is no use
+   without a way to jump into it, which is what he asked for when he said the
+   numbers should come after picking. The keypad here filters the door or flat
+   number, not the street, and the same dead-key greying applies. */
+function handStDoorNo(d){
+  const t=String(d||"");
+  let m=t.match(/\b(?:flat|apartment|apt|unit|studio|room)\.?\s*([0-9]+[A-Za-z]?)/i);
+  if(m)return m[1].toUpperCase();
+  m=t.match(/^\s*([0-9]+[A-Za-z]?)\b/);
+  return m?m[1].toUpperCase():"";
+}
+function showHandStreetBldg(street,bldg,num){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{openHand();}catch(e){}
+  const NAME=String(street||"").trim(), B=String(bldg||"").trim();
+  handNav("stbldg:"+NAME.toUpperCase()+"|"+B.toUpperCase(),function(){showHandStreetBldg(NAME,B,num);});
+  try{box.dataset.sub="stbldg";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const filt=String(num||"").replace(/[^0-9A-Za-z]/g,"").toUpperCase();
+  const groups=handStAddrsFor(NAME);
+  let g=null;
+  for(let i=0;i<groups.length;i++){
+    if(String(groups[i].label).toUpperCase()===B.toUpperCase()){g=groups[i];break;}
+  }
+  const rows=g?g.rows:[];
+  const doors=rows.map(function(r){return {r:r,no:handStDoorNo(r.d)};});
+  const match=filt?doors.filter(x=>x.no&&x.no.indexOf(filt)===0):doors;
+  const shown=match.slice(0,80);
+  const key="flex:1;min-width:0;padding:9px 0;border:1px solid var(--div);border-radius:9px;"+
+            "background:var(--sur);font-size:14px;font-weight:800;color:var(--txt);cursor:pointer;"+
+            "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
+  // Only the digits that can still find a door stay alive.
+  const next=(function(){
+    const set=Object.create(null);let any=false;
+    doors.forEach(function(x){
+      if(!x.no)return;
+      if(!filt){set[x.no.charAt(0)]=1;any=true;return;}
+      if(x.no.indexOf(filt)===0){any=true;const nx=x.no.charAt(filt.length);if(nx)set[nx]=1;}
+    });
+    return any?set:null;
+  })();
+  const walkList=(g&&g.walkList)||[];
+  const chips=walkList.map(w=>'<span style="display:inline-block;padding:3px 8px;margin:3px 5px 0 0;background:#e8f0fe;border:1px solid #b7cdf5;border-radius:9px;font-size:11.5px;font-weight:800;color:var(--pri)">'+escHtml(w)+'</span>').join("");
+  const list=shown.map(function(x,i){
+    return '<button type="button" class="handStBAddr" data-i="'+i+'" style="display:block;width:100%;text-align:left;padding:10px 12px;margin-top:5px;background:var(--sur);border:none;border-radius:10px;box-shadow:var(--shad);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'+
+      '<div style="font-size:13px;color:var(--txt);word-break:break-word">'+escHtml(x.r.d)+'</div>'+
+      (x.r.r?'<div style="font-size:11px;font-weight:800;color:var(--pri);margin-top:2px">'+escHtml(x.r.r)+'</div>':"")+
+    '</button>';
+  }).join("");
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    ${handTopBar(B)}
+    <div style="font-size:12px;color:var(--sub);margin-top:4px">${escHtml(NAME)} · ${rows.length} address${rows.length===1?"":"es"}</div>
+    <div>${chips}</div>
+    <div id="handStBTop" style="position:-webkit-sticky;position:sticky;top:0;z-index:6;background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
+      <div style="font-size:12px;font-weight:800;color:var(--txt);margin-top:4px">Flat or door number</div>
+      <div id="handStBNum" style="margin-top:6px;padding:9px;border:2px solid var(--div);border-radius:11px;text-align:center;
+        font-size:17px;font-weight:800;letter-spacing:.05em;color:${filt?"var(--txt)":"var(--sub)"}">${filt?escHtml(filt):"all"}</div>
+      <div style="display:flex;gap:5px;margin-top:5px">${"1234567890".split("").map(function(c){
+        const live=next===null||next[c];
+        return '<button type="button" class="handStBN" data-k="'+c+'"'+(live?"":" disabled")+' style="'+key+(live?"":";opacity:.26;cursor:default")+'">'+c+'</button>';
+      }).join("")}</div>
+      <div style="display:flex;gap:5px;margin-top:5px">
+        <button type="button" id="handStBDel" style="${key};flex:1">⌫</button>
+        <button type="button" id="handStBAll" style="${key};flex:1">show all</button>
+      </div>
+    </div>
+    <div style="font-size:11.5px;color:var(--sub);margin-top:10px">${filt?("Showing "+match.length+" of "+rows.length+" — starting with "+escHtml(filt)):(rows.length+" address"+(rows.length===1?"":"es"))}</div>
+    ${list||'<div style="font-size:13px;color:var(--sub);margin-top:10px">Nothing here starts with '+escHtml(filt)+'.</div>'}
+    ${match.length>shown.length?'<div style="font-size:11.5px;color:var(--sub);margin-top:8px">…and '+(match.length-shown.length)+' more — type a number to narrow it down.</div>':""}
+    <button type="button" id="handStBBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;
+      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to ${escHtml(NAME)}</button>
+  </div>`;
+  box.querySelectorAll(".handStBN").forEach(b=>{
+    b.onclick=function(){showHandStreetBldg(NAME,B,filt+b.dataset.k);};
+  });
+  const bd=document.getElementById("handStBDel");
+  if(bd)bd.onclick=function(){showHandStreetBldg(NAME,B,filt.slice(0,-1));};
+  const ba=document.getElementById("handStBAll");
+  if(ba)ba.onclick=function(){showHandStreetBldg(NAME,B,"");};
+  box.querySelectorAll(".handStBAddr").forEach(b=>{
+    b.onclick=function(){
+      const x=shown[parseInt(b.dataset.i,10)];
+      if(!x)return;
+      try{renderHandheld(String(x.r.d||""),false);}catch(e){}
+      try{window.__wildBackTo=function(){showHandStreetBldg(NAME,B,filt);};}catch(e){}
+    };
+  });
+  const bk=document.getElementById("handStBBack");
+  if(bk)bk.onclick=function(){showHandStreetAddrs(NAME,"");};
 }
 
 /* ── SOUND SCREEN (v1.65) ─────────────────────────────────────────────── */
@@ -6283,6 +6533,7 @@ function handDropDataIndexes(){
   try{handFindIdx=null;}catch(e){}         // v3.3: the walks-search list is derived from the data too
   try{handStPartsCache=null;}catch(e){}    // v3.5: so is the per-street breakdown
   try{handStAddrCache=null;}catch(e){}     // v4.36: and the street address list
+  try{handStBldgCache=null;}catch(e){}     // v4.38: and the building search index
   try{handWalkNameSet=null;}catch(e){}     // v4.20: the walk-name set is derived from the data too
   try{knownPostcodeSet._cache=null;knownPostcodeSet._for=null;}catch(e){}
   try{tokenStreetCount=null;}catch(e){}
