@@ -500,7 +500,7 @@ body.addr-locked #rl .lockmsg{display:flex}
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
     <h1 style="flex:1;min-width:0;overflow:hidden;color:#fff;margin:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;font-weight:600"><span style="font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:16px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1>
-    <button type="button" id="wildResetBtn" aria-label="Reset app if the scanner stops working — tap here to reset" style="flex:0 0 auto;width:184px;max-width:54%;padding:4px 8px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:15px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:8.5px;letter-spacing:.02em;opacity:.9;font-weight:700">IF SCANNER STOPS WORKING</span><span id="wildResetL3" style="font-size:9px;letter-spacing:.04em;opacity:1;font-weight:800;margin-top:1px">TAP HERE TO RESET</span></button>
+    <button type="button" id="wildResetBtn" aria-label="Reset app if the scanner stops working — tap here to reset" style="flex:0 0 auto;width:184px;max-width:54%;padding:4px 8px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:15px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800">IF SCANNER STOPS WORKING</span><span id="wildResetL3" style="font-size:9px;letter-spacing:.04em;opacity:1;font-weight:800;margin-top:1px">TAP HERE TO RESET</span></button>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
@@ -513,7 +513,7 @@ body.addr-locked #rl .lockmsg{display:flex}
           <div style="font-size:12.5px">The scanner reads the <b>postcode</b> from the label and shows the walk. It's usually right, but <b>not 100% accurate</b> — a 2D barcode often carries the postcode with odd spacing or extra characters, sometimes the wrong postcode is printed, and one postcode can cover more than one walk. When a scan looks wrong, check the address and use <b>“Wrong walk?”</b> to set it right.</div>
         </div>
         <div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">
-          <button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button><button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Search a street or building</button>
+          <button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="padding:14px 18px;border:1px solid #4E342E;border-radius:12px;background:#5D4037;font-size:15.5px;font-weight:800;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button><button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="padding:14px 18px;border:1px solid #4E342E;border-radius:12px;background:#5D4037;font-size:15.5px;font-weight:800;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a street or building</button>
         </div>
       </div>
     </div>
@@ -598,7 +598,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 155;
+const THIS_BUILD_NUM = 156;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -608,7 +608,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.40";
+const BUILD_NAME = "v4.41";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3211,7 +3211,7 @@ async function detectCodes(bd,source,w,h,zxBoost){
   return results;
 }
 
-const HAND_IDLE_BTN="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation";
+const HAND_IDLE_BTN="padding:14px 18px;border:1px solid #4E342E;border-radius:12px;background:#5D4037;font-size:15.5px;font-weight:800;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation";
 
 
 /* ── THE PDA'S OWN VOLUME KEYS (v1.66) ────────────────────────────────────
@@ -4047,12 +4047,12 @@ function showHandSound(){
    repeated in six spots, so anything added to it went missing on whichever
    route back wasn't updated. */
 function handIdleActionsHtml(){
-  var b="padding:11px 13px;border:1px solid var(--div);border-radius:12px;background:var(--sur);"+
-        "font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;"+
+  var b="padding:14px 18px;border:1px solid #4E342E;border-radius:12px;background:#5D4037;"+
+        "font-size:15.5px;font-weight:800;color:#fff;cursor:pointer;"+
         "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
   return '<div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">'+
     '<button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="'+b+'">⌨ Type a postcode</button>'+
-    '<button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="'+b+'">⌨ Search a street or building</button>'+
+    '<button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="'+b+'">⌨ Type a street or building</button>'+
     '</div>';
 }
 /* v1.99: the REAL idle screen — the "Scan a barcode" panel with the
