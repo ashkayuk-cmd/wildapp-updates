@@ -499,8 +499,8 @@ body.addr-locked #rl .lockmsg{display:flex}
     <!-- v3.7: the title is the website version now. "Handheld Scanner" and its
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
-    <h1 style="flex:1;min-width:0;overflow:hidden;color:#fff;margin:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;font-weight:600"><span style="font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:16px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1>
-    <button type="button" id="wildResetBtn" aria-label="Reset app if the scanner stops working — tap here to reset" style="flex:0 0 auto;width:184px;max-width:54%;padding:4px 8px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:15px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800">IF SCANNER STOPS WORKING</span><span id="wildResetL3" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800;margin-top:1px">TAP HERE TO RESET</span></button>
+    <div style="flex:1;min-width:0"></div>
+    <div id="wildBattWrap" style="flex:0 0 auto;display:none;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #fff;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#fff;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#fff;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="font-size:12px;font-weight:800;color:#fff;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div><button type="button" id="wildResetBtn" aria-label="Reset app if the scanner stops working — tap here to reset" style="flex:0 0 auto;width:184px;max-width:54%;padding:4px 8px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.03em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:15px">&#8635; RESET APP</span><span id="wildResetL2" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800">IF SCANNER STOPS WORKING</span><span id="wildResetL3" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800;margin-top:1px">TAP HERE TO RESET</span></button>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
@@ -513,11 +513,12 @@ body.addr-locked #rl .lockmsg{display:flex}
         <div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px">
           <button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="padding:14px 18px;border:1px solid #1558B0;border-radius:12px;background:#1A73E8;font-size:15.5px;font-weight:800;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button><button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="padding:14px 18px;border:1px solid #1558B0;border-radius:12px;background:#1A73E8;font-size:15.5px;font-weight:800;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a Street or Building name</button>
         
-        <div style="max-width:340px;margin:14px auto 0;text-align:center;line-height:1.55"><div style="font-size:12.5px">The scanner reads the <b>postcode</b> from the label and shows the walk. It's usually right, but <b>not 100% accurate</b> — a 2D barcode often carries the postcode with odd spacing or extra characters, sometimes the wrong postcode is printed, and one postcode can cover more than one walk. When a scan looks wrong, check the address and use <b>“Wrong walk?”</b> to set it right.</div></div>
+        <div style="max-width:340px;margin:14px auto 0;text-align:center;line-height:1.55"><div style="font-size:12.5px">The scanner reads the <b>postcode</b> from the label and shows the walk. It's usually right, but <b>not 100% accurate</b> — a 2D barcode often carries the postcode with odd spacing or extra characters, sometimes the wrong postcode is printed, and one postcode can cover more than one walk. When a scan looks wrong, check the address by asking someone else or checking the IPS board.</div></div>
       </div>
       </div>
     </div>
   </div>
+<div id="wildSiteBottom" style="flex:0 0 auto;background:var(--pri);display:flex;align-items:center;justify-content:center;gap:7px;padding:7px 10px;min-height:34px"><h1 id="wildSiteTitle" style="margin:0;min-width:0;overflow:hidden;display:flex;align-items:baseline;justify-content:center;gap:7px;color:#fff;font-weight:600;cursor:pointer"><span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.82;white-space:nowrap;line-height:1.1">Website version</span><span id="wildSiteBarUrl" style="max-width:100%;font-size:13.5px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15">wildapp.gt.tc</span></h1></div>
 </div>
 
 </div>
@@ -598,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 161;
+const THIS_BUILD_NUM = 165;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -608,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.46";
+const BUILD_NAME = "v4.50";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -625,7 +626,7 @@ const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
 const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD  = 157;                  // build of the WildApp.apk beside this file
+const REPO_APK_BUILD  = 164;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -12842,7 +12843,7 @@ document.addEventListener("visibilitychange",()=>{
      and it closes over wildHome directly so it works even if something else
      overwrites window.__wildHome. */
   try{
-    var _t=document.querySelector("#handPanel .qrbar h1");
+    var _t=document.getElementById("wildSiteTitle")||document.querySelector("#handPanel .qrbar h1")||document.querySelector("#handPanel h1");
     if(_t){
       _t.style.cursor="pointer";
       _t.setAttribute("role","button");
@@ -12899,4 +12900,88 @@ document.addEventListener("visibilitychange",()=>{
   }
 })();
 </script>
+
+<script>
+/* v4.47 — BATTERY READOUT IN THE TOP BAR.
+   The APK now hides the Android status bar (immersive), which takes the system
+   battery icon with it, so the app shows its own. Source order:
+     1. WildReset.battery()  -> "<pct>|<charging 0|1>"  (native, always present in the APK)
+     2. navigator.getBattery()                          (website / newer WebViews)
+     3. neither -> the pill stays display:none and nothing else changes.
+   Deliberately self-contained: it touches only #wildBattWrap/#wildBattFill/#wildBattPct
+   and never throws into the surrounding app. */
+(function(){
+  var wrap, fill, pct, timer=null, last=-2;
+
+  function els(){
+    if(!wrap) wrap=document.getElementById("wildBattWrap");
+    if(!fill) fill=document.getElementById("wildBattFill");
+    if(!pct)  pct =document.getElementById("wildBattPct");
+    return !!(wrap&&fill&&pct);
+  }
+
+  function paint(p, charging){
+    if(!els()) return;
+    if(p===null||p===undefined||p!==p||p<0){ wrap.style.display="none"; return; }
+    p = Math.max(0, Math.min(100, Math.round(p)));
+    wrap.style.display="flex";
+    if(p===last && !charging) return;
+    last = charging ? -2 : p;
+    fill.style.width = p + "%";
+    /* low battery reads red, charging reads green, otherwise plain white */
+    fill.style.background = charging ? "#7CFF9E" : (p<=15 ? "#FF6B6B" : "#fff");
+    pct.textContent = (charging ? "\u26A1" : "") + p + "%";
+  }
+
+  function readNative(){
+    try{
+      if(window.WildReset && typeof window.WildReset.battery==="function"){
+        var s = String(window.WildReset.battery()||"");
+        var bits = s.split("|");
+        var p = parseInt(bits[0],10);
+        if(!isNaN(p) && p>=0){ paint(p, bits[1]==="1"); return true; }
+        paint(-1, false);   /* bridge answered with no reading -> hide the pill */
+        return true;
+      }
+    }catch(e){}
+    return false;
+  }
+
+  function tick(){ if(!readNative()){ /* web path handles itself via events */ } }
+
+  function startWeb(){
+    try{
+      if(!navigator.getBattery) return false;
+      navigator.getBattery().then(function(b){
+        function upd(){ paint(b.level*100, !!b.charging); }
+        upd();
+        b.addEventListener("levelchange", upd);
+        b.addEventListener("chargingchange", upd);
+      }).catch(function(){});
+      return true;
+    }catch(e){ return false; }
+  }
+
+  function start(){
+    if(!els()) return;
+    if(readNative()){
+      if(timer) clearInterval(timer);
+      timer = setInterval(tick, 30000);
+      document.addEventListener("visibilitychange", function(){
+        if(!document.hidden) tick();
+      });
+    }else{
+      startWeb();
+    }
+  }
+
+  if(document.readyState==="complete"||document.readyState==="interactive"){
+    setTimeout(start,0);
+  }else{
+    window.addEventListener("DOMContentLoaded",function(){ setTimeout(start,0); });
+  }
+  window.__wildBatteryRefresh = function(){ try{ tick(); }catch(e){} };
+})();
+</script>
+
 </body></html>
