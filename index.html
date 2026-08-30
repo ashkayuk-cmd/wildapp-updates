@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 184;
+const THIS_BUILD_NUM = 186;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.69";
+const BUILD_NAME = "v4.71";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -634,7 +634,7 @@ const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside
    app from GitHub" compared the repo's APK (170) against the installed one
    (182) and reported the repo as behind. It is the sixth release stamp and
    was the one nobody was counting. */
-const REPO_APK_BUILD  = 184;
+const REPO_APK_BUILD  = 186;
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -4062,15 +4062,35 @@ function showHandStreetBldg(street,bldg,num){
    refused write therefore shows as the slider snapping back, which is honest,
    instead of a slider that moves while nothing happens. */
 function wildAudio(){
-  try{return (window.WildAudio&&typeof WildAudio.streams==="function")?WildAudio:null;}catch(e){return null;}
+  try{return (window.WildAudio&&typeof WildAudio.vol==="function")?WildAudio:null;}catch(e){return null;}
 }
+/* The streams worth showing, in the order the volume panel shows them.
+   v4.70: the ids and the wording live HERE now. The first version had the
+   wrapper build this list as JSON in a static initialiser, and a bridge class
+   that fails to initialise takes the whole app down with it - which is what it
+   did. Names are page content anyway; the wrapper only has to read and write a
+   number it is handed. */
+const AUDIO_STREAMS=[
+  {id:3,name:"Media"},
+  {id:5,name:"Notifications"},
+  {id:2,name:"Ring"},
+  {id:4,name:"Alarm"},
+  {id:1,name:"System"}
+];
+/* A stream that can't be read (-1) or has no range is left out rather than
+   drawn as a dead slider. On a device where a stream simply isn't there, the
+   row shouldn't appear at all. */
 function audioStreams(){
   const a=wildAudio();
   if(!a)return null;
-  try{
-    const v=JSON.parse(a.streams()||"[]");
-    return (Array.isArray(v)&&v.length)?v:null;
-  }catch(e){return null;}
+  const out=[];
+  for(const st of AUDIO_STREAMS){
+    let v=-1,m=-1;
+    try{v=a.vol(st.id);m=a.max(st.id);}catch(e){continue;}
+    if(!(m>0)||v<0)continue;
+    out.push({id:st.id,name:st.name,vol:v,max:m});
+  }
+  return out.length?out:null;
 }
 function scannerBeepOn(){
   const a=wildAudio();
@@ -5920,6 +5940,14 @@ function splitPostcodes(){
 function wildKiosk(){
   try{return (window.WildKiosk&&typeof WildKiosk.pick==="function")?WildKiosk:null;}catch(e){return null;}
 }
+/* Device admin: granted, not granted, or null when the wrapper can't say.
+   Android will not grant this silently - the user has to confirm on a system
+   screen - so all the app can do is put that screen in front of them. */
+function kioskAdminOn(){
+  const k=wildKiosk();
+  if(!k||typeof k.adminOn!=="function")return null;
+  try{return !!k.adminOn();}catch(e){return null;}
+}
 function kioskIsOn(){
   const k=wildKiosk();
   if(!k)return null;                       // null = can't tell, don't claim either way
@@ -5975,6 +6003,27 @@ function showHandBackHold(){
       +'<div style="font-size:11px;font-weight:800;color:var(--pri);flex-shrink:0;min-width:34px">'+t+'</div>'
       +'<div style="font-size:11.5px;color:var(--sub);line-height:1.45">'+w+'</div></div>';
   };
+  /* v4.71: device admin has its own row. requestAdmin() has been in the
+     wrapper all along and nothing ever called it, which is why an install
+     never offered it. The wrapper now asks a few seconds after launch, and
+     this row is the way back to it if that prompt was dismissed. */
+  const adminOn=kioskAdminOn();
+  const adminHtml = (adminOn===null) ? "" :
+    '<div style="font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:16px">Screen</div>'
+    +(adminOn
+      ? '<div style="padding:12px 13px;margin-top:7px;background:var(--sur);border:none;border-left:6px solid #2e7d32;border-radius:11px;box-shadow:var(--shad)">'
+        +'<div style="font-size:14px;font-weight:800;color:var(--txt)">\u2713 Screen timeout is on</div>'
+        +'<div style="font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.45">The app can switch the screen off after 3 minutes idle, which is what saves the battery through a round.</div></div>'
+      : '<button type="button" id="bhAdmin" style="display:block;width:100%;text-align:left;padding:12px 13px;margin-top:7px;'
+        +'background:var(--sur);border:none;border-left:6px solid #f9a825;border-radius:11px;box-shadow:var(--shad);cursor:pointer;'
+        +'-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+        +'<div style="display:flex;align-items:center;gap:10px">'
+          +'<div style="font-size:18px;flex-shrink:0">\uD83D\uDD0B</div>'
+          +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">Let the app turn the screen off</div>'
+          +'<div style="font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.45">Not switched on. Without it the screen stays lit all round and the battery goes. Tap here, then Activate on the screen Android shows.</div></div>'
+          +'<div style="font-size:14px;color:var(--sub);flex-shrink:0">\u203A</div>'
+        +'</div></button>');
+
   const stateLine = on===null
     ? 'Its title line reads <b>Kiosk mode is ON</b> or <b>Kiosk mode is OFF</b>.'
     : 'Right now kiosk mode is <b>'+(on?"ON":"OFF")+'</b>.';
@@ -5990,6 +6039,7 @@ function showHandBackHold(){
       +(live?"Tap a row to run it":"What\u2019s on it")+'</div>'
     +(live?'<div style="font-size:11.5px;color:var(--sub);margin-top:4px;line-height:1.45">These do the same thing as picking them off the real menu \u2014 no need to hold BACK for ten seconds. The two amber ones ask first.</div>':"")
     +rows
+    +adminHtml
     +(live
       ?'<button type="button" id="bhOpen" style="margin-top:14px;width:100%;padding:12px;background:var(--sur);border:1px solid var(--div);'
         +'border-radius:12px;font-size:13px;font-weight:700;color:var(--txt);cursor:pointer">Open the real menu instead</button>'
@@ -6019,6 +6069,14 @@ function showHandBackHold(){
         if(i===0)setTimeout(function(){try{showHandBackHold();}catch(e){}},350);
       };
     });
+    /* Re-render on return: the admin screen is a separate activity, so coming
+       back should show the row as granted rather than still asking. */
+    const ad=document.getElementById("bhAdmin");
+    if(ad)ad.onclick=function(){
+      const k=wildKiosk();if(!k||typeof k.admin!=="function")return;
+      try{k.admin();}catch(e){}
+      setTimeout(function(){try{showHandBackHold();}catch(e){}},4000);
+    };
     const op=document.getElementById("bhOpen");
     if(op)op.onclick=function(){const k=wildKiosk();if(k)try{k.menu();}catch(e){}};
   }

@@ -1,4 +1,4 @@
-# Wild App — APK v1.95 (app build v4.69 / 184)
+# Wild App — APK v1.97 (app build v4.71 / 186)
 
 Supersedes every earlier build in this session. Install this one.
 The native side moved in this build (v1.95), so the APK is required for the
@@ -18,7 +18,65 @@ survive.
 
 ---
 
-## 1. "Repo has build 170, you have 182" — fixed
+## 0. Device admin is now offered after an install
+
+`requestAdmin()` was already in the wrapper, complete and correct — and
+**nothing anywhere called it**. That's why an install never asked. Same shape
+as the scanner-config bug earlier in this session: shipped code that was never
+wired up.
+
+Three parts:
+
+**Asked at launch.** `armAdminPrompt()` posts the request about four seconds
+after startup, only when it isn't already granted. Delayed rather than
+immediate — at `onCreate` the WebView isn't up yet, and a system screen thrown
+over a half-built activity is how you get a black window.
+
+**The kiosk no longer fights it.** `requestAdmin()` now opens the 120-second
+leave window before starting the intent. Without that,
+`onWindowFocusChanged(false)` schedules `bringBack` and the app pulls itself
+back on top of the admin screen the instant it appears — the same fight the
+on-screen keypad used to have. This was going to bite regardless of who called
+it.
+
+**A way back to it.** Options → Back button menu has a Screen section: an amber
+row when it isn't granted, a green confirmation when it is. So a dismissed
+prompt isn't a dead end. Re-renders on return from the system screen.
+
+Android cannot grant device admin silently — the user has to confirm on a
+system screen. All the app can do is put that screen in front of you. Tap the
+row, then **Activate**.
+
+## 1. "Wild App keeps stopping" — fixed. Install this build.
+
+**v1.95 would not start. Do not use it.** My fault, and worth being precise
+about what I got wrong.
+
+The v1.95 `AudioBridge` had a static initialiser that built two arrays and a
+JSON string. The four `addJavascriptInterface` calls in `onCreate` sit
+**outside any try/catch**, so a class that fails to initialise escapes
+`onCreate` and kills the activity before the WebView is ever shown — every
+launch, with no way back in. That is exactly the symptom.
+
+Two changes, and I did both because only one of them is a fix:
+
+**The bridge is rewritten.** No static initialiser, no static state, no arrays,
+no string building — just five small accessors shaped like the KioskBridge
+methods that are known to run. The stream ids and names moved into the page,
+which is where wording belonged anyway; the wrapper now only reads and writes a
+number it is handed.
+
+**The registrations are wrapped.** A bridge failing to attach now costs one
+settings screen, not the app. Every screen that uses a bridge already copes
+with it being absent, because that is what happens on an older wrapper.
+
+Honest caveat: I have no ART verifier in this environment, so I could not
+single out the offending instruction. `dexdump` parsed the v1.95 dex cleanly,
+which tells you the bytecode was well-formed but nothing about whether it would
+initialise. Rather than guess at a line, I removed the whole class of
+construct — and made `onCreate` survive being wrong again.
+
+## 2. "Repo has build 170, you have 182" — fixed
 
 There is a **sixth** release stamp, `REPO_APK_BUILD`, and it had been sitting
 at **170** through every release. "Update app from GitHub" compares the repo's
@@ -39,7 +97,7 @@ Reproduced the message from your repo's current file (`apk:170` vs installed
 
 **Release checklist is now six stamps, not five.**
 
-## 2. Device volume + scanner beep in Sound & vibration
+## 3. Device volume + scanner beep in Sound & vibration
 
 New `WildAudio` bridge. Options → Sound & vibration now carries the sliders the
 notification shade shows — **Media, Notifications, Ring, Alarm, System** — because
@@ -72,7 +130,7 @@ already been written over whatever was there. If it sounds like the
 notification tone rather than the classic Zebra beep, that's why — tell me and
 I'll capture the original URI at first acquire instead.
 
-## 3. Options: "Restart scanner" removed
+## 4. Options: "Restart scanner" removed
 
 Gone at Ash's request. `window.wildScanner` itself is untouched — the
 automatic fix when the app wakes from sleep still runs, which is where the
@@ -83,7 +141,7 @@ Options is now eleven rows, still A–Z. Checked every row still opens its own
 screen after the removal — the list is sorted and then wired by index, so a
 deletion is exactly the kind of change that can drift the handlers.
 
-## 4. Exact-address beep sounded like it repeated — fixed (web)
+## 5. Exact-address beep sounded like it repeated — fixed (web)
 
 Only the EXACT outcome doubled, which is what pointed at the cause: a stray
 engine beep would have doubled every outcome, not one of them.
@@ -101,7 +159,7 @@ Verified by capturing the oscillator schedule: exact = 1 note 1500→1900,
 building = 1 flat note, picker = 2 notes, none = 1 note, and a FIRM walk still
 adds its low tail.
 
-## 5. Back button menu — the rows now RUN (new in this build)
+## 6. Back button menu — the rows now RUN (new in this build)
 
 New `WildKiosk` bridge in the APK. Tapping a row does exactly what picking it
 off the native dialog does, because the bridge hands the index to the dialog's
@@ -124,7 +182,7 @@ reimplementation would have quietly lost it and the rows would have half-worked.
 On an older wrapper the rows stay a plain list with a line saying why. A tap
 that silently does nothing is worse than a row that never looked tappable.
 
-## 6. The voice stutter — fixed (web, was v4.64)
+## 7. The voice stutter — fixed (web, was v4.64)
 
 `speakText()` scheduled speaking on a 350 ms timer and never kept hold of it,
 so two requests close together left **two timers armed**. The native TTS bridge
@@ -140,7 +198,7 @@ the same phrase inside 1.5s is dropped rather than restarted. A *different*
 walk always speaks — that's a new answer and must be heard. Reproduced against
 a mock of the shim (2 utterances, 1 flushed) and confirmed fixed (1, 0).
 
-## 7. The double scan sound — fixed (native, was v1.93)
+## 8. The double scan sound — fixed (native, was v1.93)
 
 The shipped APK **never configured the scanner at all** — no `ScannerConfig`
 anywhere — so Zebra's decode beep ran at factory default and the app's outcome
@@ -153,13 +211,13 @@ must run before the read, and re-enabling after a pause can hand back the
 defaults. Wrapped so a firmware missing either field loses the silencing, not
 the scanner.
 
-## 8. A double *buzz* found on the way (web)
+## 9. A double *buzz* found on the way (web)
 
 Three paths — your correction, an override, the Junction Mews picker — buzzed
 40 ms themselves and then called `outcomeTone()`, which buzzes again. Gone;
 `outcomeTone()` owns the haptic, as its comments always claimed.
 
-## 9. Sound & vibration (web)
+## 10. Sound & vibration (web)
 
 The Sound screen rebuilt in the shape of Android's own page: beep volume,
 **Vibrate on scan** switch, **Light / Normal / Strong**, and a test row per
@@ -185,12 +243,16 @@ the motor doesn't spin up, above 400 it reads as a fault.
 - signature verifies **v1, v2, v3**; manifest intact (`uk.wild.app`, HOME
   category, EMDK `uses-library`, `configChanges 0x40003FFF` still carrying
   mcc/mnc)
+- `dexdump` over the rebuilt dex: no static initialiser anywhere in
+  AudioBridge, no fill-array-data, register/ins/outs sane on every new method
 - jsdom: both wrapper cases (bridge / no bridge), both confirm dialogs
-  including Cancel, the kiosk toggle redraw, and all five Sound test tones
+  including Cancel, the kiosk toggle redraw, all five Sound test tones, the
+  DND spring-back, value clamping, and a device missing a stream entirely
+  (that row is omitted rather than drawn dead)
 
 ## Build stamps
 
-`THIS_BUILD_NUM 184` · `BUILD_NAME v4.69` · `REPO_APK_BUILD 184` ·
+`THIS_BUILD_NUM 186` · `BUILD_NAME v4.71` · `REPO_APK_BUILD 186` ·
 `REPO_DATA_BUILD 131` · `REPO_DATA_HASH a5195d2e` · `REPO_DATA_ROWS 24102`
 
 Six stamps. `REPO_APK_BUILD` only moves when an APK is uploaded; the other five
