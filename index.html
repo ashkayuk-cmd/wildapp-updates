@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 179;
+const THIS_BUILD_NUM = 182;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.64";
+const BUILD_NAME = "v4.67";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4051,7 +4051,7 @@ function showHandStreetBldg(street,bldg,num){
    harder. That is the honest limit of what a WebView can do, and the screen
    says so rather than pretending otherwise. */
 const SOUND_TESTS=[
-  {k:"exact",   e:"\u2705", n:"Exact address",   d:"Rising two-note pair - the label matched one address"},
+  {k:"exact",   e:"\u2705", n:"Exact address",   d:"One rising beep - the label matched a single address"},
   {k:"building",e:"\U0001F3E2", n:"Building",       n2:"Building", d:"One beep - matched a building, not a single flat"},
   {k:"picker",  e:"\u2753", n:"More than one walk",d:"Low double - look at the screen and pick"},
   {k:"none",    e:"\u274C", n:"No match",        d:"Flat low tone - nothing found for that label"},
@@ -4367,17 +4367,31 @@ function outcomeTone(kind,walkText){
       }
       return;
     }
+    /* Each entry is [frequency, seconds] or [from, seconds, to] — the third
+       value glides the pitch across the note instead of stepping to it.
+
+       v4.66: EXACT used to be two separate notes, 1500 then 1900, with a
+       50 ms gap between them. It was meant to read as one rising chirp, but
+       two notes of similar length a semitone-ish apart with a silence in the
+       middle is heard as a beep that repeats — which is what it sounded
+       like, and it made an exact hit easy to mistake for a fault.
+       It's now ONE note that slides 1500→1900. Same rising shape, same
+       length, unmistakably a single beep — and still nothing like BUILDING,
+       which is flat at 1400. PICKER stays a genuine double on purpose: that
+       one means "look at the screen", and sounding repeated is the point. */
     const seq=({
-      exact:[[1500,.09],[1900,.11]],
+      exact:[[1500,.17,1900]],
       building:[[1400,.14]],
       picker:[[950,.09],[950,.09]],
       none:[[420,.22]]
     })[kind]||[[1400,.14]];
     if(walkText&&/\bFIRM\b/i.test(walkText))seq.push([640,.16]);
     let t=audioCtx.currentTime+0.01;
-    for(const[f,dur]of seq){
+    for(const[f,dur,to]of seq){
       const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-      o.type=BEEP_WAVE;o.frequency.value=f;
+      o.type=BEEP_WAVE;
+      o.frequency.setValueAtTime(f,t);
+      if(to)o.frequency.linearRampToValueAtTime(to,t+dur);
       g.gain.setValueAtTime(0.0001,t);
       g.gain.exponentialRampToValueAtTime(peak,t+0.01);
       g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
@@ -5785,21 +5799,52 @@ function splitPostcodes(){
   handSplitCache=out;
   return out;
 }
-/* ── BACK-BUTTON MENU (v4.63) ──────────────────────────────────
-   A read-only crib sheet for the hidden menu the WRAPPER shows when the
-   hardware BACK key is held down. That menu is native — it lives in the APK,
-   not in this page, so this screen cannot open it and cannot read which way
-   kiosk mode is currently set. It only lists what will appear, so the choices
-   don't have to be remembered (or discovered by holding BACK in the street).
-   The timings and wording below are lifted from the shipped APK: hints at
-   3s and 7s, menu at 10s. */
-const BACKHOLD_ITEMS=[
-  {n:"Leave kiosk mode / Turn kiosk mode on",d:"The first row, and the only one that changes wording. It reads \"Leave kiosk mode\" when kiosk is ON and \"Turn kiosk mode on\" when it's OFF — so the row itself tells you the current state. Leaving kiosk mode lets you out to the phone; the title line above the list says which state you're in."},
-  {n:"Exit app",d:"Closes the Wild App. In kiosk mode the wrapper normally pulls itself back to the front, so this is the deliberate way out."},
-  {n:"Launch StageNow",d:"Opens Zebra's StageNow app for scanning a staging barcode."},
-  {n:"Android Settings",d:"The phone's own settings — Wi-Fi, text-to-speech voices, volume, date and time."},
-  {n:"Change launcher (Home app)",d:"Picks which app the HOME key opens. This is how the Wild App is set as HOME, and how it's unset again."}
-];
+/* -- BACK-BUTTON MENU (v4.65) ----------------------------------
+   Started life as a read-only crib sheet for the hidden menu the WRAPPER
+   shows when the hardware BACK key is held down. The rows now RUN, via the
+   WildKiosk bridge added to the APK in v1.94 - tapping one does exactly what
+   picking it off the native dialog does, because the bridge hands the index
+   to the dialog's own listener rather than reimplementing anything. That
+   listener also opens the 120-second grace window that stops the kiosk
+   pulling itself back to the front, which a reimplementation would have
+   quietly lost.
+
+   The bridge only exists in APK v1.94 and later. On an older wrapper the
+   rows stay exactly as they were - a list - with a line saying why, because
+   a tap that silently does nothing is worse than a row that never looked
+   tappable. Same story in a desktop browser.
+
+   Timings and wording below are lifted from the shipped APK: hints at 3s and
+   7s, menu at 10s. */
+function wildKiosk(){
+  try{return (window.WildKiosk&&typeof WildKiosk.pick==="function")?WildKiosk:null;}catch(e){return null;}
+}
+function kioskIsOn(){
+  const k=wildKiosk();
+  if(!k)return null;                       // null = can't tell, don't claim either way
+  try{return !!k.state();}catch(e){return null;}
+}
+/* Row 0's wording flips with the current state, so it's built rather than
+   stored. The rest are fixed. */
+function backHoldItems(on){
+  return [
+    {i:0,e:"\uD83D\uDD12",
+       n:on===null?"Leave kiosk mode / Turn kiosk mode on":(on?"Leave kiosk mode":"Turn kiosk mode on"),
+       d:on===null
+         ?"The only row that changes wording: it reads \u201cLeave kiosk mode\u201d when kiosk is ON and \u201cTurn kiosk mode on\u201d when it\u2019s OFF, so the row itself tells you the state."
+         :(on?"Kiosk is on. This lets you out to the phone \u2014 the app stops pulling itself back to the front."
+             :"Kiosk is off. This locks the app to the front again."),
+       warn:false},
+    {i:1,e:"\uD83D\uDEAA",n:"Exit app",
+       d:"Closes the Wild App. In kiosk mode the wrapper normally pulls itself back, so this is the deliberate way out.",warn:true},
+    {i:2,e:"\uD83D\uDCE1",n:"Launch StageNow",
+       d:"Opens Zebra\u2019s StageNow app for scanning a staging barcode.",warn:false},
+    {i:3,e:"\u2699\uFE0F",n:"Android Settings",
+       d:"The phone\u2019s own settings \u2014 Wi\u2011Fi, text\u2011to\u2011speech voices, volume, date and time.",warn:false},
+    {i:4,e:"\uD83C\uDFE0",n:"Change launcher (Home app)",
+       d:"Picks which app the HOME key opens. This is how the Wild App is set as HOME, and how it\u2019s unset again.",warn:true}
+  ];
+}
 function showHandBackHold(){
   const box=document.getElementById("handResult");
   if(!box)return;
@@ -5807,33 +5852,98 @@ function showHandBackHold(){
   handNav("backhold",function(){showHandBackHold();});
   try{box.dataset.sub="backhold";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
-  const rows=BACKHOLD_ITEMS.map(function(x,i){
-    return '<div style="padding:11px 13px;margin-top:7px;background:var(--sur);border:none;border-left:6px solid var(--pri);border-radius:11px;box-shadow:var(--shad)">'
-      +'<div style="font-size:14px;font-weight:800;color:var(--txt)">'+(i+1)+'. '+escHtml(x.n)+'</div>'
-      +'<div style="font-size:11.5px;color:var(--sub);margin-top:4px;line-height:1.45">'+escHtml(x.d)+'</div>'
-    +'</div>';
+  const live=!!wildKiosk();
+  const on=kioskIsOn();
+  const rows=backHoldItems(on).map(function(x){
+    const tag=live?"button":"div";
+    const tap=live?'class="bhRow" data-i="'+x.i+'" type="button" '
+                 :'';
+    return '<'+tag+' '+tap+'style="display:block;width:100%;text-align:left;padding:12px 13px;margin-top:7px;'
+      +'background:var(--sur);border:none;border-left:6px solid '+(x.warn?"#f9a825":"var(--pri)")+';border-radius:11px;'
+      +'box-shadow:var(--shad);'+(live?'cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation':'')+'">'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+        +'<div style="font-size:18px;flex-shrink:0">'+x.e+'</div>'
+        +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">'+escHtml(x.n)+'</div>'
+        +'<div style="font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.45">'+escHtml(x.d)+'</div></div>'
+        +(live?'<div style="font-size:14px;color:var(--sub);flex-shrink:0">\u203A</div>':'')
+      +'</div>'
+    +'</'+tag+'>';
   }).join("");
   const step=function(t,w){
     return '<div style="display:flex;gap:9px;align-items:baseline;margin-top:5px">'
       +'<div style="font-size:11px;font-weight:800;color:var(--pri);flex-shrink:0;min-width:34px">'+t+'</div>'
       +'<div style="font-size:11.5px;color:var(--sub);line-height:1.45">'+w+'</div></div>';
   };
+  const stateLine = on===null
+    ? 'Its title line reads <b>Kiosk mode is ON</b> or <b>Kiosk mode is OFF</b>.'
+    : 'Right now kiosk mode is <b>'+(on?"ON":"OFF")+'</b>.';
   box.innerHTML='<div style="width:100%;text-align:left">'
     +handTopBar("Back button menu")
     +'<div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.45">Hold the hardware BACK key down and the wrapper counts you in, then shows a menu of five. Nothing happens if you let go early.</div>'
     +'<div style="margin-top:10px;padding:10px 12px;background:#f7f8fa;border:1px solid var(--div);border-radius:11px">'
       +step("3s","&ldquo;Keep holding BACK&hellip;&rdquo;")
       +step("7s","&ldquo;Keep holding &mdash; nearly there&hellip;&rdquo;")
-      +step("10s","The menu opens. Its title line reads <b>Kiosk mode is ON</b> or <b>Kiosk mode is OFF</b>.")
+      +step("10s","The menu opens. "+stateLine)
     +'</div>'
-    +'<div style="font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:14px">What&rsquo;s on it</div>'
+    +'<div style="font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:14px">'
+      +(live?"Tap a row to run it":"What\u2019s on it")+'</div>'
+    +(live?'<div style="font-size:11.5px;color:var(--sub);margin-top:4px;line-height:1.45">These do the same thing as picking them off the real menu \u2014 no need to hold BACK for ten seconds. The two amber ones ask first.</div>':"")
     +rows
-    +'<div style="font-size:11.5px;color:var(--sub);margin-top:10px;line-height:1.45">There&rsquo;s a <b>Close</b> button under the list, and tapping outside closes it too &mdash; so opening it by accident costs nothing.</div>'
-    +'<div style="font-size:11px;color:var(--sub);margin-top:10px;line-height:1.45">This screen is a list only. The menu belongs to the wrapper the app runs inside, so it can&rsquo;t be opened from here.</div>'
+    +(live
+      ?'<button type="button" id="bhOpen" style="margin-top:14px;width:100%;padding:12px;background:var(--sur);border:1px solid var(--div);'
+        +'border-radius:12px;font-size:13px;font-weight:700;color:var(--txt);cursor:pointer">Open the real menu instead</button>'
+      :'<div style="font-size:11.5px;color:var(--sub);margin-top:12px;line-height:1.45">These rows are a list only on this wrapper. Tapping them needs the wrapper from APK v1.94 or later \u2014 until then, hold BACK for ten seconds to reach them.</div>')
     +'<button id="handBhBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>'
   +'</div>';
+
+  if(live){
+    /* Exit and the launcher chooser both walk you out of the app, so they
+       confirm first - the rest are cheap to undo and just run. Kiosk is a
+       toggle, and the screen redraws afterwards so row 0 and the state line
+       agree with what just happened. */
+    box.querySelectorAll(".bhRow").forEach(function(b){
+      b.onclick=function(){
+        const i=+b.dataset.i;
+        const k=wildKiosk();
+        if(!k)return;
+        const run=function(){try{k.pick(i);}catch(e){}};
+        if(i===1||i===4){
+          const what=(i===1)?"Close the Wild App?":"Change which app the HOME key opens?";
+          const note=(i===1)?"You'll be back at the phone. Nothing is lost \u2014 corrections and settings are saved."
+                            :"Android will ask you to pick a launcher. Choosing something other than Wild App means HOME stops opening it.";
+          handConfirm(what,note,run);
+          return;
+        }
+        run();
+        if(i===0)setTimeout(function(){try{showHandBackHold();}catch(e){}},350);
+      };
+    });
+    const op=document.getElementById("bhOpen");
+    if(op)op.onclick=function(){const k=wildKiosk();if(k)try{k.menu();}catch(e){}};
+  }
   const bk=document.getElementById("handBhBack");
   if(bk)bk.onclick=function(){try{handBackToOptions();}catch(e){}};
+}
+/* A yes/no sheet for the two rows that walk you out of the app. Deliberately
+   not window.confirm(): a system dialog steals the window focus, and the
+   kiosk answers a focus loss by dismissing system windows and pulling itself
+   back - the two would fight, exactly as the on-screen keypad used to. */
+function handConfirm(title,note,onYes){
+  const ov=document.createElement("div");
+  ov.id="wildConfirm";
+  ov.style.cssText="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:20px";
+  ov.innerHTML='<div style="background:#fff;border-radius:15px;padding:18px;max-width:320px;width:100%;box-shadow:0 8px 28px rgba(0,0,0,.3)">'
+    +'<div style="font-size:16px;font-weight:800;color:#202124">'+escHtml(title)+'</div>'
+    +'<div style="font-size:12.5px;color:var(--sub,#5f6368);margin-top:7px;line-height:1.5">'+escHtml(note)+'</div>'
+    +'<div style="display:flex;gap:9px;margin-top:16px">'
+      +'<button type="button" id="wcNo" style="flex:1;padding:12px;border:1px solid #dadce0;border-radius:11px;background:#fff;font-size:13.5px;font-weight:800;color:#202124;cursor:pointer">Cancel</button>'
+      +'<button type="button" id="wcYes" style="flex:1;padding:12px;border:none;border-radius:11px;background:#c5221f;font-size:13.5px;font-weight:800;color:#fff;cursor:pointer">Yes</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  const no=ov.querySelector("#wcNo");
+  if(no)no.onclick=function(){ov.remove();};
+  const yes=ov.querySelector("#wcYes");
+  if(yes)yes.onclick=function(){ov.remove();try{onYes();}catch(e){}};
 }
 function showHandSplits(){
   const box=document.getElementById("handResult");
@@ -9599,18 +9709,8 @@ function openOptionsMenu(){
   };
   const MENU=[
     {e:"ℹ️",label:"App version",sub:"Which build is running, and updates",go:goHand(()=>openAppVersion())},
-    {e:"⬅️",label:"Back button menu",sub:"What holding BACK for 10 seconds brings up",go:goHand(()=>showHandBackHold())},
+    {e:"⬅️",label:"Back button menu",sub:"Kiosk mode, exit, StageNow, Android settings",go:goHand(()=>showHandBackHold())},
     {e:"🕒",label:"Recent scans",sub:"The last 40 scans, and what each one gave",go:goHand(()=>showHandRecent())},
-    {e:"🔌",label:"Restart scanner",sub:"If the trigger lights nothing. Takes about a second",go:()=>{
-      ov.remove();
-      try{if(typeof openHand==="function")openHand();}catch(e){}
-      // Falls back to the full app restart only if the bridge isn't there.
-      try{
-        if(window.wildScanner&&window.wildScanner.fix()){window.wildScanner.hud("↻ Scanner restarted");return;}
-        if(window.WildReset&&WildReset.hard){WildReset.hard();return;}
-        location.reload();
-      }catch(e){}
-    }},
     {e:"🔀",label:"Shared streets",sub:"Streets split between two or more walks",go:goHand(()=>showHandShared())},
     {e:"🔊",label:"Sound &amp; vibration",sub:"Beep volume, vibrate on/off and strength",go:goHand(()=>showHandSound())},
     {e:"⚠️",label:"Split postcodes",sub:"Postcodes that go to more than one walk",go:goHand(()=>showHandSplits())},
@@ -12616,10 +12716,12 @@ document.addEventListener("visibilitychange",()=>{
      What this CANNOT do is ask whether a read is actually armed — only
      native EMDK can see that, so it can't be silently automatic the way a
      native watchdog would be.  It covers the two moments that matter
-     instead: a tap (the RESET box, or Options → Restart scanner), and the
-     app coming back after the device has been asleep, which is when the
-     arming is most often lost — the screen going off pauses and re-enables
-     the scanner, and that is one of the places it wedges. */
+     instead: the app coming back after the device has been asleep, which is
+     when the arming is most often lost — the screen going off pauses and
+     re-enables the scanner, and that is one of the places it wedges.
+     v4.67: Options → Restart scanner is gone at Ash's request, so the
+     wake-up fix is now the only caller. The manual fallback is unchanged:
+     RESET APP in the title bar, which reloads the whole app. */
   window.wildScanner=(function(){
     var LAST_SCAN=0, LAST_FIX=0, BUSY=false;
     var QUIET_MS=300000;   // only auto-fix when nothing has scanned for 5 min
