@@ -101,7 +101,7 @@ window.WILD_LIBS_READY=(async()=>{
 html,body,#app{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* But keep real inputs usable so you can still type a postcode / edit text. */
 input,textarea,[contenteditable="true"]{-webkit-user-select:text;-moz-user-select:text;-ms-user-select:text;user-select:text;-webkit-touch-callout:default}
-:root{--pri:#1565C0;--pri2:#0D47A1;--sur:#fff;--bg:#F0F4F8;--txt:#1A1A2E;--sub:#5f6368;--div:#dee3ea;--chip:#E3F2FD;--shad:0 2px 8px rgba(0,0,0,.13);--r:14px;}
+:root{--pri:#0b6c86;--pri2:#084f62;--sur:#fff;--bg:#F0F4F8;--txt:#1A1A2E;--sub:#5f6368;--div:#dee3ea;--chip:#d9eef5;--shad:0 2px 8px rgba(0,0,0,.13);--r:14px;}
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt);overflow:hidden}
 #app{display:flex;flex-direction:column;height:100vh;height:100dvh;width:100%;max-width:430px;margin:0 auto;background:var(--bg);position:relative;overflow:hidden}
 @media (max-width:900px){#app{max-width:100%}}
@@ -166,9 +166,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Ro
 .shbadge b{font-weight:800}
 /* Street delivered by more than one walk — deliberately a different colour
    from .shbadge (orange = same walk, two streets) so the two never blur. */
-.wkbadge{display:inline-block;background:#e3f2fd;color:#0d47a1;border:1px solid #90caf9;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;letter-spacing:.03em;margin-left:6px;text-transform:none;vertical-align:middle;white-space:normal}
+.wkbadge{display:inline-block;background:#d9eef5;color:#084f62;border:1px solid #8fc7d8;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;letter-spacing:.03em;margin-left:6px;text-transform:none;vertical-align:middle;white-space:normal}
 .wkbadge b{font-weight:800;text-decoration:underline}
-#bwalks{display:none;margin-top:8px;background:#e3f2fd;color:#0d47a1;border:1px solid #90caf9;border-radius:6px;padding:7px 10px;font-size:12px;line-height:1.45}
+#bwalks{display:none;margin-top:8px;background:#d9eef5;color:#084f62;border:1px solid #8fc7d8;border-radius:6px;padding:7px 10px;font-size:12px;line-height:1.45}
 #bwalks b{font-weight:800}
 .shdetail{background:#fff3e0;color:#e65100;border:1px solid #ffcc80;border-radius:10px;padding:10px 12px;margin:-6px 0 14px;font-size:12px;line-height:1.45}
 .shdetail b{font-weight:700}
@@ -287,9 +287,9 @@ body.addr-locked #rl .lockmsg{display:flex}
 #lockScan{position:absolute;inset:0;background:#000;display:none;flex-direction:column;z-index:500}
 #lockScan.show{display:flex}
 #lockScan video{flex:1;width:100%;object-fit:cover;background:#000}
-#lockScan .scanbar{padding:14px;display:flex;gap:10px;background:#0D47A1;color:#fff;align-items:center}
+#lockScan .scanbar{padding:14px;display:flex;gap:10px;background:#084f62;color:#fff;align-items:center}
 #lockScan .scanbar .msg{flex:1;font-size:13px}
-#lockScan .scanbar button{background:#fff;color:#0D47A1;border:none;font-weight:600;padding:10px 18px;border-radius:10px;cursor:pointer}
+#lockScan .scanbar button{background:#fff;color:#084f62;border:none;font-weight:600;padding:10px 18px;border-radius:10px;cursor:pointer}
 #lockScan .scanframe{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:35%;max-width:140px;aspect-ratio:1;border:3px solid rgba(255,255,255,.7);border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
 .licon{font-size:54px}.ltxt{color:#fff;font-size:19px;font-weight:600}
 .lbar{width:180px;height:4px;background:rgba(255,255,255,.3);border-radius:2px;overflow:hidden}
@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 189;
+const THIS_BUILD_NUM = 190;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.74";
+const BUILD_NAME = "v4.75";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -934,7 +934,7 @@ function updBtnReady(kind){
   b._busy=false;
   b.style.opacity="1";
   b.textContent=UPD_READY_LABEL;
-  b.style.background="var(--pri,#0a7)";
+  b.style.background="var(--pri,#0b6c86)";
   b.style.color="#fff";
 }
 function applyUpdateNow(kind){
@@ -1008,7 +1008,7 @@ function liveBanner(title,sub,onTap){
   const bar=document.createElement("div");
   bar.id="wildUpdateBar";
   bar.style.cssText=["position:fixed","top:0","left:0","right:0","z-index:2147483646",
-    "background:var(--pri,#0a7)","color:#fff","padding:12px 14px","font-family:inherit",
+    "background:var(--pri,#0b6c86)","color:#fff","padding:12px 14px","font-family:inherit",
     "font-size:14px","font-weight:800","display:flex","align-items:center",
     "justify-content:space-between","box-shadow:0 2px 8px rgba(0,0,0,.25)","cursor:pointer"].join(";");
   bar.innerHTML='<span><span style="display:block">⬇ '+title+'</span>'+
@@ -1121,7 +1121,7 @@ function showDataPicker(msg){
     +'<div style="font-size:34px;margin-bottom:10px;">\ud83d\udcc2</div>'
     +'<div style="font-weight:600;font-size:16px;margin-bottom:8px;">No address data yet</div>'
     +'<div id="dpMsg" style="font-size:13px;color:#5f6368;line-height:1.45;margin-bottom:16px;"></div>'
-    +'<button id="dpBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--pri,#1565C0);color:#fff;font-size:15px;font-weight:600;">Choose Excel file</button>'
+    +'<button id="dpBtn" type="button" style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--pri,#0b6c86);color:#fff;font-size:15px;font-weight:600;">Choose Excel file</button>'
     +'</div>';
   document.body.appendChild(ov);
   ov.querySelector("#dpMsg").textContent=msg||"";
@@ -3463,7 +3463,7 @@ function showHandTypeIn(keep){
     </div>
     <div id="handTypeSug" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
     <button type="button" id="handTypeGo" style="margin-top:10px;width:100%;padding:14px;border:none;border-radius:12px;
-      background:var(--pri,#1565C0);color:#fff;font-size:15px;font-weight:800;cursor:pointer">Look up</button>
+      background:var(--pri,#0b6c86);color:#fff;font-size:15px;font-weight:800;cursor:pointer">Look up</button>
     <button type="button" id="handTypeBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;
       border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
   </div>`;
@@ -4173,7 +4173,7 @@ function showHandSound(){
         +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">Scanner\u2019s own beep</div>'
         +'<div style="font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4">Zebra\u2019s decode beep, separate from the app\u2019s. On means two sounds per scan \u2014 that beep, then the app\u2019s outcome tone. It follows the phone\u2019s volume above, not the app\u2019s.</div></div>'
         +'<button type="button" id="beepSw" role="switch" aria-checked="'+(beepOn?"true":"false")+'" style="flex-shrink:0;width:58px;height:32px;border:none;border-radius:16px;'
-        +'background:'+(beepOn?"var(--pri,#1565C0)":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+        +'background:'+(beepOn?"var(--pri,#0b6c86)":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
         +'<span id="beepKnob" style="position:absolute;top:3px;left:'+(beepOn?"29px":"3px")+';width:26px;height:26px;border-radius:13px;background:#fff;transition:left .15s"></span></button>'
       +'</div>');
 
@@ -4196,7 +4196,7 @@ function showHandSound(){
         +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">Vibrate on scan</div>'
         +'<div style="font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4">Off makes the app completely silent when the volume is also 0.</div></div>'
         +'<button type="button" id="vibeSw" role="switch" aria-checked="'+(on?"true":"false")+'" style="flex-shrink:0;width:58px;height:32px;border:none;border-radius:16px;'
-        +'background:'+(on?"var(--pri,#1565C0)":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+        +'background:'+(on?"var(--pri,#0b6c86)":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
         +'<span id="vibeKnob" style="position:absolute;top:3px;left:'+(on?"29px":"3px")+';width:26px;height:26px;border-radius:13px;background:#fff;transition:left .15s"></span></button>'
       +'</div>'
       +'<div id="vibeStrengthWrap" style="margin-top:14px;opacity:'+(on?"1":".4")+';pointer-events:'+(on?"auto":"none")+'">'
@@ -4237,7 +4237,7 @@ function showHandSound(){
   const sw=document.getElementById("vibeSw"), knob=document.getElementById("vibeKnob"),
         wrap=document.getElementById("vibeStrengthWrap");
   const paintSwitch=v=>{
-    if(sw){sw.style.background=v?"var(--pri,#1565C0)":"#c9ced4";sw.setAttribute("aria-checked",v?"true":"false");}
+    if(sw){sw.style.background=v?"var(--pri,#0b6c86)":"#c9ced4";sw.setAttribute("aria-checked",v?"true":"false");}
     if(knob)knob.style.left=v?"29px":"3px";
     if(wrap){wrap.style.opacity=v?"1":".4";wrap.style.pointerEvents=v?"auto":"none";}
   };
@@ -4282,7 +4282,7 @@ function showHandSound(){
     const a=wildAudio();if(!a)return;
     let now=false;
     try{now=!a.beep();a.setBeep(now);}catch(e){return;}
-    bsw.style.background=now?"var(--pri,#1565C0)":"#c9ced4";
+    bsw.style.background=now?"var(--pri,#0b6c86)":"#c9ced4";
     bsw.setAttribute("aria-checked",now?"true":"false");
     if(bknob)bknob.style.left=now?"29px":"3px";
   };
@@ -4324,7 +4324,7 @@ function showHandBrightness(){
         +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">Auto brightness</div>'
         +'<div style="font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4">Leaves the screen at whatever level the device itself is set to. Turn off to fix it manually below.</div></div>'
         +'<button type="button" id="brSw" role="switch" aria-checked="'+(auto?"true":"false")+'" style="flex-shrink:0;width:58px;height:32px;border:none;border-radius:16px;'
-        +'background:'+(auto?"var(--pri,#1565C0)":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+        +'background:'+(auto?"var(--pri,#0b6c86)":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
         +'<span id="brKnob" style="position:absolute;top:3px;left:'+(auto?"29px":"3px")+';width:26px;height:26px;border-radius:13px;background:#fff;transition:left .15s"></span></button>'
       +'</div>'
       +'<div id="brSlideWrap" style="margin-top:16px;opacity:'+(auto?".4":"1")+';pointer-events:'+(auto?"none":"auto")+'">'
@@ -4338,7 +4338,7 @@ function showHandBrightness(){
   const sw=document.getElementById("brSw"),knob=document.getElementById("brKnob"),wrap=document.getElementById("brSlideWrap");
   const sl=document.getElementById("brSlide"),num=document.getElementById("brNum");
   const redrawSwitch=()=>{
-    if(sw){sw.setAttribute("aria-checked",auto?"true":"false");sw.style.background=auto?"var(--pri,#1565C0)":"#c9ced4";}
+    if(sw){sw.setAttribute("aria-checked",auto?"true":"false");sw.style.background=auto?"var(--pri,#0b6c86)":"#c9ced4";}
     if(knob)knob.style.left=auto?"29px":"3px";
     if(wrap){wrap.style.opacity=auto?".4":"1";wrap.style.pointerEvents=auto?"none":"auto";}
   };
