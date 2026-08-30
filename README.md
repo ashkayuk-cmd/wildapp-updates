@@ -1,38 +1,48 @@
-# Brightness setting — build 187 / v4.72
+# Fix: "Update app from GitHub" not detecting the new APK
 
-## What's new
-A new "Brightness" row in Settings (sorted alphabetically, sits between
-"Back button menu" and "Recent scans"):
-- **Auto brightness** toggle — on (default) leaves the screen at whatever the
-  device itself is set to; off lets you fix it manually.
-- **Slider (1–100%)** — appears when Auto is off, applies live as you drag,
-  and is remembered across restarts.
+## What went wrong — my mistake
+There are **six** release stamps, and I updated five. I missed
+`REPO_APK_BUILD`, which is the one "Update app from GitHub" actually uses.
 
-## Why this needed a full APK, not just an OTA push
-Screen brightness can only be set through the Activity's Window, which isn't
-reachable from JavaScript — it needed a new native bridge (`WildBrightness`,
-alongside the existing `WildAudio`/`WildTTS`/etc.) exposed into the WebView.
-That's a dex-level change, so this one has to be installed by hand like the
-last one.
+That button doesn't inspect the `.apk` file in the repo at all — it reads
+`REPO_APK_BUILD` out of the repo's `index.html` and compares it against the
+build baked into your installed APK. I'd bumped `THIS_BUILD_NUM` to 187 but
+left `REPO_APK_BUILD` at 186, so the app compared 186 against your installed
+187, concluded the repo was *behind*, and correctly reported nothing to
+install.
 
-## Deploy
-1. **Install `WildApp.apk` on the device** — same signing cert, same
-   `versionCode` 170 (only the OTA-layer `THIS_BUILD_NUM` moved, to 187, same
-   scheme as every other content-only release), installs as a normal update.
-2. **Upload `index.html`** to `ashkayuk-cmd/wildapp-updates` on GitHub — this
-   is the same content now baked into the APK, so devices that get the OTA
-   push before the new APK will simply not see the Brightness row yet (the
-   Settings menu hides it automatically when the bridge isn't present), and
-   devices with the new APK but an older OTA copy will get it back as soon as
-   they pick up this OTA. Either order is safe.
-   `wild_data.json` is untouched — no need to re-upload it.
+(The comment above that constant documents this exact failure happening once
+before, at v4.69. I walked into it anyway.)
 
-## Compatibility
-Feature-detected the same way `WildAudio` already is: if `window.WildBrightness`
-doesn't exist (older wrapper, or opened in a browser during preview), the
-Settings row just doesn't appear — no dead controls, no error.
+## Fixed
+`REPO_APK_BUILD` is now 187, matching. All six stamps for this release:
 
-## Also carried over from the crash-fix build
-The `requestAdmin()` register-collision fix, the on-screen crash display
-around `onCreate`'s WebView setup, and the earlier crash-logger hook are all
-still in this build.
+| Stamp             | Value      | Moved? |
+|-------------------|------------|--------|
+| `THIS_BUILD_NUM`  | 187        | yes    |
+| `BUILD_NAME`      | v4.72      | yes    |
+| `REPO_APK_BUILD`  | 187        | yes (was missed) |
+| `REPO_DATA_BUILD` | 131        | no — data untouched |
+| `REPO_DATA_HASH`  | a5195d2e   | no — data untouched |
+| `REPO_DATA_ROWS`  | 24102      | no — data untouched |
+
+## Deploy — order matters this time
+1. **Upload `index.html`** to the repo first. This is the file that carries
+   the corrected stamp, so it's the one that makes the button work.
+2. **Upload `WildApp.apk`** to the repo, replacing the current one, so what
+   the button downloads matches what the stamp advertises.
+3. On the device, "Update app from GitHub" should now find build 187 and open
+   the installer.
+
+If you already manually installed the previous 187 APK, the button will say
+"Already on build 187 — tap again to install anyway", which is correct and
+harmless; you don't need to reinstall. The point of this fix is that *future*
+APK releases will be detected properly.
+
+## Note on the two buttons
+- **Check now** → checks `index.html` / `wild_data.json` (the web layer),
+  applies automatically on next launch.
+- **Update app from GitHub** → checks `REPO_APK_BUILD`, and if newer,
+  downloads the repo's `WildApp.apk` and opens Android's installer. Still
+  needs your tap to confirm the install — Android won't silently install —
+  but it does mean you don't have to transfer the file by hand.
