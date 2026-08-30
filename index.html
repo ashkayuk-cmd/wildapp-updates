@@ -3265,6 +3265,53 @@ function setSoundLevel(v){
   try{localStorage.setItem(SOUND_KEY,String(v));}catch(e){}
   return v;
 }
+/* -- VIBRATION PREFS (v4.63) --------------------------------
+   Until now the buzz was hard-wired: eleven separate vibrate calls scattered
+   through the scan paths, none of them switchable. Three of those sites fired
+   their own short buzz AND then called outcomeTone(), which buzzes again - so
+   a plain exact hit buzzed twice in a row. Every site now goes through
+   wildVibrate(), the one place that decides whether to buzz at all and how
+   hard, and the duplicate pre-buzzes are gone.
+   Strength scales the DURATIONS, because that is all the Web Vibration API
+   exposes - there is no amplitude control in a WebView. A longer pulse on the
+   TC56's motor reads as a stronger one. */
+const VIBE_KEY="wildVibeOn_v1";
+const VIBE_STRENGTH_KEY="wildVibeStrength_v1";
+const VIBE_SCALES={light:0.5,normal:1,strong:1.9};
+function vibeOn(){
+  try{if(localStorage.getItem(VIBE_KEY)==="0")return false;}catch(e){}
+  return true;                                    // on unless turned off
+}
+function setVibeOn(on){
+  try{localStorage.setItem(VIBE_KEY,on?"1":"0");}catch(e){}
+  return !!on;
+}
+function vibeStrength(){
+  let v="normal";
+  try{const r=localStorage.getItem(VIBE_STRENGTH_KEY);if(r&&VIBE_SCALES[r])v=r;}catch(e){}
+  return v;
+}
+function setVibeStrength(v){
+  if(!VIBE_SCALES[v])v="normal";
+  try{localStorage.setItem(VIBE_STRENGTH_KEY,v);}catch(e){}
+  return v;
+}
+/* The single gate every buzz in the app passes through. Takes a number or a
+   pattern array, exactly like the browser call it replaces. Durations are
+   scaled and clamped to 15-400 ms: below 15 the motor doesn't spin up at all,
+   above 400 it reads as a fault rather than a signal. */
+function wildVibrate(pattern){
+  try{
+    if(!vibeOn())return false;
+    if(!navigator.vibrate)return false;
+    const k=VIBE_SCALES[vibeStrength()]||1;
+    const scale=n=>Math.max(15,Math.min(400,Math.round((Number(n)||0)*k)));
+    const out=Array.isArray(pattern)?pattern.map(scale):scale(pattern);
+    if(Array.isArray(out)&&!out.length)return false;
+    navigator.vibrate(out);
+    return true;
+  }catch(e){return false;}
+}
 // Peak gain for one beep. Zero means DON'T PLAY: an exponential ramp can
 // never reach zero, so silence has to be a skip, not a quiet tone.
 /* v4.24: with TODAY'S WALK set the beeps are the whole warning, so they run
@@ -3991,6 +4038,25 @@ function showHandStreetBldg(street,bldg,num){
 }
 
 /* ── SOUND SCREEN (v1.65) ─────────────────────────────────────────────── */
+/* -- SOUND & VIBRATION (v4.63) ---------------------------------
+   Rebuilt as a full feedback screen in the shape of Android's own Sound page:
+   a volume section, a vibration section with a master switch and a strength
+   picker, and a row per outcome so each tone can be heard on its own without
+   scanning a parcel to provoke it. Everything writes straight to localStorage
+   through the same helpers the scan paths read, so a change takes effect on
+   the very next scan - nothing to save or apply.
+
+   Note on the vibration slider: the Web Vibration API has no amplitude, only
+   duration, so "strength" lengthens the pulse rather than driving the motor
+   harder. That is the honest limit of what a WebView can do, and the screen
+   says so rather than pretending otherwise. */
+const SOUND_TESTS=[
+  {k:"exact",   e:"\u2705", n:"Exact address",   d:"Rising two-note pair - the label matched one address"},
+  {k:"building",e:"\U0001F3E2", n:"Building",       n2:"Building", d:"One beep - matched a building, not a single flat"},
+  {k:"picker",  e:"\u2753", n:"More than one walk",d:"Low double - look at the screen and pick"},
+  {k:"none",    e:"\u274C", n:"No match",        d:"Flat low tone - nothing found for that label"},
+  {k:"notmine", e:"\u26A0\uFE0F", n:"Not your walk",  d:"Three harsh blats - only fires when TODAY'S WALK is set"}
+];
 function showHandSound(){
   const box=document.getElementById("handResult");
   if(!box)return;
@@ -4001,29 +4067,64 @@ function showHandSound(){
   const btn="padding:14px 0;flex:1;border:1px solid var(--div);border-radius:12px;background:var(--sur);"+
             "font-size:20px;font-weight:800;color:var(--txt);cursor:pointer;"+
             "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
-  box.innerHTML=`<div style="width:100%;max-width:340px;margin:0 auto;text-align:left;padding:14px 4px">
-    ${handTopBar("Sound")}
-    <div style="font-size:12.5px;color:var(--sub);margin-top:6px;line-height:1.45">How loud the scan beeps are. The PDA's volume keys change this very setting — press one and you'll hear it. At 0 the beeps stop but the buzz carries on, so a scan still registers in your hand.</div>
-    <div id="handVolNum" style="font-size:36px;font-weight:800;color:var(--txt);text-align:center;margin:16px 0 6px">${v?v+"%":"Off"}</div>
-    <div style="display:flex;align-items:center;gap:10px">
-      <button type="button" id="handVolDown" style="${btn};max-width:64px">−</button>
-      <input id="handVol" type="range" min="0" max="100" step="5" value="${v}" style="flex:1;height:34px">
-      <button type="button" id="handVolUp" style="${btn};max-width:64px">+</button>
-    </div>
-    <button type="button" id="handVolTest" style="margin-top:14px;width:100%;padding:13px;border:none;border-radius:12px;
-      background:var(--pri,#1565C0);color:#fff;font-size:14px;font-weight:800;cursor:pointer">▶ Test beep</button>
-    <button type="button" id="handVolMine" style="margin-top:8px;width:100%;padding:13px;border:1px solid var(--div);border-radius:12px;
-      background:var(--sur);color:var(--txt);font-size:13.5px;font-weight:800;cursor:pointer">&#9654; Test &ldquo;not your walk&rdquo; beep</button>
-    <button type="button" id="handVolBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;
-      border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>
-  </div>`;
+  const head=t=>'<div style="font-size:11px;font-weight:800;color:var(--pri);text-transform:uppercase;letter-spacing:.06em;margin:20px 0 6px">'+t+'</div>';
+  const card=inner=>'<div style="background:var(--sur);border:1px solid var(--div);border-radius:13px;padding:13px">'+inner+'</div>';
+
+  const on=vibeOn(), st=vibeStrength();
+  const segBtn=(id,label,sel)=>'<button type="button" id="'+id+'" style="flex:1;padding:11px 0;border:1px solid '+(sel?"var(--pri)":"var(--div)")+
+    ';border-radius:11px;background:'+(sel?"#e8f0fe":"var(--sur)")+';font-size:13px;font-weight:800;color:'+(sel?"var(--pri)":"var(--txt)")+
+    ';cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'+label+'</button>';
+  const testRows=SOUND_TESTS.map(function(x){
+    return '<button type="button" class="sndTest" data-k="'+x.k+'" style="display:flex;align-items:center;gap:11px;width:100%;padding:12px 4px;'
+      +'border:none;border-top:1px solid var(--div);background:none;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+      +'<div style="font-size:19px;flex-shrink:0">'+x.e+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:800;color:var(--txt)">'+escHtml(x.n)+'</div>'
+      +'<div style="font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4">'+escHtml(x.d)+'</div></div>'
+      +'<div style="font-size:12px;color:var(--pri);font-weight:800;flex-shrink:0">\u25B6</div></button>';
+  }).join("");
+
+  box.innerHTML='<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:14px 4px">'
+    +handTopBar("Sound &amp; vibration")
+    +head("Beep volume")
+    +card(
+       '<div style="font-size:12px;color:var(--sub);line-height:1.45">The app\u2019s own level, separate from the phone\u2019s. The PDA\u2019s volume keys change this very setting. At 0 the beeps stop but the buzz carries on, so a scan still registers in your hand.</div>'
+      +'<div id="handVolNum" style="font-size:34px;font-weight:800;color:var(--txt);text-align:center;margin:14px 0 6px">'+(v?v+"%":"Off")+'</div>'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+        +'<button type="button" id="handVolDown" style="'+btn+';max-width:60px">\u2212</button>'
+        +'<input id="handVol" type="range" min="0" max="100" step="5" value="'+v+'" style="flex:1;height:34px">'
+        +'<button type="button" id="handVolUp" style="'+btn+';max-width:60px">+</button>'
+      +'</div>')
+    +head("Vibration")
+    +card(
+       '<div style="display:flex;align-items:center;gap:12px">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">Vibrate on scan</div>'
+        +'<div style="font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4">Off makes the app completely silent when the volume is also 0.</div></div>'
+        +'<button type="button" id="vibeSw" role="switch" aria-checked="'+(on?"true":"false")+'" style="flex-shrink:0;width:58px;height:32px;border:none;border-radius:16px;'
+        +'background:'+(on?"var(--pri,#1565C0)":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+        +'<span id="vibeKnob" style="position:absolute;top:3px;left:'+(on?"29px":"3px")+';width:26px;height:26px;border-radius:13px;background:#fff;transition:left .15s"></span></button>'
+      +'</div>'
+      +'<div id="vibeStrengthWrap" style="margin-top:14px;opacity:'+(on?"1":".4")+';pointer-events:'+(on?"auto":"none")+'">'
+        +'<div style="font-size:12px;font-weight:800;color:var(--txt)">Strength</div>'
+        +'<div style="font-size:11px;color:var(--sub);margin:3px 0 8px;line-height:1.4">A web page can\u2019t drive the motor harder, only for longer \u2014 so a stronger setting is a longer buzz. Tap one to feel it.</div>'
+        +'<div style="display:flex;gap:8px">'
+          +segBtn("vibeLight","Light",st==="light")
+          +segBtn("vibeNormal","Normal",st==="normal")
+          +segBtn("vibeStrong","Strong",st==="strong")
+        +'</div>'
+      +'</div>')
+    +head("Test each outcome")
+    +card('<div style="font-size:12px;color:var(--sub);line-height:1.45;padding-bottom:4px">Every sound a scan can make, at the settings above. Tap to hear and feel it.</div>'+testRows)
+    +'<div style="font-size:11px;color:var(--sub);margin-top:14px;line-height:1.45">The scanner engine has a decode beep of its own, set in the wrapper rather than here \u2014 if you hear two sounds per scan, that\u2019s the other one.</div>'
+    +'<button type="button" id="handVolBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;'
+    +'border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>'
+  +'</div>';
+
   const sl=document.getElementById("handVol"), num=document.getElementById("handVolNum");
-  const show=(n)=>{if(num)num.textContent=n?n+"%":"Off";};
+  const show=n=>{if(num)num.textContent=n?n+"%":"Off";};
   const apply=(n,beep)=>{
     const set=setSoundLevel(n);
     if(sl)sl.value=String(set);
     show(set);
-    // Hear it immediately — a level you can't hear is the thing being fixed.
     if(beep&&set)try{outcomeTone("building");}catch(e){}
   };
   if(sl){
@@ -4034,11 +4135,39 @@ function showHandSound(){
   if(dn)dn.onclick=()=>apply(soundLevel()-10,true);
   const up=document.getElementById("handVolUp");
   if(up)up.onclick=()=>apply(soundLevel()+10,true);
-  const t=document.getElementById("handVolTest");
-  if(t)t.onclick=()=>{const n=soundLevel();if(!n){show(0);return;}try{outcomeTone("exact");}catch(e){}};
-  // Hear the warning without having to scan somebody else's parcel to get it.
-  const tm=document.getElementById("handVolMine");
-  if(tm)tm.onclick=()=>{try{outcomeTone("notmine");}catch(e){}};
+
+  /* The switch redraws itself rather than re-rendering the screen, so the
+     scroll position and the volume slider stay exactly where they were. */
+  const sw=document.getElementById("vibeSw"), knob=document.getElementById("vibeKnob"),
+        wrap=document.getElementById("vibeStrengthWrap");
+  const paintSwitch=v=>{
+    if(sw){sw.style.background=v?"var(--pri,#1565C0)":"#c9ced4";sw.setAttribute("aria-checked",v?"true":"false");}
+    if(knob)knob.style.left=v?"29px":"3px";
+    if(wrap){wrap.style.opacity=v?"1":".4";wrap.style.pointerEvents=v?"auto":"none";}
+  };
+  if(sw)sw.onclick=function(){
+    const v=setVibeOn(!vibeOn());
+    paintSwitch(v);
+    if(v)wildVibrate(60);          // confirm by feel, the way the switch is meant to be judged
+  };
+  const segs={light:document.getElementById("vibeLight"),normal:document.getElementById("vibeNormal"),strong:document.getElementById("vibeStrong")};
+  const paintSegs=cur=>{
+    Object.keys(segs).forEach(function(k){
+      const b=segs[k];if(!b)return;
+      const on2=(k===cur);
+      b.style.borderColor=on2?"var(--pri)":"var(--div)";
+      b.style.background=on2?"#e8f0fe":"var(--sur)";
+      b.style.color=on2?"var(--pri)":"var(--txt)";
+    });
+  };
+  Object.keys(segs).forEach(function(k){
+    const b=segs[k];if(!b)return;
+    b.onclick=function(){paintSegs(setVibeStrength(k));wildVibrate(80);};
+  });
+
+  box.querySelectorAll(".sndTest").forEach(function(b){
+    b.onclick=function(){try{outcomeTone(b.dataset.k);}catch(e){}};
+  });
   const back=document.getElementById("handVolBack");
   // v4.26: went to the scanning screen, unlike every other settings screen.
   if(back)back.onclick=()=>{try{handBackToOptions();}catch(e){}};
@@ -4143,7 +4272,7 @@ function handGoIdle(){
 // which opening the scanner tab provides). ----
 let audioCtx=null;
 function successFeedback(){
-  try{if(navigator.vibrate)navigator.vibrate(100);}catch(e){}
+  wildVibrate(100);
   try{
     const peak=beepPeak();
     if(!peak)return;                      // sound off — the buzz above still fired
@@ -4207,10 +4336,10 @@ function outcomeTone(kind,walkText){
      scanner — result branches, picker, replay — sounds the same. */
   const notMine=(kind==="notmine")||todayWalkMismatch(walkText);
   try{
-    if(navigator.vibrate){
+    {
       const v=notMine?[70,70,70,70,70]
                      :({exact:60,building:80,picker:[40,60,40],none:[30,50,140]})[kind];
-      if(v)navigator.vibrate(v);
+      if(v)wildVibrate(v);
     }
   }catch(e){}
   try{
@@ -6883,7 +7012,7 @@ function commitHandFix(walk,scope){
   handLastWalk=walk;
   if(addrSave)handLastAddr=addrSave;
   handFixAddr=null;handFixPc=null;
-  try{if(navigator.vibrate)navigator.vibrate(30);}catch(e){}
+  wildVibrate(30);
   // v1.43 — BACK FIX: this confirmation used to CLEAR the sub-screen marker,
   // which left the hardware BACK key with nothing to close, so BACK did
   // nothing on the last page of the correction flow. It's now a sub-screen
@@ -8255,7 +8384,7 @@ function renderNoPostcode(raw,fromScanner,isTracking){
   if(!box)return;
   handLastRaw=raw||""; handLastPc=null; handLastHn=null; handLastAddr=""; handLastWalk="";
   if(fromScanner){
-    try{if(navigator.vibrate)navigator.vibrate([30,40,30]);}catch(e){}
+    wildVibrate([30,40,30]);
     outcomeTone("none");
     logScan(raw, isTracking?"No postcode found (tracking number)":"No postcode found");
   }
@@ -8363,7 +8492,7 @@ function renderHandheld(raw,fromScanner){
   // used for numberless scans) is matched before the postcode+number key.
   const uOv=getUserOverride(pcNoSpace,hn,raw);
   if(uOv){
-    if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}outcomeTone("exact",uOv.walk);logScan(raw,"✎ "+uOv.walk+" · "+(uOv.addr||pcNoSpace)+" (your correction)",uOv.walk);}
+    if(fromScanner){outcomeTone("exact",uOv.walk);logScan(raw,"✎ "+uOv.walk+" · "+(uOv.addr||pcNoSpace)+" (your correction)",uOv.walk);}
     box.style.justifyContent="center";
     const pcFmt=pcNoSpace&&pcNoSpace.length>3?pcNoSpace.slice(0,-3)+" "+pcNoSpace.slice(-3):(pcNoSpace||"");
     handLastAddr=uOv.addr||((hn?hn+" · ":"")+pcFmt);
@@ -8424,7 +8553,7 @@ function renderHandheld(raw,fromScanner){
             fromWalks,fromBy,"That's the return address on the label, not where it's going.");
         }
         if(fromScanner){
-          try{if(navigator.vibrate)navigator.vibrate([30,40,30]);}catch(e){}
+          wildVibrate([30,40,30]);
           outcomeTone("building");
           logScan(raw,"Handheld — "+w2w+" · from the label's address ("+pcFmt+" not in W2)",w2w);
         }
@@ -8460,7 +8589,7 @@ function renderHandheld(raw,fromScanner){
       const spoken=(w2Addr&&w2Addr.walks.length===1)?w2Addr.walks[0]
         :((!w2Addr&&fromWalks.length===1)?"from "+fromWalks[0]:null);
       if(fromScanner){
-        try{if(navigator.vibrate)navigator.vibrate([30,40,30]);}catch(e){}
+        wildVibrate([30,40,30]);
         outcomeTone(cards?"building":"none");
         logScan(raw,"Handheld — "+pcFmt+" not in W2"
           +(w2Addr&&w2Addr.walks.length?" · label address "+w2Addr.walks.join(" / "):"")
@@ -8580,7 +8709,7 @@ function renderHandheld(raw,fromScanner){
       return true;
     });
     if(ov){
-      if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}outcomeTone("exact",ov.walk);logScan(raw,""+ov.walk+" · "+ov.addr+" (override)",ov.walk);}
+      if(fromScanner){outcomeTone("exact",ov.walk);logScan(raw,""+ov.walk+" · "+ov.addr+" (override)",ov.walk);}
       box.style.justifyContent="center";
       box.innerHTML=`
         <div style="font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.12em;text-transform:uppercase">Walk</div>
@@ -8603,7 +8732,7 @@ function renderHandheld(raw,fromScanner){
   // and the QR on these labels often carries only the number and the postcode,
   // so insisting on "junction" let a plain "12 W2 1PN" scan through silently.
   if(pcNoSpace==="W21PN" && hn==="12"){
-    if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}outcomeTone("picker");logScan(raw,"Junction Mews — 1-2 (firm) or 12 — asked");}
+    if(fromScanner){outcomeTone("picker");logScan(raw,"Junction Mews — 1-2 (firm) or 12 — asked");}
     const opts=[
       {walk:"FIRM",        addr:JM_FIRM_ADDR},
       {walk:"11 NORFOLK",  addr:"12, Junction Mews, W2 1PN"}
@@ -8785,7 +8914,7 @@ function renderHandheld(raw,fromScanner){
     }
   }
 
-  if(fromScanner){try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}}
+  if(fromScanner){wildVibrate(40);}
 
   if(!walks.length){
     // ── BROADENED "DO NOT PICK UP" (v1.32) ──────────────────────────────
@@ -9483,7 +9612,7 @@ function openOptionsMenu(){
       }catch(e){}
     }},
     {e:"🔀",label:"Shared streets",sub:"Streets split between two or more walks",go:goHand(()=>showHandShared())},
-    {e:"🔊",label:"Sound",sub:"How loud the scan beeps are",go:goHand(()=>showHandSound())},
+    {e:"🔊",label:"Sound &amp; vibration",sub:"Beep volume, vibrate on/off and strength",go:goHand(()=>showHandSound())},
     {e:"⚠️",label:"Split postcodes",sub:"Postcodes that go to more than one walk",go:goHand(()=>showHandSplits())},
     {e:"📍",label:"Today's walk",sub:"Warn me when a scan isn't for my walk",go:goHand(()=>showHandTodayWalk())},
     {e:"🗣️",label:"Voice",sub:"Which voice reads the walk aloud, speed &amp; pitch",go:()=>{ov.remove();try{openVoiceSheet();}catch(e){}}},
@@ -11724,7 +11853,7 @@ function handleQRResult(raw,fromCamera,typed){
     // Quick vibration on detect; the audio now comes from the OUTCOME tone
     // at the terminal branch (exact / building / picker / none), so ears
     // learn the result without a glance.
-    try{if(navigator.vibrate)navigator.vibrate(40);}catch(e){}
+    wildVibrate(40);
   }
   speakArm=!!fromCamera; // SAY WALK speaks camera results only, never typed lookups
   scanOrigin=!!fromCamera; // gates outcome tones and viewfinder HUD for this render chain
