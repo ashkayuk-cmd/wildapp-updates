@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 178;
+const THIS_BUILD_NUM = 179;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.63";
+const BUILD_NAME = "v4.64";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -9758,11 +9758,44 @@ function openVoiceSheet(){
     };
   });
 }
+/* -- SAY WALK: one utterance at a time (v4.64) ------------------
+   The voice stuttered - a walk name would start, get cut off a word or two
+   in, and start again from the top.
+
+   Cause: speakText() schedules the actual speaking on a 350 ms timer and
+   never held on to that timer, so two requests close together left TWO
+   timers armed. The native TTS bridge speaks with QUEUE_FLUSH, so the second
+   one arrives mid-word and flushes the first - which sounds exactly like a
+   stutter rather than like two separate readings.
+
+   Two requests are easy to get: two scans in quick succession, or a single
+   scan that resolves through a path which speaks and then renders a screen
+   that speaks again. The guard that was meant to catch this asked
+   speechSynthesis.speaking / .pending, and on the PDA those are supplied by
+   the native shim, where both are permanently false - so it never fired.
+
+   Fixed by making the request single-flight: a pending timer is cancelled
+   before a new one is armed, and an identical phrase asked for again within
+   a second and a half is dropped rather than restarted. Both are tracked in
+   the page, so they work the same whether the engine is the real
+   speechSynthesis or the WildTTS shim. */
+let speakTimer=null, speakLastText="", speakLastAt=0;
+const SPEAK_REPEAT_MS=1500;
+function speakCancel(){
+  if(speakTimer){clearTimeout(speakTimer);speakTimer=null;}
+  try{speechSynthesis.cancel();}catch(e){}
+}
 function speakText(text){
   try{
     if(!window.speechSynthesis||!text)return;
     const spoken=speechFriendly(text);
+    const now=Date.now();
+    // The same walk asked for twice in a breath is one reading, not two.
+    // A DIFFERENT walk always speaks - that's a new answer and must be heard.
+    if(spoken===speakLastText&&now-speakLastAt<SPEAK_REPEAT_MS)return;
+    speakLastText=spoken;speakLastAt=now;
     const say=()=>{
+      speakTimer=null;
       try{
         const u=new SpeechSynthesisUtterance(spoken);
         const sp=speakPrefs();
@@ -9775,11 +9808,9 @@ function speakText(text){
         }catch(e){u.lang="en-GB";}
         lastUtterance=u;
         // Android/desktop Chrome can leave the engine PAUSED after the tab
-        // is backgrounded (visibilitychange) — speak() then queues silently
+        // is backgrounded (visibilitychange) - speak() then queues silently
         // forever and every later scan stays mute, so SAY WALK appears to
-        // just stop working until a full reload. resume() is a harmless
-        // no-op when not paused, so always clear that state right before
-        // speaking.
+        // just stop working until a full reload.
         // Only resume when the engine is genuinely paused. Calling resume()
         // on a NOT-paused engine triggers a Chrome/Android bug where the
         // utterance repeats over and over ("Speaking on... Speaking on...").
@@ -9787,18 +9818,24 @@ function speakText(text){
         speechSynthesis.speak(u);
       }catch(e){}
     };
+    /* Anything already waiting to be said is stale the moment a newer result
+       arrives, so drop it rather than letting it fire and be flushed a
+       fraction of a second later. This is the line that ends the stutter. */
+    if(speakTimer){clearTimeout(speakTimer);speakTimer=null;}
     // Chrome quirk: cancel() immediately followed by speak() swallows the new
     // utterance. Only cancel when something is actually queued, and give the
     // cancel a moment to settle before speaking.
     // Both delays also let the outcome tone FINISH before the voice starts:
     // tone and speech used to begin together, so the beep sat on top of the
-    // first word — the walk NUMBER — making the voice read as far quieter
+    // first word - the walk NUMBER - making the voice read as far quieter
     // than it is. 350ms clears the longest tone (building + FIRM low tail).
-    if(speechSynthesis.speaking||speechSynthesis.pending){
-      speechSynthesis.cancel();
-      setTimeout(say,430); // cancel-settle + tone clearance
+    let busy=false;
+    try{busy=!!(speechSynthesis.speaking||speechSynthesis.pending);}catch(e){}
+    if(busy){
+      try{speechSynthesis.cancel();}catch(e){}
+      speakTimer=setTimeout(say,430); // cancel-settle + tone clearance
     }else{
-      setTimeout(say,350);
+      speakTimer=setTimeout(say,350);
     }
   }catch(e){}
 }
@@ -9830,7 +9867,7 @@ function setupSpeakButton(){
       // speak() to come from a user gesture before scan results can talk).
       speakText("Speaking on");
     }else{
-      try{speechSynthesis.cancel();}catch(e){}
+      speakCancel();   // v4.64: a timer already armed would speak AFTER the switch went off
     }
     setStatus(speakEnabled?"Speaking walk names ON \u2014 the walk is read aloud after each scan":"Speaking walk names OFF");
   };
@@ -12429,7 +12466,9 @@ function pauseCameraForBackground(){
   // (paused, with a stuck queue that blocks everything after it). Drop
   // whatever is queued so the next scan starts clean; the resume-before-
   // speak in speakText handles the paused flag itself.
-  try{speechSynthesis.cancel();}catch(e){}
+  // v4.64: also drops a timer waiting to speak, which would otherwise fire
+  // into a backgrounded engine and be the stuck utterance on the way back.
+  speakCancel();
   scanning=false;
   cancelAnimationFrame(scanLoop);
   if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
