@@ -500,9 +500,8 @@ body.addr-locked #rl .lockmsg{display:flex}
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
     <div style="flex:1;min-width:0"></div>
-    <div id="wildBattWrap" style="flex:0 0 auto;display:none;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #fff;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#fff;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#fff;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="font-size:12px;font-weight:800;color:#fff;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div><div style="flex:1;min-width:0"></div><button type="button" id="wildResetBtn" aria-label="Restart the whole app" style="flex:0 0 auto;width:128px;max-width:40%;padding:4px 6px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.02em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:14px">&#8635; RESET</span><span id="wildResetL2" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800">APP</span></button>
+    <div id="wildBattWrap" style="flex:0 0 auto;display:none;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #fff;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#fff;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#fff;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="font-size:12px;font-weight:800;color:#fff;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div><button type="button" id="wildResetBtn" aria-label="If the scanner stops working, tap here to reset the app" style="flex:1 1 auto;width:auto;min-width:0;max-width:none;margin-left:6px;padding:5px 8px;font-size:11.5px;font-weight:600;font-family:inherit;letter-spacing:.01em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.2;white-space:normal"><span id="wildResetL1" style="font-size:11.5px;font-weight:600">If scanner stops working <b style="font-weight:900">Tap Here</b> to <b style="font-weight:900">reset app</b></span><span id="wildResetL2" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800"></span></button>
   </div>
-  <div id="wildResetHint" style="flex:0 0 auto;display:none;padding:5px 10px 0;text-align:center;font-size:11.5px;font-weight:600;line-height:1.3;color:var(--sub);opacity:.85">If the scanner stops working, reset the app.</div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
   <input id="handCatch" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="none" style="position:absolute;opacity:0;pointer-events:none;height:0;width:0;border:0;padding:0">
@@ -600,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 173;
+const THIS_BUILD_NUM = 175;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -610,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.58";
+const BUILD_NAME = "v4.60";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -12363,10 +12362,8 @@ document.addEventListener("visibilitychange",()=>{
         && box.querySelector("#handEmpty"));
       var bar=document.getElementById("wildSiteBottom");
       if(bar)bar.style.display=idle?"flex":"none";
-      /* v4.58: the RESET hint rides on the same idle test, so it can never
-         sit under a scan result or a settings screen. */
-      var hint=document.getElementById("wildResetHint");
-      if(hint)hint.style.display=idle?"block":"none";
+      /* v4.60: the hint line is gone — the RESET button says it itself now,
+         and the button lives in the top bar, which is always on show. */
     }catch(e){}
   }
   window.__wildSiteBarVis=siteBarVis;
