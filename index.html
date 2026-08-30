@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 177;
+const THIS_BUILD_NUM = 178;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.62";
+const BUILD_NAME = "v4.63";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -5656,6 +5656,56 @@ function splitPostcodes(){
   handSplitCache=out;
   return out;
 }
+/* ── BACK-BUTTON MENU (v4.63) ──────────────────────────────────
+   A read-only crib sheet for the hidden menu the WRAPPER shows when the
+   hardware BACK key is held down. That menu is native — it lives in the APK,
+   not in this page, so this screen cannot open it and cannot read which way
+   kiosk mode is currently set. It only lists what will appear, so the choices
+   don't have to be remembered (or discovered by holding BACK in the street).
+   The timings and wording below are lifted from the shipped APK: hints at
+   3s and 7s, menu at 10s. */
+const BACKHOLD_ITEMS=[
+  {n:"Leave kiosk mode / Turn kiosk mode on",d:"The first row, and the only one that changes wording. It reads \"Leave kiosk mode\" when kiosk is ON and \"Turn kiosk mode on\" when it's OFF — so the row itself tells you the current state. Leaving kiosk mode lets you out to the phone; the title line above the list says which state you're in."},
+  {n:"Exit app",d:"Closes the Wild App. In kiosk mode the wrapper normally pulls itself back to the front, so this is the deliberate way out."},
+  {n:"Launch StageNow",d:"Opens Zebra's StageNow app for scanning a staging barcode."},
+  {n:"Android Settings",d:"The phone's own settings — Wi-Fi, text-to-speech voices, volume, date and time."},
+  {n:"Change launcher (Home app)",d:"Picks which app the HOME key opens. This is how the Wild App is set as HOME, and how it's unset again."}
+];
+function showHandBackHold(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  try{openHand();}catch(e){}
+  handNav("backhold",function(){showHandBackHold();});
+  try{box.dataset.sub="backhold";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  const rows=BACKHOLD_ITEMS.map(function(x,i){
+    return '<div style="padding:11px 13px;margin-top:7px;background:var(--sur);border:none;border-left:6px solid var(--pri);border-radius:11px;box-shadow:var(--shad)">'
+      +'<div style="font-size:14px;font-weight:800;color:var(--txt)">'+(i+1)+'. '+escHtml(x.n)+'</div>'
+      +'<div style="font-size:11.5px;color:var(--sub);margin-top:4px;line-height:1.45">'+escHtml(x.d)+'</div>'
+    +'</div>';
+  }).join("");
+  const step=function(t,w){
+    return '<div style="display:flex;gap:9px;align-items:baseline;margin-top:5px">'
+      +'<div style="font-size:11px;font-weight:800;color:var(--pri);flex-shrink:0;min-width:34px">'+t+'</div>'
+      +'<div style="font-size:11.5px;color:var(--sub);line-height:1.45">'+w+'</div></div>';
+  };
+  box.innerHTML='<div style="width:100%;text-align:left">'
+    +handTopBar("Back button menu")
+    +'<div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.45">Hold the hardware BACK key down and the wrapper counts you in, then shows a menu of five. Nothing happens if you let go early.</div>'
+    +'<div style="margin-top:10px;padding:10px 12px;background:#f7f8fa;border:1px solid var(--div);border-radius:11px">'
+      +step("3s","&ldquo;Keep holding BACK&hellip;&rdquo;")
+      +step("7s","&ldquo;Keep holding &mdash; nearly there&hellip;&rdquo;")
+      +step("10s","The menu opens. Its title line reads <b>Kiosk mode is ON</b> or <b>Kiosk mode is OFF</b>.")
+    +'</div>'
+    +'<div style="font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:14px">What&rsquo;s on it</div>'
+    +rows
+    +'<div style="font-size:11.5px;color:var(--sub);margin-top:10px;line-height:1.45">There&rsquo;s a <b>Close</b> button under the list, and tapping outside closes it too &mdash; so opening it by accident costs nothing.</div>'
+    +'<div style="font-size:11px;color:var(--sub);margin-top:10px;line-height:1.45">This screen is a list only. The menu belongs to the wrapper the app runs inside, so it can&rsquo;t be opened from here.</div>'
+    +'<button id="handBhBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>'
+  +'</div>';
+  const bk=document.getElementById("handBhBack");
+  if(bk)bk.onclick=function(){try{handBackToOptions();}catch(e){}};
+}
 function showHandSplits(){
   const box=document.getElementById("handResult");
   if(!box)return;
@@ -9420,6 +9470,7 @@ function openOptionsMenu(){
   };
   const MENU=[
     {e:"ℹ️",label:"App version",sub:"Which build is running, and updates",go:goHand(()=>openAppVersion())},
+    {e:"⬅️",label:"Back button menu",sub:"What holding BACK for 10 seconds brings up",go:goHand(()=>showHandBackHold())},
     {e:"🕒",label:"Recent scans",sub:"The last 40 scans, and what each one gave",go:goHand(()=>showHandRecent())},
     {e:"🔌",label:"Restart scanner",sub:"If the trigger lights nothing. Takes about a second",go:()=>{
       ov.remove();
