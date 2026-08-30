@@ -1,40 +1,61 @@
-# Brightness fix — build 188 / v4.73
+# Build 189 / v4.74
 
-## Why it did nothing
-JavaScript bridge methods (`@JavascriptInterface`) run on a **background
-WebView thread**, not the UI thread. `Window.setAttributes()` — the only way
-to change screen brightness for an app window — has to be called on the UI
-thread; called from anywhere else it silently does nothing.
+## 1. Brightness defaults — done
+Now defaults to **auto brightness ON, slider at 50%** (was 60%). The error
+fallback in `get()` also moved 60 → 50 so it can't disagree with itself.
 
-My first version called it straight from the bridge method, so every set was
-quietly discarded. The `try/catch` around it made it worse by hiding any
-complaint. The toggle and slider were updating the saved preference correctly
-the whole time — the screen just never got told.
+Reminder on how this behaves: with auto ON the 50% isn't driving anything —
+the device controls the screen. The 50% is the value that takes effect the
+moment you switch auto OFF. That's what you asked for; just don't expect the
+screen to visibly sit at 50% while auto is on.
 
-**Fixed** by posting the change through `runOnUiThread()` so it lands on the
-right thread. Saved values are unchanged, so whatever you'd already set will
-take effect as soon as this build runs.
+Note this only affects **fresh installs / cleared data**. If this device has
+already saved a brightness preference, that saved value wins and the new
+default won't show. Clear app data if you want to see the new default.
 
-## Stamps for this release — all six checked
+## 2. Touch panel mode (gloves + screen protector) — partial
+**Cannot be set by the app.** It's a Zebra device-level touch driver setting,
+not an app setting. There's no API for it in the barcode EMDK this app links
+against, and writing it directly would need `WRITE_SECURE_SETTINGS`, which a
+sideloaded app can't grant itself. Anything I built for it would be guessing
+at an undocumented key and failing silently.
+
+**What I added instead:** a "Display & touch" row in Settings that opens
+Android's own Display settings directly, so touch panel mode is two taps away
+rather than buried. Set it there once — on TC56 it's usually
+Display → Touch Panel Mode → "Glove and Finger" / "Screen Protector".
+
+**To have it set automatically on every install**, that needs a Zebra
+**StageNow** profile applied as part of device provisioning. That's the
+supported route and it's outside the APK.
+
+## 3. Default launcher prompt — cannot be suppressed from the app
+Android deliberately requires the user to choose a HOME app; an app cannot
+make itself the default launcher programmatically. This is core Android
+security, not a Zebra or Wild App limitation.
+
+Two ways to stop it recurring:
+- When the chooser appears, pick **Wild App → Always** (not "Just once").
+  That holds until the app is reinstalled — which is why it returns after
+  every reset/reinstall.
+- **Permanently:** set Wild App as **device owner** via StageNow, which locks
+  the launcher with no prompt at all. Again, a provisioning step, not
+  something the APK can do to itself.
+
+## Stamps — all six checked
 | Stamp             | Value    | Moved? |
 |-------------------|----------|--------|
-| `THIS_BUILD_NUM`  | 188      | yes |
-| `BUILD_NAME`      | v4.73    | yes |
-| `REPO_APK_BUILD`  | 188      | yes |
+| `THIS_BUILD_NUM`  | 189      | yes |
+| `BUILD_NAME`      | v4.74    | yes |
+| `REPO_APK_BUILD`  | 189      | yes |
 | `REPO_DATA_BUILD` | 131      | no — data untouched |
 | `REPO_DATA_HASH`  | a5195d2e | no — data untouched |
 | `REPO_DATA_ROWS`  | 24102    | no — data untouched |
 
-Loader `BAKED` in the APK's own `index.html` also synced to 188.
+Loader `BAKED` synced to 189.
 
 ## Deploy
 1. Upload `index.html` to the repo.
-2. Upload `WildApp.apk` to the repo (replacing the current one).
-3. Install `WildApp.apk` on the device — or, since `REPO_APK_BUILD` is correct
-   now, "Update app from GitHub" should offer build 188 and open the installer
-   for you.
-
-## Testing it
-Settings → Brightness → turn **Auto brightness** off → drag the slider. The
-screen should change as you drag, and hold that level after leaving the screen
-and on the next restart. Turning Auto back on returns control to the device.
+2. Upload `WildApp.apk` to the repo.
+3. Install on the device, or use "Update app from GitHub" — it should offer
+   build 189.

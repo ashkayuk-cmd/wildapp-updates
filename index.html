@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 188;
+const THIS_BUILD_NUM = 189;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.73";
+const BUILD_NAME = "v4.74";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -634,7 +634,7 @@ const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside
    app from GitHub" compared the repo's APK (170) against the installed one
    (182) and reported the repo as behind. It is the sixth release stamp and
    was the one nobody was counting. */
-const REPO_APK_BUILD  = 188;
+const REPO_APK_BUILD  = 189;
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -9932,6 +9932,10 @@ function openOptionsMenu(){
     {e:"ℹ️",label:"App version",sub:"Which build is running, and updates",go:goHand(()=>openAppVersion())},
     {e:"⬅️",label:"Back button menu",sub:"Kiosk mode, exit, StageNow, Android settings",go:goHand(()=>showHandBackHold())},
     ...(wildBrightness()?[{e:"🔆",label:"Brightness",sub:"Screen brightness, auto or fixed",go:goHand(()=>showHandBrightness())}]:[]),
+    {e:"👆",label:"Display &amp; touch",sub:"Opens Android's Display settings — touch panel mode for gloves &amp; screen protector",go:()=>{
+      ov.remove();
+      try{if(window.WildKiosk&&typeof WildKiosk.pick==="function")WildKiosk.pick(5);}catch(e){}
+    }},
     {e:"🕒",label:"Recent scans",sub:"The last 40 scans, and what each one gave",go:goHand(()=>showHandRecent())},
     {e:"🔀",label:"Shared streets",sub:"Streets split between two or more walks",go:goHand(()=>showHandShared())},
     {e:"🔊",label:"Sound &amp; vibration",sub:"Beep volume, vibrate on/off and strength",go:goHand(()=>showHandSound())},
