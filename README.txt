@@ -1,80 +1,62 @@
-Wild App — v4.42, APK build 157
+WILD APP — v4.55, APK build 170
 ================================
 
-WHAT CHANGED (native)
+WHAT THIS FIXES
+The scanner dying after you leave the app (notification shade → gear → HOME),
+and "Reset scanner" not bringing it back.
 
-The BACK-hold menu is now a list instead of three buttons, and it stays
-open when you toggle kiosk mode.
+Cause: when the app was backgrounded, the scanner connection could be dropped
+altogether (EMDK closes it, or another app takes the scan engine). The app's
+resume() only re-enabled a scanner it still had a handle on — if the handle was
+gone, it did NOTHING and returned silently. No error, no retry, dead trigger.
+"Reset scanner" retried on the same broken connection and gave up after 6 tries
+with no further attempt. Only RESET APP worked, because that rebuilt everything
+from scratch.
 
-  Kiosk mode is ON / OFF          <- title tells you the current state
-    Leave kiosk mode  (or  Turn kiosk mode on)
-    Exit app
-    Launch StageNow
-    Android Settings
-    Change launcher (Home app)
-    [ Close ]
+What changed (native, ZebraScanner):
+  1. resume() now recovers. If the scanner handle is gone, or enable/read
+     throws, it does a FULL re-bind — releases EMDK completely and binds again
+     from the start, exactly what a full app restart does. Only kicks in once
+     the scanner has worked at least once, so first launch is untouched.
+  2. The "gave up" path now escalates instead of stopping. When the 6 quick
+     retries fail, it re-binds EMDK from scratch rather than printing
+     "init failed" and quitting.
+  3. Capped at 3 re-binds so it can't loop; the counter resets the moment the
+     scanner comes back, and tapping RESET (top-right) clears it too.
+  4. Messages on screen: "Scanner lost — re-binding…" while it recovers, and
+     "Scanner could not be re-acquired. Tap RESET (top-right)." only if all
+     three attempts fail.
+  5. Every re-bind is written to the crash log (Android/data/uk.wild.app/files/
+     wild-crash.txt) as "SCANNER full re-bind", so if it ever still fails we
+     can see exactly what happened.
 
-- Tapping the kiosk row toggles it and REOPENS the menu, now reading the
-  other way round. So you can turn kiosk off and then hit Exit or Launch
-  StageNow in the same visit, without holding BACK for another 10 seconds.
+Also in this APK: the app content is refreshed to repo build 169 (v4.54),
+restamped as build 170 — so nothing you've had shipped is lost, and no
+index.html upload is needed for this.
 
-- "Launch StageNow" turns kiosk off, RELEASES THE SCAN ENGINE, and opens
-  StageNow. Releasing the scanner is the important part: that is what was
-  stopping StageNow from scanning. It finds StageNow by looking through the
-  installed apps for a package name containing "stagenow", so it works on
-  all three PDAs without anyone typing a package name. If it can't find it
-  you get a toast saying so.
+STAMPS
+  versionCode 170  (platformBuildVersionCode still 24)
+  THIS_BUILD_NUM 170, BUILD_NAME "v4.55"
+  BAKED_DATA_BUILD 170, REPO_APK_BUILD 170, loader BAKED 170
+  data a5195d2e, 24,102 rows (unchanged)
 
-- "Exit app" turns kiosk off, releases the scanner and quits properly —
-  same effect as Force stop, without going into Settings. Wild App is the
-  launcher, so pressing HOME afterwards brings it straight back.
-
-- "Android Settings" and "Change launcher" behave exactly as before.
-
+CHECKS DONE
+  - dex diff vs build 168: 1 added method (fullRebind), only ZebraScanner
+    changed; every other class byte-identical after a full round-trip.
+  - No method writes into its own parameter registers.
+  - 7 of 11 APK entries carried through byte-identical; entry order and
+    compression preserved; signed v1/v2/v3 with wild-signing.keystore
+    (SHA-256 2C:3A:BB:7A…), so it installs OVER the top — corrections, added
+    addresses and scan history are kept.
+  - The app.html actually inside the signed APK was booted and scanned
+    (Sussex Gardens W2 1UL → 14 SUSSEX GARDENS).
 
 INSTALLING
+  Hold BACK for 10 s → "Leave", THEN install — the kiosk fights the installer.
+  After installing, re-pick Wild App as the home app if Android asks.
+  Then hold BACK → "Turn on" to put the kiosk back on.
 
-Hold BACK 10 s -> Leave, then install as usual. Same signing key, so it
-installs over the top and your corrections, added addresses and scan
-history are kept.
-
-After installing, re-pick Wild App as the home app (any install clears it):
-hold BACK -> More options is now the same list -> Change launcher -> pick
-Wild App and choose ALWAYS, not Just once.
-
-
-CONTENT
-
-This APK also refreshes its built-in copy to the current published content
-(repo build 156), restamped as 157. The built-in copy had been stuck on
-build 137, so "Use built-in version" was giving very old behaviour. Baked
-data is unchanged (build 131, a5195d2e, 24,102 rows) — it already matched
-the repo, so there is no 2.1 MB re-download on first run.
-
-No index.html upload is needed for this build.
-
-
-ABOUT YOUR STAGENOW BARCODE
-
-The repo's WildApp.apk is still build 137. If you want the barcode to
-install THIS build, upload WildApp157.apk to the repo as WildApp.apk
-first — the barcode always fetches whatever is at that URL.
-
-Also: keep AppMgr on "Upgrade" for the two PDAs that still have the app
-installed, so their data survives. The PDA you uninstalled from needs
-"Install" once, then you can switch back to Upgrade.
-
-
-VERIFICATION
-
-- dex diff vs build 137: 8 new methods on MainActivity, 2 new inner
-  classes, and exactly one changed body (showKioskDialog). Nothing else
-  touched — confirmed by disassembling the built dex and diffing the
-  smali text method by method.
-- register check on all new methods: no negative locals, no writes into
-  parameter registers.
-- 7 of 11 entries byte-identical to the old APK.
-- versionCode 157; platformBuildVersionCode left at 24.
-- signed v1 + v2 + v3 with your key (SHA-256 2C:3A:BB:7A:B7:00:AF:19...).
-- baked content: 11/11 checks pass, booted from the file actually inside
-  the signed APK; 250-label render diff vs published build 156 = 0.
+IF IT STILL DROPS
+Send me wild-crash.txt from Android/data/uk.wild.app/files/ — the SCANNER
+STATUS / EMDK opened / EMDK CLOSED / full re-bind lines will say whether the
+connection is being closed on you or something else is holding the engine.
