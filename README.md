@@ -1,4 +1,4 @@
-# Wild App — APK v1.95 (app build v4.68 / 183)
+# Wild App — APK v1.95 (app build v4.69 / 184)
 
 Supersedes every earlier build in this session. Install this one.
 The native side moved in this build (v1.95), so the APK is required for the
@@ -18,7 +18,28 @@ survive.
 
 ---
 
-## 1. Device volume + scanner beep in Sound & vibration
+## 1. "Repo has build 170, you have 182" — fixed
+
+There is a **sixth** release stamp, `REPO_APK_BUILD`, and it had been sitting
+at **170** through every release. "Update app from GitHub" compares the repo's
+APK build against the installed one, so it correctly reported the repo as
+behind — the stamp was lying, not the check.
+
+The five I had been keeping in step (`THIS_BUILD_NUM`, `BUILD_NAME`,
+`REPO_DATA_BUILD`, `REPO_DATA_HASH`, `REPO_DATA_ROWS`) all describe the code
+and the data. `REPO_APK_BUILD` describes the APK next to them, and it is
+genuinely a separate number: an OTA-only release publishes a new `index.html`
+with no new APK, and this must then stay on the last APK's build. It only moves
+when an APK is actually uploaded — which is exactly why it got missed.
+
+Both are 184 in this release, because the APK is being published alongside.
+Reproduced the message from your repo's current file (`apk:170` vs installed
+182 → "Repo has build 170, you have 182"), then confirmed this release gives
+"Opening installer… (build 184)" and, once installed, "Already on build 184".
+
+**Release checklist is now six stamps, not five.**
+
+## 2. Device volume + scanner beep in Sound & vibration
 
 New `WildAudio` bridge. Options → Sound & vibration now carries the sliders the
 notification shade shows — **Media, Notifications, Ring, Alarm, System** — because
@@ -51,7 +72,7 @@ already been written over whatever was there. If it sounds like the
 notification tone rather than the classic Zebra beep, that's why — tell me and
 I'll capture the original URI at first acquire instead.
 
-## 2. Options: "Restart scanner" removed
+## 3. Options: "Restart scanner" removed
 
 Gone at Ash's request. `window.wildScanner` itself is untouched — the
 automatic fix when the app wakes from sleep still runs, which is where the
@@ -62,7 +83,7 @@ Options is now eleven rows, still A–Z. Checked every row still opens its own
 screen after the removal — the list is sorted and then wired by index, so a
 deletion is exactly the kind of change that can drift the handlers.
 
-## 3. Exact-address beep sounded like it repeated — fixed (web)
+## 4. Exact-address beep sounded like it repeated — fixed (web)
 
 Only the EXACT outcome doubled, which is what pointed at the cause: a stray
 engine beep would have doubled every outcome, not one of them.
@@ -80,7 +101,7 @@ Verified by capturing the oscillator schedule: exact = 1 note 1500→1900,
 building = 1 flat note, picker = 2 notes, none = 1 note, and a FIRM walk still
 adds its low tail.
 
-## 4. Back button menu — the rows now RUN (new in this build)
+## 5. Back button menu — the rows now RUN (new in this build)
 
 New `WildKiosk` bridge in the APK. Tapping a row does exactly what picking it
 off the native dialog does, because the bridge hands the index to the dialog's
@@ -103,7 +124,7 @@ reimplementation would have quietly lost it and the rows would have half-worked.
 On an older wrapper the rows stay a plain list with a line saying why. A tap
 that silently does nothing is worse than a row that never looked tappable.
 
-## 5. The voice stutter — fixed (web, was v4.64)
+## 6. The voice stutter — fixed (web, was v4.64)
 
 `speakText()` scheduled speaking on a 350 ms timer and never kept hold of it,
 so two requests close together left **two timers armed**. The native TTS bridge
@@ -119,7 +140,7 @@ the same phrase inside 1.5s is dropped rather than restarted. A *different*
 walk always speaks — that's a new answer and must be heard. Reproduced against
 a mock of the shim (2 utterances, 1 flushed) and confirmed fixed (1, 0).
 
-## 6. The double scan sound — fixed (native, was v1.93)
+## 7. The double scan sound — fixed (native, was v1.93)
 
 The shipped APK **never configured the scanner at all** — no `ScannerConfig`
 anywhere — so Zebra's decode beep ran at factory default and the app's outcome
@@ -132,13 +153,13 @@ must run before the read, and re-enabling after a pause can hand back the
 defaults. Wrapped so a firmware missing either field loses the silencing, not
 the scanner.
 
-## 7. A double *buzz* found on the way (web)
+## 8. A double *buzz* found on the way (web)
 
 Three paths — your correction, an override, the Junction Mews picker — buzzed
 40 ms themselves and then called `outcomeTone()`, which buzzes again. Gone;
 `outcomeTone()` owns the haptic, as its comments always claimed.
 
-## 8. Sound & vibration (web)
+## 9. Sound & vibration (web)
 
 The Sound screen rebuilt in the shape of Android's own page: beep volume,
 **Vibrate on scan** switch, **Light / Normal / Strong**, and a test row per
@@ -169,8 +190,11 @@ the motor doesn't spin up, above 400 it reads as a fault.
 
 ## Build stamps
 
-`THIS_BUILD_NUM 183` · `BUILD_NAME v4.68` · `REPO_DATA_BUILD 131` ·
-`REPO_DATA_HASH a5195d2e` · `REPO_DATA_ROWS 24102`
+`THIS_BUILD_NUM 184` · `BUILD_NAME v4.69` · `REPO_APK_BUILD 184` ·
+`REPO_DATA_BUILD 131` · `REPO_DATA_HASH a5195d2e` · `REPO_DATA_ROWS 24102`
+
+Six stamps. `REPO_APK_BUILD` only moves when an APK is uploaded; the other five
+move on every release.
 
 ## Still outstanding
 
