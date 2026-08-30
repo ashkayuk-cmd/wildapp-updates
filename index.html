@@ -500,7 +500,7 @@ body.addr-locked #rl .lockmsg{display:flex}
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
     <div style="flex:1;min-width:0"></div>
-    <div id="wildBattWrap" style="flex:0 0 auto;display:none;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #fff;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#fff;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#fff;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="font-size:12px;font-weight:800;color:#fff;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div><div style="flex:1;min-width:0"></div><button type="button" id="wildScanResetBtn" aria-label="Restart the scanner" style="flex:0 0 auto;width:112px;max-width:32%;margin-right:6px;padding:4px 6px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.02em;color:#fff;background:#ef6c00;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildScanResetL1" style="font-size:14px">&#8635; RESET</span><span id="wildScanResetL2" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800">SCANNER</span><span id="wildScanResetL3" style="font-size:9px;letter-spacing:.02em;opacity:.9;font-weight:800;margin-top:1px">TRY THIS FIRST</span></button><button type="button" id="wildResetBtn" aria-label="Restart the whole app" style="flex:0 0 auto;width:112px;max-width:32%;padding:4px 6px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.02em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:14px">&#8635; RESET</span><span id="wildResetL2" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800">APP</span><span id="wildResetL3" style="font-size:9px;letter-spacing:.02em;opacity:.9;font-weight:800;margin-top:1px">FULL RESTART</span></button>
+    <div id="wildBattWrap" style="flex:0 0 auto;display:none;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #fff;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#fff;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#fff;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="font-size:12px;font-weight:800;color:#fff;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div><div style="flex:1;min-width:0"></div><button type="button" id="wildResetBtn" aria-label="Restart the whole app" style="flex:0 0 auto;width:128px;max-width:40%;padding:4px 6px;font-size:11px;font-weight:800;font-family:inherit;letter-spacing:.02em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.02;white-space:nowrap"><span id="wildResetL1" style="font-size:14px">&#8635; RESET</span><span id="wildResetL2" style="font-size:11px;letter-spacing:.02em;opacity:.95;font-weight:800">APP</span></button>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 171;
+const THIS_BUILD_NUM = 172;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.56";
+const BUILD_NAME = "v4.57";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -12485,10 +12485,9 @@ document.addEventListener("visibilitychange",()=>{
      title — so it just needs its click behaviour wired up, once. */
   (function(){
     var btn=document.getElementById("wildResetBtn");
-    var sbtn=document.getElementById("wildScanResetBtn");
     if(!btn||btn._wired)return;
     btn._wired=true;
-    var busy=false, armed=0, revert=null, lastTap=0, sLastTap=0;
+    var busy=false, armed=0, revert=null, lastTap=0;
     var L1=document.getElementById("wildResetL1"),
         L2=document.getElementById("wildResetL2"),
         L3=document.getElementById("wildResetL3");
@@ -12517,25 +12516,11 @@ document.addEventListener("visibilitychange",()=>{
       }catch(e){try{location.reload();}catch(_){}}
       setTimeout(function(){busy=false;},2000);
     }
-    /* v4.54: the two resets are now SEPARATE buttons, at Ash's request.
-       RESET SCANNER (amber) re-acquires the scanner without touching the
-       screen, the result or the history — about a second. RESET APP (red)
-       still restarts everything, and still asks twice, because it is the
-       heavier of the two and easy to hit by accident in a coat pocket. */
-    function scanTap(){
-      var now=Date.now();
-      if(now-sLastTap<500)return;
-      sLastTap=now;
-      if(busy)return;
-      normal();
-      var ok=false;
-      try{ok=!!(window.wildScanner&&window.wildScanner.have()&&window.wildScanner.fix());}catch(e){ok=false;}
-      try{
-        if(window.wildScanner&&window.wildScanner.hud){
-          window.wildScanner.hud(ok?"\u21bb Restarting scanner\u2026":"Scanner restart unavailable");
-        }
-      }catch(e){}
-    }
+    /* v4.56: RESET SCANNER removed at Ash's request — the scanner now
+       re-binds itself (v4.55 native fix), so the separate amber button had
+       nothing left to do. RESET APP is a single button again, with the
+       wording it had before the v4.54 split, and still asks twice because
+       it is easy to hit by accident in a coat pocket. */
     function tap(){
       var now=Date.now();
       if(now-lastTap<500)return;     // touchend + click both fire
@@ -12546,11 +12531,6 @@ document.addEventListener("visibilitychange",()=>{
     }
     btn.addEventListener("click",function(e){e.preventDefault();tap();});
     btn.addEventListener("touchend",function(e){e.preventDefault();tap();});
-    if(sbtn&&!sbtn._wired){
-      sbtn._wired=true;
-      sbtn.addEventListener("click",function(e){e.preventDefault();scanTap();});
-      sbtn.addEventListener("touchend",function(e){e.preventDefault();scanTap();});
-    }
   })();
 
   /* ── ⚙️ SETTINGS button — moved to the TOP RIGHT (v3.1) ────────────────
