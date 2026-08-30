@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 169;
+const THIS_BUILD_NUM = 171;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.54";
+const BUILD_NAME = "v4.56";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -626,7 +626,7 @@ const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
 const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside this file
-const REPO_APK_BUILD  = 168;                  // build of the WildApp.apk beside this file
+const REPO_APK_BUILD  = 170;                  // build of the WildApp.apk beside this file
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -7008,6 +7008,14 @@ function showAppVersion(){
   if(pend)VER_BTNS+='<button id="handLiveApply" style="'+VER_BTN+';flex:1;border-color:#2e7d32;background:#2e7d32;color:#fff">'+
     (pend==="apk"?"⬆ Download new app":"⬆ Apply update")+'</button>';
   VER_BTNS+='</div>';
+  /* v4.56: a permanent way to pull the APK itself from GitHub. "Check now"
+     only ever FLAGS a new APK, and the green "Download new app" button above
+     appears only when a check has already seen one — so with nothing pending
+     there was no way to ask for the installer on purpose. This button always
+     asks the repo directly. */
+  VER_BTNS+=rowStart+
+    '<button id="handApkGet" style="'+VER_BTN+';flex:1;color:var(--pri)">\u2b07 Update app from GitHub</button>'+
+    '</div>';
   if(isLiveCopy()||canFwd){
     VER_BTNS+=rowStart;
     if(isLiveCopy())VER_BTNS+='<button id="handLiveRevert" style="'+VER_BTN+';flex:1;color:#8a5300">Use built-in version</button>';
@@ -7070,6 +7078,54 @@ function showAppVersion(){
     liveRestoreHeld();
     try{localStorage.setItem(LIVE_NOTE_KEY,"Back on the downloaded version ("+fwd+").");}catch(e){}
     liveApplyNow();
+  };
+  /* v4.56: ask the repo what APK is published, then hand the file to
+     Android's installer. Two taps when there is nothing new: the first says
+     what is already installed, the second downloads it anyway (a re-install
+     is the fix when the build number is right but the app is not). The tap
+     is always a fresh read — a cached answer here would tell you the APK is
+     old when it isn't. */
+  const ag=document.getElementById("handApkGet");
+  if(ag)ag.onclick=async ()=>{
+    if(ag._busy)return;
+    if(ag._arm){                       // second tap: download regardless
+      ag.textContent="Opening installer\u2026";
+      try{if(window.__wildStartApkDownload)window.__wildStartApkDownload();}catch(e){}
+      setTimeout(()=>{try{showAppVersion();}catch(e){}},2500);
+      return;
+    }
+    ag._busy=true;
+    ag.textContent="Checking\u2026";
+    let st=null;
+    try{
+      const base=WILD_UPDATE_BASE.replace(/\/+$/,"");
+      st=readRepoStamps(await liveFetchText(base+"/"+REPO_INDEX_FILE,true));
+    }catch(e){st=null;}
+    ag._busy=false;
+    if(!st||!st.apk){
+      ag.textContent="No signal";
+      setTimeout(()=>{if(!ag._arm)ag.textContent="\u2b07 Update app from GitHub";},3000);
+      return;
+    }
+    const have=installedApkBuildNow();
+    try{localStorage.setItem(REPO_APK_SEEN_KEY,String(st.apk));}catch(e){}
+    if(st.apk>have){
+      ag.textContent="Opening installer\u2026 (build "+st.apk+")";
+      try{if(window.__wildStartApkDownload)window.__wildStartApkDownload();}catch(e){}
+      setTimeout(()=>{try{showAppVersion();}catch(e){}},2500);
+      return;
+    }
+    /* Not newer. Say so rather than downloading — installing an APK that is
+       the same build or older is refused by Android and looks like a fault. */
+    ag._arm=true;
+    ag.style.color="#8a5300";
+    ag.textContent=(st.apk<have?"Repo has build "+st.apk+", you have "+have:"Already on build "+have)+" \u2014 tap again to install anyway";
+    setTimeout(()=>{
+      if(!ag._arm)return;
+      ag._arm=false;
+      ag.style.color="var(--pri)";
+      ag.textContent="\u2b07 Update app from GitHub";
+    },6000);
   };
   const mg=document.getElementById("handVerManage");
   if(mg)mg.onclick=()=>{handMgFrom="version";showHandManage();};
