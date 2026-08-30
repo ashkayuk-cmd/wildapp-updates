@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 182;
+const THIS_BUILD_NUM = 183;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.67";
+const BUILD_NAME = "v4.68";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4038,6 +4038,37 @@ function showHandStreetBldg(street,bldg,num){
 }
 
 /* ── SOUND SCREEN (v1.65) ─────────────────────────────────────────────── */
+/* -- DEVICE VOLUME + SCANNER BEEP (v4.68) ----------------------
+   Ash asked for the sliders the notification shade shows, inside the app -
+   in a kiosk there is no shade to pull down, so Media / Notifications / Ring
+   / Alarm / System were unreachable without leaving the app entirely.
+
+   These read and write the REAL AudioManager streams through the WildAudio
+   bridge (APK v1.95). Nothing is cached: the values are re-read every time
+   the screen opens, so pressing the hardware volume keys and coming back
+   shows the truth rather than a stale copy.
+
+   The setter returns the level the stream ACTUALLY ended up at, not the one
+   asked for - Android refuses ring and notification while Do Not Disturb is
+   on, and this app deliberately doesn't hold notification-policy access. A
+   refused write therefore shows as the slider snapping back, which is honest,
+   instead of a slider that moves while nothing happens. */
+function wildAudio(){
+  try{return (window.WildAudio&&typeof WildAudio.streams==="function")?WildAudio:null;}catch(e){return null;}
+}
+function audioStreams(){
+  const a=wildAudio();
+  if(!a)return null;
+  try{
+    const v=JSON.parse(a.streams()||"[]");
+    return (Array.isArray(v)&&v.length)?v:null;
+  }catch(e){return null;}
+}
+function scannerBeepOn(){
+  const a=wildAudio();
+  if(!a)return null;                       // null = no bridge, don't offer it
+  try{return !!a.beep();}catch(e){return null;}
+}
 /* -- SOUND & VIBRATION (v4.63) ---------------------------------
    Rebuilt as a full feedback screen in the shape of Android's own Sound page:
    a volume section, a vibration section with a master switch and a strength
@@ -4083,6 +4114,41 @@ function showHandSound(){
       +'<div style="font-size:12px;color:var(--pri);font-weight:800;flex-shrink:0">\u25B6</div></button>';
   }).join("");
 
+  /* Device volume: one row per stream, drawn only when the bridge is there.
+     On an older wrapper (or a desktop browser) the section is left out
+     entirely rather than shown dead - a slider that does nothing is worse
+     than no slider. */
+  const streams=audioStreams();
+  const devVolHtml = streams
+    ? head("Device volume")+card(
+        '<div style="font-size:12px;color:var(--sub);line-height:1.45">The phone\u2019s own levels \u2014 the same ones the notification shade shows. In kiosk mode there\u2019s no shade to pull down, so they live here.</div>'
+        +streams.map(function(x){
+          return '<div style="margin-top:13px">'
+            +'<div style="display:flex;justify-content:space-between;align-items:baseline">'
+              +'<div style="font-size:13px;font-weight:800;color:var(--txt)">'+escHtml(x.name)+'</div>'
+              +'<div class="avNum" data-id="'+x.id+'" style="font-size:11.5px;color:var(--sub)">'+x.vol+' / '+x.max+'</div>'
+            +'</div>'
+            +'<input class="avSlide" data-id="'+x.id+'" type="range" min="0" max="'+x.max+'" step="1" value="'+x.vol+'" style="width:100%;height:32px;margin-top:2px">'
+          +'</div>';
+        }).join("")
+        +'<div style="font-size:11px;color:var(--sub);margin-top:12px;line-height:1.45">Ring and Notifications won\u2019t move while Do Not Disturb is on \u2014 Android blocks it, and the slider will spring back if it does.</div>')
+    : "";
+
+  /* The engine's own decode beep. v1.93 silenced it outright to kill the
+     double sound; it's a switch now so it can be had back if it's ever
+     wanted. Off is still the default - the app's outcome tones are the ones
+     that carry meaning. */
+  const beepOn=scannerBeepOn();
+  const beepHtml = (beepOn===null) ? "" :
+    head("Scanner")+card(
+      '<div style="display:flex;align-items:center;gap:12px">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">Scanner\u2019s own beep</div>'
+        +'<div style="font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4">Zebra\u2019s decode beep, separate from the app\u2019s. On means two sounds per scan \u2014 that beep, then the app\u2019s outcome tone. It follows the phone\u2019s volume above, not the app\u2019s.</div></div>'
+        +'<button type="button" id="beepSw" role="switch" aria-checked="'+(beepOn?"true":"false")+'" style="flex-shrink:0;width:58px;height:32px;border:none;border-radius:16px;'
+        +'background:'+(beepOn?"var(--pri,#1565C0)":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+        +'<span id="beepKnob" style="position:absolute;top:3px;left:'+(beepOn?"29px":"3px")+';width:26px;height:26px;border-radius:13px;background:#fff;transition:left .15s"></span></button>'
+      +'</div>');
+
   box.innerHTML='<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:14px 4px">'
     +handTopBar("Sound &amp; vibration")
     +head("Beep volume")
@@ -4094,6 +4160,8 @@ function showHandSound(){
         +'<input id="handVol" type="range" min="0" max="100" step="5" value="'+v+'" style="flex:1;height:34px">'
         +'<button type="button" id="handVolUp" style="'+btn+';max-width:60px">+</button>'
       +'</div>')
+    +devVolHtml
+    +beepHtml
     +head("Vibration")
     +card(
        '<div style="display:flex;align-items:center;gap:12px">'
@@ -4114,7 +4182,7 @@ function showHandSound(){
       +'</div>')
     +head("Test each outcome")
     +card('<div style="font-size:12px;color:var(--sub);line-height:1.45;padding-bottom:4px">Every sound a scan can make, at the settings above. Tap to hear and feel it.</div>'+testRows)
-    +'<div style="font-size:11px;color:var(--sub);margin-top:14px;line-height:1.45">The scanner engine has a decode beep of its own, set in the wrapper rather than here \u2014 if you hear two sounds per scan, that\u2019s the other one.</div>'
+    +(beepOn===null?'<div style="font-size:11px;color:var(--sub);margin-top:14px;line-height:1.45">The scanner engine has a decode beep of its own, set in the wrapper rather than here \u2014 if you hear two sounds per scan, that\u2019s the other one.</div>':"")
     +'<button type="button" id="handVolBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;'
     +'border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>'
   +'</div>';
@@ -4165,6 +4233,31 @@ function showHandSound(){
     b.onclick=function(){paintSegs(setVibeStrength(k));wildVibrate(80);};
   });
 
+  /* Writes go through on release, not on every pixel of the drag - each one
+     is a real setStreamVolume on the device. The number beside the label is
+     redrawn from what the bridge REPORTS BACK, so a write Android refused
+     puts the slider back where it really is. */
+  box.querySelectorAll(".avSlide").forEach(function(sl){
+    const id=+sl.dataset.id;
+    const num=box.querySelector('.avNum[data-id="'+id+'"]');
+    const draw=v=>{if(num)num.textContent=v+" / "+sl.max;};
+    sl.oninput=()=>draw(sl.value);
+    sl.onchange=function(){
+      const a=wildAudio();if(!a)return;
+      let got=-1;
+      try{got=a.set(id,parseInt(sl.value,10));}catch(e){}
+      if(got>=0){sl.value=String(got);draw(got);}
+    };
+  });
+  const bsw=document.getElementById("beepSw"), bknob=document.getElementById("beepKnob");
+  if(bsw)bsw.onclick=function(){
+    const a=wildAudio();if(!a)return;
+    let now=false;
+    try{now=!a.beep();a.setBeep(now);}catch(e){return;}
+    bsw.style.background=now?"var(--pri,#1565C0)":"#c9ced4";
+    bsw.setAttribute("aria-checked",now?"true":"false");
+    if(bknob)bknob.style.left=now?"29px":"3px";
+  };
   box.querySelectorAll(".sndTest").forEach(function(b){
     b.onclick=function(){try{outcomeTone(b.dataset.k);}catch(e){}};
   });
