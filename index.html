@@ -599,7 +599,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 186;
+const THIS_BUILD_NUM = 187;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +609,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.71";
+const BUILD_NAME = "v4.72";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4293,6 +4293,68 @@ function showHandSound(){
   // v4.26: went to the scanning screen, unlike every other settings screen.
   if(back)back.onclick=()=>{try{handBackToOptions();}catch(e){}};
 }
+
+/* -- BRIGHTNESS (v1.93) -----------------------------------------
+   Talks to the real screen via the WildBrightness bridge (from this build
+   onward — OTA build 187). On an older wrapper the bridge just isn't there — same rule as WildAudio:
+   a feature whose bridge hasn't arrived yet doesn't offer itself rather than
+   drawing a control that does nothing. */
+function wildBrightness(){
+  try{return (window.WildBrightness&&typeof WildBrightness.set==="function")?WildBrightness:null;}catch(e){return null;}
+}
+function showHandBrightness(){
+  const box=document.getElementById("handResult");
+  if(!box)return;
+  const br=wildBrightness();
+  if(!br){handGoIdle();return;}   // menu hides this row without the bridge, but guard anyway
+  handNav("brightness",function(){showHandBrightness();});
+  try{box.dataset.sub="brightness";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  box.style.justifyContent="flex-start";
+  let auto=true,pct=60;
+  try{auto=!!br.isAuto();}catch(e){}
+  try{pct=br.get();}catch(e){}
+  const head=t=>'<div style="font-size:11px;font-weight:800;color:var(--pri);text-transform:uppercase;letter-spacing:.06em;margin:20px 0 6px">'+t+'</div>';
+  const card=inner=>'<div style="background:var(--sur);border:1px solid var(--div);border-radius:13px;padding:13px">'+inner+'</div>';
+
+  box.innerHTML='<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:14px 4px">'
+    +handTopBar("Brightness")
+    +head("Screen brightness")
+    +card(
+       '<div style="display:flex;align-items:center;gap:12px">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">Auto brightness</div>'
+        +'<div style="font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4">Leaves the screen at whatever level the device itself is set to. Turn off to fix it manually below.</div></div>'
+        +'<button type="button" id="brSw" role="switch" aria-checked="'+(auto?"true":"false")+'" style="flex-shrink:0;width:58px;height:32px;border:none;border-radius:16px;'
+        +'background:'+(auto?"var(--pri,#1565C0)":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+        +'<span id="brKnob" style="position:absolute;top:3px;left:'+(auto?"29px":"3px")+';width:26px;height:26px;border-radius:13px;background:#fff;transition:left .15s"></span></button>'
+      +'</div>'
+      +'<div id="brSlideWrap" style="margin-top:16px;opacity:'+(auto?".4":"1")+';pointer-events:'+(auto?"none":"auto")+'">'
+        +'<div id="brNum" style="font-size:34px;font-weight:800;color:var(--txt);text-align:center;margin:2px 0 10px">'+pct+'%</div>'
+        +'<input id="brSlide" type="range" min="1" max="100" step="1" value="'+pct+'" style="width:100%;height:34px">'
+      +'</div>')
+    +'<button type="button" id="brBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;'
+    +'border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>'
+  +'</div>';
+
+  const sw=document.getElementById("brSw"),knob=document.getElementById("brKnob"),wrap=document.getElementById("brSlideWrap");
+  const sl=document.getElementById("brSlide"),num=document.getElementById("brNum");
+  const redrawSwitch=()=>{
+    if(sw){sw.setAttribute("aria-checked",auto?"true":"false");sw.style.background=auto?"var(--pri,#1565C0)":"#c9ced4";}
+    if(knob)knob.style.left=auto?"29px":"3px";
+    if(wrap){wrap.style.opacity=auto?".4":"1";wrap.style.pointerEvents=auto?"none":"auto";}
+  };
+  if(sw)sw.onclick=()=>{
+    auto=!auto;
+    redrawSwitch();
+    try{ if(auto){br.auto();}else{br.set(sl?Number(sl.value):pct);} }catch(e){}
+  };
+  if(sl){
+    sl.oninput=()=>{ if(num)num.textContent=sl.value+"%"; };
+    sl.onchange=()=>{ try{br.set(Number(sl.value));}catch(e){} };
+  }
+  const back=document.getElementById("brBack");
+  if(back)back.onclick=()=>{try{handBackToOptions();}catch(e){handGoIdle();}};
+}
+
 
 /* The idle scanning screen, in one place (v1.65) — it used to be a literal
    repeated in six spots, so anything added to it went missing on whichever
@@ -9869,6 +9931,7 @@ function openOptionsMenu(){
   const MENU=[
     {e:"ℹ️",label:"App version",sub:"Which build is running, and updates",go:goHand(()=>openAppVersion())},
     {e:"⬅️",label:"Back button menu",sub:"Kiosk mode, exit, StageNow, Android settings",go:goHand(()=>showHandBackHold())},
+    ...(wildBrightness()?[{e:"🔆",label:"Brightness",sub:"Screen brightness, auto or fixed",go:goHand(()=>showHandBrightness())}]:[]),
     {e:"🕒",label:"Recent scans",sub:"The last 40 scans, and what each one gave",go:goHand(()=>showHandRecent())},
     {e:"🔀",label:"Shared streets",sub:"Streets split between two or more walks",go:goHand(()=>showHandShared())},
     {e:"🔊",label:"Sound &amp; vibration",sub:"Beep volume, vibrate on/off and strength",go:goHand(()=>showHandSound())},

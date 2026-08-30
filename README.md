@@ -1,37 +1,38 @@
-# Wild App — fixed
+# Brightness setting — build 187 / v4.72
 
-## Root cause (finally confirmed, not guessed)
-`MainActivity.requestAdmin()` had a real bytecode bug: the method declared
-only 8 registers with the implicit `this` pinned to the last one (`v7`). A
-64-bit constant a few lines later (`const-wide/32 v6, 0x1d4c0`) legitimately
-needs a *register pair* — `v6` **and** `v7` — to hold its value. That pair
-silently overwrote `this` right before it was used again, and the on-device
-verifier correctly refused to run the method at all once it noticed.
+## What's new
+A new "Brightness" row in Settings (sorted alphabetically, sits between
+"Back button menu" and "Recent scans"):
+- **Auto brightness** toggle — on (default) leaves the screen at whatever the
+  device itself is set to; off lets you fix it manually.
+- **Slider (1–100%)** — appears when Auto is off, applies live as you drag,
+  and is remembered across restarts.
 
-That's why nothing could ever catch it: a verifier rejection kills the whole
-class before any of its code — constructor, `attachBaseContext`, `onCreate`,
-any try/catch inside them — gets a chance to run. It also explains why it hit
-100% of the time on this device with zero exceptions logged anywhere, why an
-old build without this method (or with different register allocation) still
-worked, and why the crash followed the app through every reset, cert change,
-and device wipe.
+## Why this needed a full APK, not just an OTA push
+Screen brightness can only be set through the Activity's Window, which isn't
+reachable from JavaScript — it needed a new native bridge (`WildBrightness`,
+alongside the existing `WildAudio`/`WildTTS`/etc.) exposed into the WebView.
+That's a dex-level change, so this one has to be installed by hand like the
+last one.
 
-**Fixed** by widening the register window on that one method so nothing
-collides with `this`. Scanned every other method in the app for the same
-pattern — nothing else was affected.
+## Deploy
+1. **Install `WildApp.apk` on the device** — same signing cert, same
+   `versionCode` 170 (only the OTA-layer `THIS_BUILD_NUM` moved, to 187, same
+   scheme as every other content-only release), installs as a normal update.
+2. **Upload `index.html`** to `ashkayuk-cmd/wildapp-updates` on GitHub — this
+   is the same content now baked into the APK, so devices that get the OTA
+   push before the new APK will simply not see the Brightness row yet (the
+   Settings menu hides it automatically when the bridge isn't present), and
+   devices with the new APK but an older OTA copy will get it back as soon as
+   they pick up this OTA. Either order is safe.
+   `wild_data.json` is untouched — no need to re-upload it.
 
-## What's still in this build
-- The on-screen crash display (from earlier in this debugging session) is
-  still wrapped around `onCreate`'s WebView setup, as a safety net — if
-  anything ever does throw a normal Java exception there again, you'll see it
-  on screen instead of a silent "has stopped."
-- The crash logger now also installs at the earliest possible point
-  (`attachBaseContext`), before it did previously.
+## Compatibility
+Feature-detected the same way `WildAudio` already is: if `window.WildBrightness`
+doesn't exist (older wrapper, or opened in a browser during preview), the
+Settings row just doesn't appear — no dead controls, no error.
 
-Neither of these change normal behaviour — they only matter if something
-goes wrong again.
-
-## What this doesn't touch
-Nothing about resolver logic, walk data, PIN handling, or OTA update flow
-changed. Same version (1.15 / build 170), same signing cert — installs as a
-normal update.
+## Also carried over from the crash-fix build
+The `requestAdmin()` register-collision fix, the on-screen crash display
+around `onCreate`'s WebView setup, and the earlier crash-logger hook are all
+still in this build.
