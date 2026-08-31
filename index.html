@@ -129,6 +129,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Ro
 .rcount{padding:8px 4px 4px;font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
 .rcard{background:var(--sur);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;box-shadow:var(--shad);cursor:pointer;transition:transform .1s;display:flex;align-items:center;gap:12px}
 .rcard:active{transform:scale(.98)}
+
+/* v4.76: the two idle type-in buttons — raised, equal-sized, pressable. */
+#handIdlePcBtn:active,#handIdleStBtn:active{transform:translateY(3px);box-shadow:0 1px 0 #042A30,0 2px 5px rgba(0,0,0,.25)!important}
 .ric{width:38px;height:38px;border-radius:50%;background:var(--chip);display:flex;align-items:center;justify-content:center;color:var(--pri);font-size:17px;flex-shrink:0}
 .rb{flex:1;min-width:0}
 .rr{font-size:12px;font-weight:700;color:var(--pri);margin-bottom:2px}
@@ -510,8 +513,8 @@ body.addr-locked #rl .lockmsg{display:flex}
       <div id="handEmpty" style="color:var(--sub)">
         <div style="max-width:340px;margin:0 auto;text-align:center;line-height:1.55">
           <svg viewBox="0 0 16 16" width="76" height="76" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" focusable="false" style="display:block;margin:0 auto 10px"><rect width="16" height="16" fill="#fff"/><path d="M0 0h1v1h-1zM2 0h1v1h-1zM4 0h1v1h-1zM6 0h1v1h-1zM8 0h1v1h-1zM10 0h1v1h-1zM12 0h1v1h-1zM14 0h1v1h-1zM0 1h4v1h-4zM6 1h1v1h-1zM11 1h5v1h-5zM0 2h2v1h-2zM4 2h1v1h-1zM6 2h1v1h-1zM9 2h2v1h-2zM13 2h1v1h-1zM0 3h1v1h-1zM3 3h1v1h-1zM6 3h2v1h-2zM13 3h1v1h-1zM15 3h1v1h-1zM0 4h1v1h-1zM3 4h1v1h-1zM5 4h1v1h-1zM8 4h1v1h-1zM10 4h1v1h-1zM12 4h3v1h-3zM0 5h1v1h-1zM2 5h1v1h-1zM4 5h2v1h-2zM8 5h2v1h-2zM11 5h5v1h-5zM0 6h2v1h-2zM3 6h1v1h-1zM8 6h3v1h-3zM13 6h1v1h-1zM0 7h1v1h-1zM4 7h1v1h-1zM7 7h1v1h-1zM10 7h6v1h-6zM0 8h3v1h-3zM4 8h1v1h-1zM7 8h1v1h-1zM9 8h1v1h-1zM13 8h2v1h-2zM0 9h1v1h-1zM2 9h1v1h-1zM5 9h1v1h-1zM8 9h1v1h-1zM11 9h2v1h-2zM15 9h1v1h-1zM0 10h1v1h-1zM2 10h1v1h-1zM4 10h2v1h-2zM7 10h5v1h-5zM13 10h2v1h-2zM0 11h1v1h-1zM3 11h3v1h-3zM8 11h2v1h-2zM13 11h3v1h-3zM0 12h3v1h-3zM4 12h4v1h-4zM13 12h1v1h-1zM0 13h4v1h-4zM5 13h3v1h-3zM10 13h4v1h-4zM15 13h1v1h-1zM0 14h2v1h-2zM3 14h1v1h-1zM5 14h2v1h-2zM8 14h2v1h-2zM11 14h1v1h-1zM14 14h1v1h-1zM0 15h16v1h-16z" fill="#111"/></svg><div style="font-size:15px;font-weight:800;color:var(--txt);margin-bottom:8px">Scan a QR code to show walk</div></div>
-        <div id="handIdleActions" style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:14px">
-          <button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="padding:14px 18px;border:1px solid #1558B0;border-radius:12px;background:#1A73E8;font-size:16.5px;font-weight:900;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button><button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="padding:14px 18px;border:1px solid #1558B0;border-radius:12px;background:#1A73E8;font-size:16.5px;font-weight:900;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a Street or Building name</button>
+        <div id="handIdleActions" style="display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:16px">
+          <button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="display:flex;align-items:center;justify-content:center;gap:8px;width:280px;max-width:100%;min-height:60px;padding:14px 16px;border:1px solid #042A30;border-top:1px solid #0B5D70;border-radius:14px;background:#074150;font-size:16px;font-weight:900;color:#fff;line-height:1.2;text-align:center;box-shadow:0 4px 0 #042A30,0 6px 12px rgba(0,0,0,.28);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a postcode</button><button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="display:flex;align-items:center;justify-content:center;gap:8px;width:280px;max-width:100%;min-height:60px;padding:14px 16px;border:1px solid #042A30;border-top:1px solid #0B5D70;border-radius:14px;background:#074150;font-size:16px;font-weight:900;color:#fff;line-height:1.2;text-align:center;box-shadow:0 4px 0 #042A30,0 6px 12px rgba(0,0,0,.28);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">&#9000; Type a Street or Building name</button>
         
         <div style="max-width:340px;margin:14px auto 0;text-align:center;line-height:1.55"><div style="font-size:12.5px"><div>The PDA reads the <b>postcode</b> from the QR code and shows the walk. It is usually correct, but <b>not 100% accurate</b>.</div><div style="margin-top:8px">A QR code often contains the postcode with unusual spacing or extra characters. Sometimes the wrong postcode is printed, and one postcode can cover more than one walk.</div><div style="margin-top:8px">Some labels also have a <b>1D barcode</b> at the bottom right containing the postcode. You can scan these as well.</div></div></div>
       </div>
@@ -599,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 190;
+const THIS_BUILD_NUM = 191;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -609,7 +612,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.75";
+const BUILD_NAME = "v4.76";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -4360,10 +4363,8 @@ function showHandBrightness(){
    repeated in six spots, so anything added to it went missing on whichever
    route back wasn't updated. */
 function handIdleActionsHtml(){
-  var b="padding:14px 18px;border:1px solid #1558B0;border-radius:12px;background:#1A73E8;"+
-        "font-size:15.5px;font-weight:800;color:#fff;cursor:pointer;"+
-        "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
-  return '<div id="handIdleActions" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px">'+
+  var b="display:flex;align-items:center;justify-content:center;gap:8px;width:280px;max-width:100%;min-height:60px;padding:14px 16px;border:1px solid #042A30;border-top:1px solid #0B5D70;border-radius:14px;background:#074150;font-size:16px;font-weight:900;color:#fff;line-height:1.2;text-align:center;box-shadow:0 4px 0 #042A30,0 6px 12px rgba(0,0,0,.28);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation";
+  return '<div id="handIdleActions" style="display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:16px">'+
     '<button type="button" id="handIdlePcBtn" onclick="try{showHandTypeIn()}catch(e){}" style="'+b+'">⌨ Type a postcode</button>'+
     '<button type="button" id="handIdleStBtn" onclick="try{showHandStreetIn()}catch(e){}" style="'+b+'">⌨ Type a Street or Building name</button>'+
     '</div>';
