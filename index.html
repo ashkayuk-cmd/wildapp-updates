@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 195;
+const THIS_BUILD_NUM = 197;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD = 193;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.80";
+const BUILD_NAME = "v4.82";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -637,7 +637,7 @@ const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside
    app from GitHub" compared the repo's APK (170) against the installed one
    (182) and reported the repo as behind. It is the sixth release stamp and
    was the one nobody was counting. */
-const REPO_APK_BUILD  = 193;
+const REPO_APK_BUILD  = 197;
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -6162,6 +6162,7 @@ function showHandBackHold(){
     +(live?'<div style="font-size:11.5px;color:var(--sub);margin-top:4px;line-height:1.45">These do the same thing as picking them off the real menu \u2014 no need to hold BACK for ten seconds. The two amber ones ask first.</div>':"")
     +rows
     +adminHtml
+    +bhHousekeepHtml()
     +(live
       ?'<button type="button" id="bhOpen" style="margin-top:14px;width:100%;padding:12px;background:var(--sur);border:1px solid var(--div);'
         +'border-radius:12px;font-size:13px;font-weight:700;color:var(--txt);cursor:pointer">Open the real menu instead</button>'
@@ -6201,9 +6202,77 @@ function showHandBackHold(){
     };
     const op=document.getElementById("bhOpen");
     if(op)op.onclick=function(){const k=wildKiosk();if(k)try{k.menu();}catch(e){}};
+    wireBhHousekeeping();
   }
   const bk=document.getElementById("handBhBack");
   if(bk)bk.onclick=function(){try{handBackToOptions();}catch(e){}};
+}
+/* -- HOUSEKEEPING ROWS (v4.82) ---------------------------------------
+   Two things Ash asked for, both of which need the wrapper and so appear
+   only when the bridge that does them is present:
+
+     Close other windows  - anything else the app has left open behind the
+       scan screen is finished off and the app is pulled back to the front.
+       Android only lets an app close ITS OWN windows, so this cannot shut
+       down a separate app someone launched; it clears the app's own strays,
+       which is what actually piles up on the round.
+
+     Browse files - opens the PDA's own Files app, falling back to the
+       system file picker on a device that has no Files app. In kiosk mode
+       Android blocks one app from starting another, so the row says so
+       rather than appearing to do nothing.
+
+   Written as its own block keyed on two element IDs, so it cannot disturb
+   the .bhRow wiring above. */
+function bhCanHousekeep(){
+  try{ var k=wildKiosk(); return !!(k && typeof k.closeOthers==="function" && typeof k.files==="function"); }
+  catch(e){ return false; }
+}
+function bhHousekeepHtml(){
+  if(!bhCanHousekeep())return "";
+  const row=function(id,emoji,name,desc){
+    return '<button type="button" id="'+id+'" style="display:block;width:100%;text-align:left;padding:12px 13px;margin-top:7px;'
+      +'background:var(--sur);border:none;border-left:6px solid var(--pri);border-radius:11px;box-shadow:var(--shad);'
+      +'cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+        +'<div style="font-size:18px;flex-shrink:0">'+emoji+'</div>'
+        +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">'+escHtml(name)+'</div>'
+        +'<div style="font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.45">'+escHtml(desc)+'</div></div>'
+        +'<div style="font-size:14px;color:var(--sub);flex-shrink:0">\u203A</div>'
+      +'</div></button>';
+  };
+  return '<div style="font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:16px">Housekeeping</div>'
+    +row("bhClose","\uD83E\uDDF9","Close other windows",
+         "Shuts anything else this app has left open and brings the scan screen back to the front. Corrections and scan history are untouched.")
+    +row("bhFiles","\uD83D\uDCC1","Browse files on the PDA",
+         "Opens the PDA\u2019s file browser \u2014 handy for reading the crash log in Android/data/uk.wild.app/files.")
+    +'<div id="bhHkMsg" style="font-size:11.5px;color:var(--sub);margin-top:8px;line-height:1.45;min-height:16px"></div>';
+}
+function wireBhHousekeeping(){
+  const msg=document.getElementById("bhHkMsg");
+  const say=function(t,bad){ if(msg){ msg.textContent=t; msg.style.color=bad?"#8a5300":"var(--sub)"; } };
+  const cl=document.getElementById("bhClose");
+  if(cl)cl.onclick=function(){
+    const k=wildKiosk(); if(!k)return;
+    let r=""; try{ r=String(k.closeOthers()||""); }catch(e){ r="ERR|"+e; }
+    if(r.indexOf("OK|")===0){
+      const n=parseInt(r.slice(3),10)||0;
+      say(n?("Closed "+n+" other window"+(n===1?"":"s")+". The scan screen is the only one left."):
+             "Nothing else was open \u2014 the scan screen was already the only window.");
+    }else{
+      say("The device would not close them: "+r.replace(/^ERR\|/,""),true);
+    }
+  };
+  const fb=document.getElementById("bhFiles");
+  if(fb)fb.onclick=function(){
+    const k=wildKiosk(); if(!k)return;
+    let r=""; try{ r=String(k.files()||""); }catch(e){ r="ERR|"+e; }
+    if(r.indexOf("OK|")===0){
+      say(r==="OK|files"?"Opening the Files app\u2026":"Opening the file picker\u2026");
+    }else{
+      say("Could not open it. If kiosk mode is ON, Android blocks the app from starting another one \u2014 turn kiosk off above, then try again. ("+r.replace(/^ERR\|/,"")+")",true);
+    }
+  };
 }
 /* A yes/no sheet for the two rows that walk you out of the app. Deliberately
    not window.confirm(): a system dialog steals the window focus, and the
@@ -10015,17 +10084,64 @@ function openOptionsGated(){
    localStorage and re-applied at boot, because a StageNow run or an
    Enterprise Reset can move it underneath us. ------------------------- */
 const PULLDOWN_KEY="wildPullDown_v1";
+/* v4.82: the version the device actually accepted, once we have found it. */
+const PULLDOWN_VER_KEY="wildPullDownVer_v1";
+/* Oldest first: an Android 8 TC56 wants a low UiMgr version, and asking for a
+   newer one than MX supports is what made the old build answer FAILURE. */
+const PULLDOWN_VERSIONS=["5.1","4.4","6.0","7.0","8.2","9.2","10.1"];
 function wildPullDown(){
   try{return (window.WildKiosk&&typeof WildKiosk.pullDown==="function")?WildKiosk:null;}catch(e){return null;}
 }
 function pullDownWanted(){
   try{var v=localStorage.getItem(PULLDOWN_KEY);return v==="1"?1:(v==="2"?2:0);}catch(e){return 0;}
 }
+function pullDownVerStored(){
+  try{var v=localStorage.getItem(PULLDOWN_VER_KEY);return v||"";}catch(e){return "";}
+}
+/* Does this wrapper take a version from us? Only APK build 197 and later. */
+function wildPullDownV(){
+  try{return (window.WildKiosk&&typeof WildKiosk.pullDownV==="function")?WildKiosk:null;}catch(e){return null;}
+}
+/* An answer that is neither a success nor a plain refusal — the device could
+   not even be asked, so walking further down the ladder is pointless. */
+function pullDownFatal(r){
+  return /EMDK not open|no PROFILE feature|^ERR /i.test(String(r||""));
+}
+function pullDownOk(r){ return /SUCCESS|CHECK_XML/i.test(String(r||"")); }
+/* v4.82: the old build baked UiMgr version 10.1 into the APK and this PDA's
+   MX is older than that, so every request came back FAILURE. The version is
+   now a parameter, and the app finds the one this device accepts by trying
+   them oldest-first and remembering the winner. Later changes are one call. */
 function pullDownApply(mode){
+  var bv=wildPullDownV();
+  if(bv){
+    var tried=[], r="";
+    var first=pullDownVerStored();
+    var list=PULLDOWN_VERSIONS.slice();
+    if(first){
+      var i=list.indexOf(first);
+      if(i>0){ list.splice(i,1); list.unshift(first); }
+    }
+    for(var n=0;n<list.length;n++){
+      var v=list[n];
+      try{ r=String(bv.pullDownV(mode,v)||""); }catch(e){ r="ERR "+e; }
+      tried.push(v);
+      if(pullDownOk(r)){
+        try{localStorage.setItem(PULLDOWN_KEY,String(mode));}catch(e){}
+        try{localStorage.setItem(PULLDOWN_VER_KEY,v);}catch(e){}
+        return r;
+      }
+      if(pullDownFatal(r))return r;
+    }
+    /* Everything was refused: forget any remembered version so the next go
+       starts clean rather than leading with one we now know is wrong. */
+    try{localStorage.removeItem(PULLDOWN_VER_KEY);}catch(e){}
+    return r+" (tried "+tried.join(", ")+")";
+  }
   var b=wildPullDown();if(!b)return "no bridge";
-  var r="";try{r=String(b.pullDown(mode)||"");}catch(e){r="ERR "+e;}
-  if(/SUCCESS|CHECK_XML/i.test(r)){try{localStorage.setItem(PULLDOWN_KEY,String(mode));}catch(e){}}
-  return r;
+  var r2="";try{r2=String(b.pullDown(mode)||"");}catch(e){r2="ERR "+e;}
+  if(pullDownOk(r2)){try{localStorage.setItem(PULLDOWN_KEY,String(mode));}catch(e){}}
+  return r2;
 }
 /* Re-assert the saved choice once at start-up. Never on a fresh install —
    mode 0 means the user has never chosen, so we leave the device alone. */
@@ -10050,8 +10166,13 @@ function pullDownExplain(r){
     return "The device's EMDK service isn't available to the app right now. A restart of the PDA sometimes clears this; otherwise use StageNow.";
   if(/^ERR /i.test(r))
     return "The app hit an error talking to the device.<br><span style=\"opacity:.75\">"+escHtml(r)+"</span>";
-  if(/FAILURE/i.test(r))
-    return "The device refused the change.<br>This is MX rejecting the request, not a fault in the app \u2014 most likely this PDA's Android 8 MX is older than the settings version the app asks for, which is fixed inside the installed APK. Use the StageNow profile to change the pull-down for now.<br><span style=\"opacity:.75\">MX said: "+escHtml(r)+"</span>";
+  if(/FAILURE/i.test(r)){
+    if(wildPullDownV())
+      return "The device refused every settings version the app knows about, so this PDA\u2019s MX will not take the change from here. Use the StageNow profile instead."
+        +"<br><span style=\"opacity:.75\">MX said: "+escHtml(r)+"</span>";
+    return "The device refused the change.<br>This wrapper asks for one fixed settings version and this PDA\u2019s MX is older than that. Installing the newer app (APK) lets it try the others."
+      +"<br><span style=\"opacity:.75\">MX said: "+escHtml(r)+"</span>";
+  }
   return "MX said: "+escHtml(r);
 }
 function showHandPullDown(){
@@ -13750,7 +13871,25 @@ document.addEventListener("visibilitychange",()=>{
     pct.textContent = (charging ? "\u26A1" : "") + p + "%";
   }
 
+  /* v4.82: the old reading came from the BATTERY_CHANGED broadcast's
+     level/scale pair, which on this TC56 is coarse and lags behind the real
+     charge — the pill could sit on the same number for most of a round and
+     then drop several points at once. battery2() in the new APK reads
+     BATTERY_PROPERTY_CAPACITY straight off the fuel gauge instead, which is
+     the same source Android's own battery screen uses. Answer format is
+     "<pct>|<charging 0|1>|<source>". Older wrappers have no battery2, so the
+     original path stays as the fallback and nothing changes for them. */
   function readNative(){
+    try{
+      if(window.WildKiosk && typeof window.WildKiosk.battery2==="function"){
+        var s2 = String(window.WildKiosk.battery2()||"");
+        var b2 = s2.split("|");
+        var p2 = parseInt(b2[0],10);
+        window.__wildBattSrc = b2[2]||"";
+        if(!isNaN(p2) && p2>=0){ paint(p2, b2[1]==="1"); return true; }
+        /* fall through to the old bridge rather than hiding the pill */
+      }
+    }catch(e){}
     try{
       if(window.WildReset && typeof window.WildReset.battery==="function"){
         var s = String(window.WildReset.battery()||"");
@@ -13783,7 +13922,7 @@ document.addEventListener("visibilitychange",()=>{
     if(!els()) return;
     if(readNative()){
       if(timer) clearInterval(timer);
-      timer = setInterval(tick, 30000);
+      timer = setInterval(tick, 15000);   /* v4.82: the gauge moves in 1% steps, so read it more often */
       document.addEventListener("visibilitychange", function(){
         if(!document.hidden) tick();
       });
