@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 199;
+const THIS_BUILD_NUM = 200;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD = 193;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.84";
+const BUILD_NAME = "v4.85";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -874,10 +874,18 @@ async function liveFetchText(url,fresh){
   if(!r.ok)throw new Error("HTTP "+r.status);
   return await r.text();
 }
+// v4.85: "Up to date" alone can't distinguish "nothing new was published"
+// from "the wrong file was published". Both look identical on the round. The
+// build number the repo actually served is shown beside the verdict so a
+// stale or mis-uploaded index.html is visible in one tap.
+function repoStampLabel(res){
+  const n=res&&parseInt(res.repo,10);
+  return (n>0)?" ("+n+")":"";
+}
 // One update check: the APK build number (banner only — installing an APK
 // always needs your taps) plus the over-the-air code and data.
 async function checkForUpdate(reason){
-  if(navigator.onLine===false)return {offline:true,found:null};
+  if(navigator.onLine===false)return {offline:true,found:null,repo:0};
   // A tap means "tell me the truth now"; the automatic ones may use the cache.
   const fresh=(reason==="button"||reason==="manual");
   let found=null, reached=false;
@@ -903,7 +911,7 @@ async function checkForUpdate(reason){
   // repo carries its own build number and says what is published beside it.
   let html=null;
   try{html=await liveFetchText(base+"/"+REPO_INDEX_FILE,fresh);reached=true;}
-  catch(e){return {offline:!reached,found:found};}
+  catch(e){return {offline:!reached,found:found,repo:0};}
   const st=readRepoStamps(html);
   // (a) a newer APK. Installing one always needs your taps, so this only
   // flags it: the bottom-left pill turns amber and the ⟳ button offers it.
@@ -943,7 +951,7 @@ async function checkForUpdate(reason){
       }
     }catch(e){}
   }
-  return {offline:!reached,found:found};
+  return {offline:!reached,found:found,repo:st.code,repoApk:st.apk,repoData:st.data};
 }
 // The ⟳ Update button in the top bar: check right now, and say plainly what
 // happened. An update that's found raises the banner; the button just reports.
@@ -1023,7 +1031,7 @@ function wireUpdateButton(){
     try{res=await checkForUpdate("button");}catch(e){}
     b.style.opacity="1";
     if(res&&res.found){updBtnReady(res.found);return;}   // stays until applied
-    b.textContent=(!res||res.offline)?"No signal":"Up to date";
+    b.textContent=(!res||res.offline)?"No signal":("Up to date"+repoStampLabel(res));
     setTimeout(()=>{if(!b._ready)updBtnIdle(b);b._busy=false;},3000);
   };
 }
@@ -7738,7 +7746,7 @@ function showAppVersion(){
   if(chk)chk.onclick=()=>{
     chk.textContent="Checking…";
     Promise.resolve(checkForUpdate("manual")).then((res)=>{
-      chk.textContent=(!res||res.offline)?"No signal":(res.found?"Update ready":"Up to date");
+      chk.textContent=(!res||res.offline)?"No signal":(res.found?"Update ready":("Up to date \u2014 repo "+(parseInt(res.repo,10)||"?")));
       if(res&&res.found)updBtnReady(res.found);
       setTimeout(()=>showAppVersion(),1200);
     });
