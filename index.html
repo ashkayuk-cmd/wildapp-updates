@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 197;
+const THIS_BUILD_NUM = 198;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD = 193;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.82";
+const BUILD_NAME = "v4.83";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -637,7 +637,7 @@ const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside
    app from GitHub" compared the repo's APK (170) against the installed one
    (182) and reported the repo as behind. It is the sixth release stamp and
    was the one nobody was counting. */
-const REPO_APK_BUILD  = 197;
+const REPO_APK_BUILD  = 198;
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -7669,16 +7669,13 @@ function showAppVersion(){
   VER_BTNS+=rowStart+
     '<button id="handApkGet" style="'+VER_BTN+';flex:1;color:var(--pri)">\u2b07 Update app from GitHub</button>'+
     '</div>';
-  /* v4.78: the notification pull-down lives here, beside the other things
-     that change the device rather than the app's own data. Bridge-gated, so
-     the website build and any non-Zebra device never show it. */
-  if(wildPullDown()){
-    var pdNow=pullDownWanted();
-    VER_BTNS+=rowStart+
-      '<button id="handPullDown" style="'+VER_BTN+';flex:1;color:var(--txt)">Notification pull-down: '+
-      (pdNow===2?"Blocked":(pdNow===1?"Allowed":"not set"))+'</button>'+
-      '</div>';
-  }
+  /* v4.83: the notification pull-down row is gone from this screen. It sat
+     here from v4.78 reading "Notification pull-down: not set" on a device
+     whose MX refuses the change anyway, so it was a permanent line of noise
+     on the one screen you look at to check a build number. The setting is
+     still applied at boot from whatever was last chosen (pullDownBoot), and
+     showHandPullDown() is still here and still on the browsing trail — it
+     just has no row pointing at it from App version any more. */
   if(isLiveCopy()||canFwd){
     VER_BTNS+=rowStart;
     if(isLiveCopy())VER_BTNS+='<button id="handLiveRevert" style="'+VER_BTN+';flex:1;color:#8a5300">Use built-in version</button>';
@@ -7772,8 +7769,6 @@ function showAppVersion(){
      is the fix when the build number is right but the app is not). The tap
      is always a fresh read — a cached answer here would tell you the APK is
      old when it isn't. */
-  const pd=document.getElementById("handPullDown");
-  if(pd)pd.onclick=()=>{try{showHandPullDown();}catch(e){}};
   const ag=document.getElementById("handApkGet");
   if(ag)ag.onclick=async ()=>{
     if(ag._busy)return;

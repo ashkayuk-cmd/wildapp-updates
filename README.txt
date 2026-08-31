@@ -1,5 +1,8 @@
-WILD APP — build 197 (v4.82)   APK + OTA
+WILD APP — build 198 (v4.83)   APK + OTA
 ========================================
+
+REPLACES the 197 files — do not upload those. 198 is 197 plus the App version
+change below.
 
 UPLOAD BOTH to ashkayuk-cmd/wildapp-updates (main):
   WildApp.apk
@@ -18,7 +21,7 @@ the one in the APK you uploaded (SHA256 2C:3A:BB:7A:B7:00:AF:19…), so it goes 
 as an update. Corrections and scan history are kept.
 
 versionCode stays 193 on purpose. The app reads its own APK build from the baked
-app.html (now 197), not from versionCode, and editing the binary manifest for a
+app.html (now 198), not from versionCode, and editing the binary manifest for a
 number nothing reads is risk for no gain.
 
 
@@ -26,7 +29,7 @@ WHERE THE STARTING POINT CAME FROM
 ----------------------------------
 Build 196 was never published — the repo was still on 195 and the APK you sent
 was 193, so 196's pull-down work existed nowhere. I rebuilt it into this one.
-197 therefore carries everything from 194, 195 and 196 as well as today's three.
+198 therefore carries everything from 194, 195 and 196 as well as today's four.
 
 
 1. BATTERY PERCENT IS NOW THE REAL ONE
@@ -71,7 +74,22 @@ row says so in plain words rather than appearing to do nothing. Turn kiosk off
 on the row above, browse, then turn it back on.
 
 
-4. NOTIFICATION PULL-DOWN — the FAILURE fix (carried from 196)
+4. NOTIFICATION PULL-DOWN ROW REMOVED FROM APP VERSION
+------------------------------------------------------
+The row that read "Notification pull-down: not set" is gone from the App
+version screen. It went in at v4.78 and has sat there ever since on a device
+whose MX refuses the change anyway, so it was a permanent line of noise on the
+one screen you open to check a build number.
+
+WHAT THIS DOES NOT CHANGE: whatever was last chosen is still re-applied at
+boot, and the pull-down screen itself is still in the build and still on the
+browsing trail. What is gone is the only row that pointed at it — so with 198
+there is no way to REACH that screen from inside the app. That is what you
+asked for, but say the word and I will put it in the Options list instead,
+where the other device settings live, rather than on App version.
+
+
+5. NOTIFICATION PULL-DOWN — the FAILURE fix (carried from 196)
 --------------------------------------------------------------
 WHAT WAS WRONG: pullDown() in the old APK hard-coded UiMgr version "10.1" into
 the MX profile XML. This TC56 is Android 8, whose MX is older than that, so it
@@ -94,9 +112,9 @@ remembered one so the next go starts clean.
 
 STAMPS
 ------
-  THIS_BUILD_NUM   197
-  BUILD_NAME       v4.82
-  REPO_APK_BUILD   197
+  THIS_BUILD_NUM   198
+  BUILD_NAME       v4.83
+  REPO_APK_BUILD   198
   BAKED_DATA_BUILD 193        (unchanged)
   REPO_DATA_BUILD  131        (unchanged)
   REPO_DATA_HASH   a5195d2e   (unchanged, verified against baked data)
@@ -121,6 +139,11 @@ TESTED
   - full app booted in jsdom with the real dataset: no page errors, the five
     original back-menu rows all still present alongside the two new ones, and
     the pull-down screen still renders
+  - 11 tests on the App version screen: the row and its "not set" text are
+    gone, the GitHub update button and Last updated panel are untouched, the
+    pull-down screen and its boot re-apply are both still defined, and the
+    back menu and battery pill are unaffected. The old build was run against
+    the same suite and fails exactly the two removal checks
   - all 6 script blocks parse
   - APK re-opened after signing: parses, zip integrity OK, dex SHA1 and Adler32
     both correct, no original entry lost or added, the nine untouched entries
