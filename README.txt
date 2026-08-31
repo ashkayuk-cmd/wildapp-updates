@@ -1,69 +1,80 @@
-WildApp v4.77 — APK build 192
+WildApp v4.78 — APK build 193
 =============================
+Supersedes build 192, which was never installed. Everything from 192 is
+in here.
 
 INSTALL
-  Hold BACK for 10 seconds, tap "Leave", then install. The kiosk fights
-  the installer otherwise.
-  After installing, re-pick Wild App as the home app (any install clears
-  it), and hold BACK -> "Turn on" to put kiosk mode back.
-
-  No index.html upload is needed — build 192 content is baked into this APK.
-  versionCode 192, signed v1/v2/v3 with wild-signing.keystore.
+  Hold BACK for 10 seconds, tap "Leave", then install.
+  Afterwards: re-pick Wild App as the home app (any install clears it),
+  and hold BACK -> "Turn on" to put kiosk mode back.
+  No index.html upload needed — build 193 content is baked in.
+  versionCode 193, signed v1/v2/v3 with wild-signing.keystore.
 
 
-WHAT'S NEW
+WHAT'S NEW vs 192
 
-1. Notification pull-down toggle  (the thing you asked for)
-   Settings -> "Notification pull-down". Shows the current state and a
-   two-tap button to change it. Behind the gear PIN you already have.
+  The notification pull-down control has MOVED off the Options menu and
+  onto the App version screen, on its own row under "Update app from
+  GitHub". It shows the current state on the button itself —
+  "Notification pull-down: Blocked / Allowed / not set" — and tapping it
+  opens the same two-tap screen as before, whose Back now returns to App
+  version rather than Options.
 
-   How it works: the shade is an Android setting, so the web layer can't
-   touch it. The app now submits a UiMgr/NotificationPullDown MX profile
-   through EMDK, reusing the EMDK connection the scanner already holds.
-   Value 1 = allowed, 2 = blocked — the same parameter as in your
-   StageNow profile.
+  The Options menu is back to the row set it had before 192.
 
-   The screen prints whatever MX replies. If it says anything other than
-   SUCCESS, the device is refusing to let the app submit MX settings, and
-   nothing is saved. In that case the StageNow profile is the way to
-   change it, and AccessMgr's AllowSubmitXMLPackageNames may need
-   uk.wild.app added before the in-app toggle can work at all.
-
-   Your choice is saved and re-applied ~4 seconds after boot, since a
-   StageNow run or an Enterprise Reset can move the setting underneath
-   the app. Until you make a choice, the app leaves the device alone.
-
-   Every attempt is written to wild-crash.txt as "PULLDOWN mode=N -> ...".
-
-2. Build 191 content (carried, you hadn't uploaded it)
-   The two idle buttons — Type a postcode / Type a Street or Building
-   name — are now #074150, the same fixed size (280px wide, stacked), and
-   raised so they read as buttons, sinking when tapped.
+  No PIN was added: openAppVersion already asks for 1984 at the door
+  (v1.96), so the whole screen including this button is already behind it.
 
 
-NATIVE CHANGES
-  2 methods added, 0 removed, 0 existing bodies changed:
-    ZebraScanner.applyMx(String)  — submits MX XML via ProfileManager
-    KioskBridge.pullDown(int)     — the JS bridge, @JavascriptInterface
-  Plus a static field ZebraScanner.emdkRef, set in onOpened, so applyMx
-  reuses the scanner's own EMDK handle rather than opening a second one.
-  A full baksmali round-trip shows ZebraScanner.smali and
-  KioskBridge.smali as the only files differing. Neither new method
-  writes into its own parameter registers.
+CARRIED FROM 192
+
+  Notification pull-down toggle. The shade is an Android setting, so the
+  web layer can't touch it — the app submits a UiMgr/NotificationPullDown
+  MX profile through EMDK, reusing the EMDK connection the scanner
+  already holds. Value 1 = allowed, 2 = blocked, the same parameter as in
+  your StageNow profile.
+
+  The screen prints whatever MX replies and only saves on success. If it
+  reports anything else the device is refusing to let the app submit MX
+  settings; AccessMgr's AllowSubmitXMLPackageNames with uk.wild.app on it
+  is the likely unlock. Every attempt is logged to wild-crash.txt as
+  "PULLDOWN mode=N -> ...".
+
+  Your choice is re-applied ~4 s after boot, since StageNow or an
+  Enterprise Reset can move it underneath the app. Until you choose, the
+  app leaves the device alone.
+
+CARRIED FROM 191
+
+  The two idle buttons (Type a postcode / Type a Street or Building name)
+  are #074150, the same fixed size (280px, stacked), raised, and sink
+  when tapped.
 
 
-TESTS
-  t192.cjs 20/20 (bridge absent -> no menu row; two-tap arming; a failed
-    MX result does not persist; boot re-apply only after a choice)
-  t191.cjs 16/17 on the file inside the APK — the one failure is its own
-    build-number assert, which now reads 192
-  250-label render diff vs build 191 = 0
-  7 of 11 entries byte-identical; only classes.dex, app.html, index.html
-    and AndroidManifest.xml changed
+VERIFICATION
+
+  classes.dex BYTE-IDENTICAL to build 192 — this was a content-only
+  change, no native edit. 8 of 11 entries byte-identical; only app.html,
+  index.html and AndroidManifest.xml differ.
+
+  Native layer (added in 192, unchanged here): 2 methods added, 0
+  removed, 0 existing bodies changed —
+    ZebraScanner.applyMx(String)   submits MX XML via ProfileManager
+    KioskBridge.pullDown(int)      the JS bridge, @JavascriptInterface
+  plus static field ZebraScanner.emdkRef set in onOpened. A full baksmali
+  round-trip showed ZebraScanner.smali and KioskBridge.smali as the only
+  files differing, and neither new method writes into its own parameter
+  registers.
+
+  t193.cjs 13/13 on the app.html inside the signed APK. The same suite on
+  build 192 fails exactly the relocation cases then throws reaching for a
+  button that isn't there yet — the change reproducing.
+  250-label render diff vs 192 = 0.
+  t192.cjs is superseded: its one failure on this build is "menu row
+  appears", which is the removal you asked for.
 
 
-UNVERIFIED — I have no device
+STILL UNVERIFIED — I have no device
   Whether EMDK grants a sideloaded app the PROFILE feature on your MX
-  10.3. If it doesn't, the toggle will report the error rather than fail
-  silently. Send me the line from wild-crash.txt and I'll know which way
-  it went.
+  10.3. If not, the toggle reports the error rather than failing
+  silently. Send the wild-crash.txt line and I'll know which way it went.
