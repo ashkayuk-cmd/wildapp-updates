@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 191;
+const THIS_BUILD_NUM = 194;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD = 57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.76";
+const BUILD_NAME = "v4.79";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -637,7 +637,7 @@ const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside
    app from GitHub" compared the repo's APK (170) against the installed one
    (182) and reported the repo as behind. It is the sixth release stamp and
    was the one nobody was counting. */
-const REPO_APK_BUILD  = 189;
+const REPO_APK_BUILD  = 193;
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -2023,6 +2023,7 @@ window.WildMoves = (() => {
 /* ============ end WildMoves ============ */
 
 function finishBoot(){
+  try{pullDownBoot();}catch(e){}
   // Addresses added by hand join the round before anything is derived from it.
   try{mergeUserAddrs();}catch(e){}
   // allData already reflects every move/edit/deletion/folder assignment made
@@ -7527,6 +7528,16 @@ function showAppVersion(){
   VER_BTNS+=rowStart+
     '<button id="handApkGet" style="'+VER_BTN+';flex:1;color:var(--pri)">\u2b07 Update app from GitHub</button>'+
     '</div>';
+  /* v4.78: the notification pull-down lives here, beside the other things
+     that change the device rather than the app's own data. Bridge-gated, so
+     the website build and any non-Zebra device never show it. */
+  if(wildPullDown()){
+    var pdNow=pullDownWanted();
+    VER_BTNS+=rowStart+
+      '<button id="handPullDown" style="'+VER_BTN+';flex:1;color:var(--txt)">Notification pull-down: '+
+      (pdNow===2?"Blocked":(pdNow===1?"Allowed":"not set"))+'</button>'+
+      '</div>';
+  }
   if(isLiveCopy()||canFwd){
     VER_BTNS+=rowStart;
     if(isLiveCopy())VER_BTNS+='<button id="handLiveRevert" style="'+VER_BTN+';flex:1;color:#8a5300">Use built-in version</button>';
@@ -7596,6 +7607,8 @@ function showAppVersion(){
      is the fix when the build number is right but the app is not). The tap
      is always a fresh read — a cached answer here would tell you the APK is
      old when it isn't. */
+  const pd=document.getElementById("handPullDown");
+  if(pd)pd.onclick=()=>{try{showHandPullDown();}catch(e){}};
   const ag=document.getElementById("handApkGet");
   if(ag)ag.onclick=async ()=>{
     if(ag._busy)return;
@@ -9898,6 +9911,67 @@ function openOptionsGated(){
     onCancel:()=>{try{handCollapseToResult();}catch(e){}}
   });
 }
+/* ── NOTIFICATION PULL-DOWN (v4.77) ───────────────────────────────────────
+   The shade is an Android setting, not a web one, so this goes out through
+   MX: WildKiosk.pullDown(1|2) submits a UiMgr/NotificationPullDown profile
+   via EMDK and hands back MX's own status string. Two-tap to change, so a
+   stray tap can't unlock the device mid-round. The chosen state is kept in
+   localStorage and re-applied at boot, because a StageNow run or an
+   Enterprise Reset can move it underneath us. ------------------------- */
+const PULLDOWN_KEY="wildPullDown_v1";
+function wildPullDown(){
+  try{return (window.WildKiosk&&typeof WildKiosk.pullDown==="function")?WildKiosk:null;}catch(e){return null;}
+}
+function pullDownWanted(){
+  try{var v=localStorage.getItem(PULLDOWN_KEY);return v==="1"?1:(v==="2"?2:0);}catch(e){return 0;}
+}
+function pullDownApply(mode){
+  var b=wildPullDown();if(!b)return "no bridge";
+  var r="";try{r=String(b.pullDown(mode)||"");}catch(e){r="ERR "+e;}
+  if(/SUCCESS|CHECK_XML/i.test(r)){try{localStorage.setItem(PULLDOWN_KEY,String(mode));}catch(e){}}
+  return r;
+}
+/* Re-assert the saved choice once at start-up. Never on a fresh install —
+   mode 0 means the user has never chosen, so we leave the device alone. */
+function pullDownBoot(){
+  var m=pullDownWanted();if(!m)return;
+  try{setTimeout(function(){try{pullDownApply(m);}catch(e){}},4000);}catch(e){}
+}
+function showHandPullDown(){
+  var box=document.getElementById("handResult");if(!box)return;
+  handNav("pulldown",showHandPullDown);
+  box.dataset.sub="pulldown";
+  var m=pullDownWanted();
+  var state=m===2?"Blocked":(m===1?"Allowed":"Not set by this app");
+  var want=m===2?1:2;                       // the button always offers the other one
+  var wantTxt=want===2?"BLOCK the pull-down":"ALLOW the pull-down";
+  box.innerHTML=(typeof handTopBar==="function"?handTopBar("Notification pull-down"):"")
+    +'<div style="max-width:340px;margin:0 auto;text-align:left;line-height:1.55">'
+    +'<div style="font-size:14px;margin-bottom:10px">Dragging down from the top of the screen opens Android\'s notification shade, which is one way out of this app.</div>'
+    +'<div style="font-size:14px;font-weight:800;margin-bottom:14px">Now: '+state+'</div>'
+    +'<button type="button" id="pdBtn" style="display:block;width:100%;min-height:56px;padding:14px;border:1px solid #042A30;border-radius:14px;background:#074150;color:#fff;font-size:15px;font-weight:900;cursor:pointer">'+wantTxt+'</button>'
+    +'<div id="pdMsg" style="font-size:12.5px;color:#5f6368;margin-top:12px;min-height:18px"></div>'
+    +'<div style="font-size:12px;color:#5f6368;margin-top:14px">This needs the PDA to allow the app to submit MX settings. If it reports an error, the device is refusing it and the StageNow profile is the way to change it.</div>'
+    +'</div>'
+    +'<button type="button" id="pdBack" style="margin-top:18px;border:none;background:#f1f3f4;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">‹ Back to App version</button>';
+  if(typeof rawResultBlock==="function"){try{rawResultBlock(box);}catch(e){}}
+  if(typeof wireHandFixButtons==="function"){try{wireHandFixButtons();}catch(e){}}
+  var bk=box.querySelector("#pdBack");
+  if(bk)bk.onclick=function(){try{showAppVersion();}catch(e){handGoIdle();}};
+  var btn=box.querySelector("#pdBtn"),msg=box.querySelector("#pdMsg"),armed=false,t=null;
+  if(btn)btn.onclick=function(){
+    if(!armed){
+      armed=true;btn.textContent="Tap again to confirm";btn.style.background="#b3261e";
+      t=setTimeout(function(){armed=false;btn.textContent=wantTxt;btn.style.background="#074150";},5000);
+      return;
+    }
+    if(t)clearTimeout(t);armed=false;
+    var r=pullDownApply(want);
+    if(msg)msg.textContent="MX said: "+r;
+    setTimeout(showHandPullDown,900);
+  };
+}
+
 function openOptionsMenu(){
   // v4.26: reopen, never stack — two sheets would take two Backs to clear.
   try{var _prev=document.getElementById("wildOptSheet");if(_prev)_prev.remove();}catch(e){}
