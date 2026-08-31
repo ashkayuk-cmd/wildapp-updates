@@ -1,80 +1,104 @@
-WildApp v4.78 — APK build 193
-=============================
-Supersedes build 192, which was never installed. Everything from 192 is
-in here.
+WILD APP — build 195 (v4.80)   OTA release
+==========================================
 
-INSTALL
-  Hold BACK for 10 seconds, tap "Leave", then install.
-  Afterwards: re-pick Wild App as the home app (any install clears it),
-  and hold BACK -> "Turn on" to put kiosk mode back.
-  No index.html upload needed — build 193 content is baked in.
-  versionCode 193, signed v1/v2/v3 with wild-signing.keystore.
+UPLOAD: index.html only.
+No data file, no APK reinstall.
+Includes everything from build 194 (Last updated panel, lighter blue buttons).
 
 
-WHAT'S NEW vs 192
+1. BACK BUTTON NOW RETURNS TO OPTIONS — FIXED
+---------------------------------------------
+Every Options sub-screen leaves a mark on a "browsing trail", and the BACK key
+walks that trail one step at a time. Two screens were never registering:
 
-  The notification pull-down control has MOVED off the Options menu and
-  onto the App version screen, on its own row under "Update app from
-  GitHub". It shows the current state on the button itself —
-  "Notification pull-down: Blocked / Allowed / not set" — and tapping it
-  opens the same two-tap screen as before, whose Back now returns to App
-  version rather than Options.
+  - App version
+  - Walk corrections (the manage screen)
 
-  The Options menu is back to the row set it had before 192.
+With no mark on the trail, BACK fell straight through to the code at the end of
+the handler that collapses to the scan screen - which is exactly the "goes to
+main app home page" you saw. Every other sub-screen (Walks, Recent scans,
+Shared streets, Sound, Splits, Today's walk, Back button menu, Brightness,
+Notification pull-down) was already registering, which is why only some of them
+misbehaved.
 
-  No PIN was added: openAppVersion already asks for 1984 at the door
-  (v1.96), so the whole screen including this button is already behind it.
+Both now register, so:
 
+  Options > App version                        > BACK  = Options
+  Options > Walk corrections                   > BACK  = Options   (was broken)
+  Options > App version > Walk corrections     > BACK  = App version, then Options
+  Options > App version > Notification pull-down > BACK = App version, then Options
 
-CARRIED FROM 192
+There was already a special case in the BACK handler for reaching Walk
+corrections FROM App version, but nothing for reaching it from Settings - that
+second route was the one dropping you home. It is on the trail now, so it
+retraces whichever way you actually opened it. The old special case is left in
+as belt-and-braces.
 
-  Notification pull-down toggle. The shade is an Android setting, so the
-  web layer can't touch it — the app submits a UiMgr/NotificationPullDown
-  MX profile through EMDK, reusing the EMDK connection the scanner
-  already holds. Value 1 = allowed, 2 = blocked, the same parameter as in
-  your StageNow profile.
-
-  The screen prints whatever MX replies and only saves on success. If it
-  reports anything else the device is refusing to let the app submit MX
-  settings; AccessMgr's AllowSubmitXMLPackageNames with uk.wild.app on it
-  is the likely unlock. Every attempt is logged to wild-crash.txt as
-  "PULLDOWN mode=N -> ...".
-
-  Your choice is re-applied ~4 s after boot, since StageNow or an
-  Enterprise Reset can move it underneath the app. Until you choose, the
-  app leaves the device alone.
-
-CARRIED FROM 191
-
-  The two idle buttons (Type a postcode / Type a Street or Building name)
-  are #074150, the same fixed size (280px, stacked), raised, and sink
-  when tapped.
+No PIN was added or removed. The trail only ever replays a screen you already
+passed the PIN to reach, and it is wiped when you go home, so there is no stale
+entry left behind to back into later.
 
 
-VERIFICATION
+2. NOTIFICATION PULL-DOWN "MX said: FAILURE"
+--------------------------------------------
+WHAT I FOUND: this is not a fault in the app's own code. I disassembled the
+installed APK and traced it:
 
-  classes.dex BYTE-IDENTICAL to build 192 — this was a content-only
-  change, no native edit. 8 of 11 entries byte-identical; only app.html,
-  index.html and AndroidManifest.xml differ.
+  WildKiosk.pullDown(mode)
+    -> builds  <wap-provisioningdoc>
+                 <characteristic version="10.1" type="UiMgr">
+                   <parm name="NotificationPullDown" value="1|2"/>
+                 </characteristic>
+               </wap-provisioningdoc>
+    -> ZebraScanner.applyMx()  -> EMDK processProfile()
+    -> returns MX's own status word
 
-  Native layer (added in 192, unchanged here): 2 methods added, 0
-  removed, 0 existing bodies changed —
-    ZebraScanner.applyMx(String)   submits MX XML via ProfileManager
-    KioskBridge.pullDown(int)      the JS bridge, @JavascriptInterface
-  plus static field ZebraScanner.emdkRef set in onOpened. A full baksmali
-  round-trip showed ZebraScanner.smali and KioskBridge.smali as the only
-  files differing, and neither new method writes into its own parameter
-  registers.
+"FAILURE" is MX's status code coming straight back - the device rejected the
+profile. The most likely reason: the XML asks for UiMgr version "10.1", and
+this is a TC56 on Android 8, whose MX is older than that. Zebra and third-party
+working examples of NotificationPullDown use version 5.1. Asking for a newer
+version than the device supports is a standard cause of a flat FAILURE.
 
-  t193.cjs 13/13 on the app.html inside the signed APK. The same suite on
-  build 192 fails exactly the relocation cases then throws reaching for a
-  button that isn't there yet — the change reproducing.
-  250-label render diff vs 192 = 0.
-  t192.cjs is superseded: its one failure on this build is "menu row
-  appears", which is the removal you asked for.
+WHY I HAVE NOT FIXED IT IN THIS RELEASE: that version string is baked into the
+dex, and pullDown() only accepts an integer - there is no way to pass different
+XML from the web layer. It needs a native APK rebuild, and I cannot test MX
+behaviour without the device in hand.
+
+WHAT THIS RELEASE DOES DO: the screen no longer just prints "MX said: FAILURE".
+It now explains that the device refused it, that it is not an app fault, and
+that StageNow is the way to change it meanwhile. It also stops wiping the
+message after 0.9s - the screen only redraws on success now, so you can
+actually read the refusal. All the other things MX can return (EMDK not open,
+no PROFILE feature, ERR ..., no bridge) get their own plain-English line.
+
+The saved state is untouched on a refusal, so it correctly still reads
+"not set" rather than pretending it worked.
+
+TO ACTUALLY FIX IT I would rebuild the APK and either drop the version stamp to
+5.1, or better, have pullDown try a ladder of MX versions and report which one
+the device accepts - that self-diagnoses instead of me guessing at your PDA's
+MX level. Say the word and I will build it.
 
 
-STILL UNVERIFIED — I have no device
-  Whether EMDK grants a sideloaded app the PROFILE feature on your MX
-  10.3. If not, the toggle reports the error rather than failing
-  silently. Send the wild-crash.txt line and I'll know which way it went.
+STAMPS
+------
+  THIS_BUILD_NUM   195
+  BUILD_NAME       v4.80
+  REPO_DATA_BUILD  131        (unchanged)
+  REPO_DATA_HASH   a5195d2e   (unchanged)
+  REPO_DATA_ROWS   24102      (unchanged)
+  REPO_APK_BUILD   193        (unchanged - no new APK)
+
+
+TESTED
+------
+  - all 6 inline script blocks parse clean
+  - 13 back-trail tests using the real handNav/handNavBack pulled out of this
+    file, covering both broken routes, the nested routes, revisiting a screen
+    (trail truncates rather than growing), a screen re-rendering itself (no
+    double entries), and the end of the trail still falling through to the old
+    collapse-to-home
+  - 14 tests on the MX explainer against every string the disassembled dex can
+    actually return, including HTML-injection escaping
+  - confirmed all 12 Options sub-screens now register on the trail
+  - confirmed the build 194 work (Last updated panel, #10778F buttons) survived
