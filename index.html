@@ -602,17 +602,17 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM = 200;
+const THIS_BUILD_NUM=200;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
 // app that bumped THIS_BUILD_NUM used to silently shadow newer downloaded
 // DATA (58 is not > 59), quietly reverting address fixes.
-const BAKED_DATA_BUILD = 193;
+const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME = "v4.85";
+const BUILD_NAME="v4.85";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -628,7 +628,7 @@ const BUILD_NAME = "v4.85";
 const REPO_INDEX_FILE="index.html";       // the app, published as index.html
 const REPO_DATA_FILE="wild_data.json";    // the addresses
 const REPO_APK_FILE="WildApp.apk";        // the installable app
-const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside this file
+const REPO_DATA_BUILD=200;                 // build of the wild_data.json beside this file
 /* Build of the WildApp.apk sitting beside this file in the repo.
    NOT the same thing as THIS_BUILD_NUM: an OTA-only release publishes a new
    index.html with no new APK, and this must then stay on the last APK's
@@ -637,11 +637,11 @@ const REPO_DATA_BUILD=131;                 // build of the wild_data.json beside
    app from GitHub" compared the repo's APK (170) against the installed one
    (182) and reported the repo as behind. It is the sixth release stamp and
    was the one nobody was counting. */
-const REPO_APK_BUILD  = 198;
+const REPO_APK_BUILD=199;
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
-const REPO_DATA_HASH="a5195d2e";
+const REPO_DATA_HASH="75fb7859";
 const REPO_DATA_ROWS=24102;
 const APK_BUILD_KEY="wildApkBuild_v1";    // versionCode of the APK on this device
 const REPO_APK_SEEN_KEY="wildRepoApk_v1"; // newest APK build seen in the repo
@@ -874,18 +874,10 @@ async function liveFetchText(url,fresh){
   if(!r.ok)throw new Error("HTTP "+r.status);
   return await r.text();
 }
-// v4.85: "Up to date" alone can't distinguish "nothing new was published"
-// from "the wrong file was published". Both look identical on the round. The
-// build number the repo actually served is shown beside the verdict so a
-// stale or mis-uploaded index.html is visible in one tap.
-function repoStampLabel(res){
-  const n=res&&parseInt(res.repo,10);
-  return (n>0)?" ("+n+")":"";
-}
 // One update check: the APK build number (banner only — installing an APK
 // always needs your taps) plus the over-the-air code and data.
 async function checkForUpdate(reason){
-  if(navigator.onLine===false)return {offline:true,found:null,repo:0};
+  if(navigator.onLine===false)return {offline:true,found:null};
   // A tap means "tell me the truth now"; the automatic ones may use the cache.
   const fresh=(reason==="button"||reason==="manual");
   let found=null, reached=false;
@@ -911,7 +903,7 @@ async function checkForUpdate(reason){
   // repo carries its own build number and says what is published beside it.
   let html=null;
   try{html=await liveFetchText(base+"/"+REPO_INDEX_FILE,fresh);reached=true;}
-  catch(e){return {offline:!reached,found:found,repo:0};}
+  catch(e){return {offline:!reached,found:found};}
   const st=readRepoStamps(html);
   // (a) a newer APK. Installing one always needs your taps, so this only
   // flags it: the bottom-left pill turns amber and the ⟳ button offers it.
@@ -951,7 +943,7 @@ async function checkForUpdate(reason){
       }
     }catch(e){}
   }
-  return {offline:!reached,found:found,repo:st.code,repoApk:st.apk,repoData:st.data};
+  return {offline:!reached,found:found};
 }
 // The ⟳ Update button in the top bar: check right now, and say plainly what
 // happened. An update that's found raises the banner; the button just reports.
@@ -1031,7 +1023,7 @@ function wireUpdateButton(){
     try{res=await checkForUpdate("button");}catch(e){}
     b.style.opacity="1";
     if(res&&res.found){updBtnReady(res.found);return;}   // stays until applied
-    b.textContent=(!res||res.offline)?"No signal":("Up to date"+repoStampLabel(res));
+    b.textContent=(!res||res.offline)?"No signal":"Up to date";
     setTimeout(()=>{if(!b._ready)updBtnIdle(b);b._busy=false;},3000);
   };
 }
@@ -6078,6 +6070,26 @@ function kioskAdminOn(){
   if(!k||typeof k.adminOn!=="function")return null;
   try{return !!k.adminOn();}catch(e){return null;}
 }
+/* SCANNER HOLD (v4.84) --------------------------------------------------
+   The APK binds the hardware trigger through EMDK, and that binding is
+   EXCLUSIVE: while Wild App holds it, no other app on the PDA can scan -
+   StageNow included, which is why a staging barcode reads on one device
+   and does nothing on another. Releasing hands the engine back without
+   uninstalling, so this PDA keeps its corrections, added addresses and
+   scan history.
+
+   The flag lives in the wrapper, not localStorage, and it is deliberately
+   NOT persisted: a full restart of the app always comes back scanning, so
+   a release can never be left on by accident overnight. */
+function scanHoldSupported(){
+  const k=wildKiosk();
+  return !!(k&&typeof k.scanRelease==="function"&&typeof k.scanHeld==="function");
+}
+function scanIsHeld(){
+  const k=wildKiosk();
+  if(!k||typeof k.scanHeld!=="function")return false;
+  try{return !!k.scanHeld();}catch(e){return false;}
+}
 function kioskIsOn(){
   const k=wildKiosk();
   if(!k)return null;                       // null = can't tell, don't claim either way
@@ -6103,6 +6115,52 @@ function backHoldItems(on){
     {i:4,e:"\uD83C\uDFE0",n:"Change launcher (Home app)",
        d:"Picks which app the HOME key opens. This is how the Wild App is set as HOME, and how it\u2019s unset again.",warn:true}
   ];
+}
+/* The card reads its state from the wrapper every render, so it always
+   agrees with what the scanner is actually doing rather than with what
+   this screen last did. */
+function bhScannerHtml(){
+  if(!scanHoldSupported())return "";
+  const held=scanIsHeld();
+  return '<div style="font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:16px">Scanner</div>'
+    +(held
+      ? '<div style="padding:12px 13px;margin-top:7px;background:var(--sur);border:none;border-left:6px solid #f9a825;border-radius:11px;box-shadow:var(--shad)">'
+        +'<div style="font-size:14px;font-weight:800;color:var(--txt)">\uD83D\uDCE1 Scanner released</div>'
+        +'<div style="font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.45">StageNow and DataWedge can scan now. Wild App will NOT read a barcode until you give it back \u2014 or restart the app, which always comes back scanning.</div>'
+        +'<button type="button" id="bhScanBack" style="margin-top:10px;width:100%;padding:11px;background:var(--pri);border:none;border-radius:11px;'
+        +'font-size:13px;font-weight:800;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">Give the scanner back to Wild App</button></div>'
+      : '<button type="button" id="bhScanRel" style="display:block;width:100%;text-align:left;padding:12px 13px;margin-top:7px;'
+        +'background:var(--sur);border:none;border-left:6px solid #f9a825;border-radius:11px;box-shadow:var(--shad);cursor:pointer;'
+        +'-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+        +'<div style="display:flex;align-items:center;gap:10px">'
+          +'<div style="font-size:18px;flex-shrink:0">\uD83D\uDCE1</div>'
+          +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800;color:var(--txt)">Release the scanner</div>'
+          +'<div style="font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.45">Hands the scan engine to StageNow. Wild App stops scanning until you give it back. Use this instead of uninstalling \u2014 nothing on this PDA is lost.</div></div>'
+          +'<div style="font-size:14px;color:var(--sub);flex-shrink:0">\u203A</div>'
+        +'</div></button>');
+}
+function wireBhScanner(){
+  const rel=document.getElementById("bhScanRel");
+  /* Behind the PIN with force:true - a stray tap mid-round must not be able
+     to kill scanning quietly, and the door PIN typed on the way in here
+     should not stand in for this one. */
+  if(rel)rel.onclick=function(){
+    requireHandPin({force:true,onOk:function(){
+      handConfirm("Release the scanner to StageNow?",
+        "Wild App stops reading barcodes until you give it back. Your corrections, added addresses and scan history are untouched.",
+        function(){
+          const k=wildKiosk();if(!k)return;
+          try{k.scanRelease();}catch(e){}
+          setTimeout(function(){try{showHandBackHold();}catch(e){}},500);
+        });
+    }});
+  };
+  const bak=document.getElementById("bhScanBack");
+  if(bak)bak.onclick=function(){
+    const k=wildKiosk();if(!k)return;
+    try{k.scanResume();}catch(e){}
+    setTimeout(function(){try{showHandBackHold();}catch(e){}},700);
+  };
 }
 function showHandBackHold(){
   const box=document.getElementById("handResult");
@@ -6170,6 +6228,7 @@ function showHandBackHold(){
     +(live?'<div style="font-size:11.5px;color:var(--sub);margin-top:4px;line-height:1.45">These do the same thing as picking them off the real menu \u2014 no need to hold BACK for ten seconds. The two amber ones ask first.</div>':"")
     +rows
     +adminHtml
+    +bhScannerHtml()
     +bhHousekeepHtml()
     +(live
       ?'<button type="button" id="bhOpen" style="margin-top:14px;width:100%;padding:12px;background:var(--sur);border:1px solid var(--div);'
@@ -6210,6 +6269,7 @@ function showHandBackHold(){
     };
     const op=document.getElementById("bhOpen");
     if(op)op.onclick=function(){const k=wildKiosk();if(k)try{k.menu();}catch(e){}};
+    wireBhScanner();
     wireBhHousekeeping();
   }
   const bk=document.getElementById("handBhBack");
@@ -7746,7 +7806,7 @@ function showAppVersion(){
   if(chk)chk.onclick=()=>{
     chk.textContent="Checking…";
     Promise.resolve(checkForUpdate("manual")).then((res)=>{
-      chk.textContent=(!res||res.offline)?"No signal":(res.found?"Update ready":("Up to date \u2014 repo "+(parseInt(res.repo,10)||"?")));
+      chk.textContent=(!res||res.offline)?"No signal":(res.found?"Update ready":"Up to date");
       if(res&&res.found)updBtnReady(res.found);
       setTimeout(()=>showAppVersion(),1200);
     });
