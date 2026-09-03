@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=201;
+const THIS_BUILD_NUM=203;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v4.86";
+const BUILD_NAME="v4.88";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3491,6 +3491,16 @@ function handTypeRefresh(){
   const go=document.getElementById("handTypeGo");
   if(go)go.style.opacity=(handTypeBuf&&handTypeBuf!==HAND_TYPE_LOCK)?"1":".45";
 }
+/* v4.87: a W2 postcode is exactly five characters (W2 + three), and the
+   keypad greys out any key that can't reach a real postcode on the round —
+   so the moment the fifth one is typed there is nothing left to decide and
+   nothing else the pad can accept. Search on that keystroke instead of
+   making Look up a second, redundant tap. The button stays for the
+   suggestion chips and as a fallback. */
+function handTypeComplete(){
+  const tail=String(handTypeBuf||"").replace(/\s+/g,"").replace(/^W2/,"");
+  return tail.length>=3;
+}
 function handTypeLookup(){
   const t=handTypeBuf.trim();
   if(!t)return;
@@ -3530,7 +3540,12 @@ function showHandTypeIn(keep){
       border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
   </div>`;
   box.querySelectorAll(".handKey").forEach(b=>{
-    b.onclick=()=>handTypeSet(handTypeBuf+b.dataset.k);
+    b.onclick=()=>{
+      handTypeSet(handTypeBuf+b.dataset.k);
+      // Short beat so the fifth character is actually seen on the display
+      // before the result screen replaces the pad.
+      if(handTypeComplete())setTimeout(function(){try{if(handTypeComplete())handTypeLookup();}catch(e){}},90);
+    };
   });
   const del=document.getElementById("handTypeDel");
   if(del)del.onclick=()=>{if(handTypeBuf.length>HAND_TYPE_LOCK.length)handTypeSet(handTypeBuf.slice(0,-1));};
@@ -3848,7 +3863,7 @@ function showHandStreetIn(keep){
   box.innerHTML=`<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:10px 2px 4px">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Search a street or building</div>
     <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">${nStreets} streets and ${nBldgs} named buildings. Tap one to see its addresses and which walk each is on.</div>
-    <div id="handStTop" style="position:-webkit-sticky;position:sticky;top:0;z-index:6;background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
+    <div id="handStTop" style="background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
       <div id="handStDisp" style="margin-top:4px;padding:12px;border:2px solid var(--div);border-radius:12px;
         font-size:19px;font-weight:800;letter-spacing:.04em;text-align:center;min-height:26px;color:var(--sub);word-break:break-word">Street…</div>
       ${pad}

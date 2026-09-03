@@ -1,78 +1,91 @@
-# Wild App — data build 201 (v4.86), OTA only
+# Wild App — build 203 (v4.88), OTA only
 
-## What changed
-One address reassigned, from the master `wild_data.xlsx`:
+Three changes, all web-layer. No native/dex change, no sideload.
 
+## 1. Street/building keypad scrolls with the page (new)
+On **Search a street or building**, the display and keypad block (`#handStTop`)
+was `position:sticky; top:0`, so it stayed pinned to the top of the screen and
+only the hit list moved underneath. It's now a normal block: scroll up and the
+keyboard scrolls up with everything else, giving the whole screen to the
+results. Scroll back down and it's there again.
+
+Nothing else about the screen changed — 26 letter keys, space, ⌫ and clear all
+behave as before, and the hit list is byte-identical for the same typed text.
+
+Left alone deliberately (not what you asked for, but the same pinning applies —
+say the word and they go too):
+- the postcode keypad (`#handTypeTop`)
+- the **House number** pad on a street's address list (`#handStNumTop`)
+- the **Flat or door number** pad on a named building (`#handStBTop`)
+
+## 2. Postcode keypad searches on the 5th character (build 202, not yet published)
+`W2` is printed, three characters get typed, and the pad greys out any key that
+can't reach a real postcode — so the fifth keystroke runs the lookup. **Look up**
+is no longer a tap you have to make; it stays as a fallback for a partial like
+`W2 5D`, and backspacing within 90 ms cancels the pending search.
+
+## 3. Data build 201 (not yet published)
 | Address | Was | Now |
 |---|---|---|
 | The Spa Porchester Centre, Porchester Road, W2 5DP | 22 PORCHESTER | 24 QUEENSWAY |
 
-Nothing else. 24,102 rows, identical order, no adds/removals, no street changes,
-same 4 `_folder` entries, same 36 walks. Byte diff is one 13-char span.
+24,102 rows, identical order, no adds/removals, no street changes, same 4
+`_folder` entries, same 36 walks. The xlsx had no other drift.
+
+W2 5DP now spans two walks, so a bare-postcode lookup on it offers the walk
+picker rather than resolving straight through. Labels carrying the Spa's name
+still resolve confidently on their own.
 
 ## Files to upload (both, together)
-- `wild_data.json`
 - `index.html`
+- `wild_data.json`
 
 ## Stamps
 | Stamp | Live (was) | This build |
 |---|---|---|
-| THIS_BUILD_NUM | 200 | **201** |
-| BUILD_NAME | v4.85 | **v4.86** |
+| THIS_BUILD_NUM | 200 | **203** |
+| BUILD_NAME | v4.85 | **v4.88** |
 | REPO_DATA_BUILD | 200 | **201** |
 | REPO_DATA_HASH | 75fb7859 | **9ef79ff6** |
 | REPO_DATA_ROWS | 24102 | 24102 (unchanged) |
 | REPO_APK_BUILD | 199 | 199 (unchanged — see below) |
 | BAKED_DATA_BUILD | 57 | 57 (unchanged) |
 
-`index.html` differs from the live file on exactly 4 lines (605, 615, 631, 644) —
-the four stamps above. The update sanity gate regexes in `readRepoStamps` are
-byte-identical and were re-simulated: they read code 201 / data 201 / apk 199 /
-rows 24102 / hash 9ef79ff6.
+Update gate re-simulated on the delivered file: code 203 / data 201 / apk 199 /
+rows 24102 / hash 9ef79ff6. `readRepoStamps` regexes byte-identical.
 
 ## APK build 199 is what is actually published
-The repo `WildApp.apk` is versionCode **199**, `BUILD_NAME "v4.84"`,
-`BAKED_DATA_BUILD 199`. The build-200 APK from the previous session was never
-uploaded, and the live `index.html` still carries `REPO_APK_BUILD=199`.
-So `REPO_APK_BUILD` has been left at 199 — raising it would make every device
-report an APK update that does not exist in the repo. If you upload the
-build-200 APK, restamp `REPO_APK_BUILD` to 200 at the same time.
-
-This release is OTA-only: no native/dex change, no sideload needed.
+Repo `WildApp.apk` is versionCode **199**, `BUILD_NAME "v4.84"`,
+`BAKED_DATA_BUILD 199`. The build-200 APK was never uploaded and live
+`index.html` still carries `REPO_APK_BUILD=199`, so it's left at 199 — raising
+it would advertise an APK that isn't in the repo. Upload the 200 APK and I'll
+restamp to match.
 
 ## Verification performed
-- Patch applied by literal string replacement on raw file text (not
-  parse/re-serialise), so the fingerprint stays byte-exact.
-- Hash function ported from the app's own `wildHash` (FNV-1a 32-bit over
-  `charCodeAt(i)&0xff`, shift-add multiply) and validated against the live
-  stamp: live file hashes to 75fb7859 as published. New file: 9ef79ff6.
-  (Note: a plain FNV-1a over UTF-8 bytes gives d5744e66 — wrong, the file has
-  non-ASCII characters. Use the charCode variant.)
-- jsdom harness, all 6 app scripts loaded with zero script errors.
-- 402-label resolve sweep (`findBestAddressMatch` across the whole dataset at
-  even stride), old build+old data vs new build+new data: **0 unintended
-  differences**, 0 nulls either side.
-- Targeted spot check confirms the intended change only:
-  - `"The Spa Porchester Centre, Porchester Road, W2 5DP"` → 22 PORCHESTER → **24 QUEENSWAY**
-  - `"THE SPA PORCHESTER CENTRE W2 5DP"` → 22 PORCHESTER → **24 QUEENSWAY**
-  - `"Porchester Centre W2 5DP"` → 22 PORCHESTER (unchanged)
-  - `"W2 5DP"` bare → 22 PORCHESTER (unchanged best match)
-
-## One behaviour change to be aware of
-W2 5DP now spans two walks. `walksForPostcode("W25DP")` went from
-`22 PORCHESTER, FIRM` to `22 PORCHESTER, 24 QUEENSWAY, FIRM`, so a scan that
-yields only that postcode with no building text will now offer the walk picker
-instead of resolving straight through. Labels that carry the Spa's name still
-resolve confidently on their own.
+- Diff from the previous build is 3 lines: two stamps and the `#handStTop`
+  style. Nothing else in 803 KB changed.
+- jsdom harness, all 6 app scripts loaded, zero script errors.
+- Street screen, driven through the real DOM: `#handStTop` has no `position`
+  property at all (previous build reported `sticky`), 26 keys present, typing
+  `WESTBOURNE` gives the same buffer, same 14 hits and a byte-identical
+  11,001-char hit list as before; ⌫ → `WESTBOURN`, clear → empty, pad intact.
+- The other three pads still report `sticky`, confirming the change is scoped
+  to the one screen.
+- Postcode keypad suite re-run and still green: single fire on `5`,`D`,`P`;
+  backspace cancels; suggestion chip fires once; two characters don't fire but
+  **Look up** does; re-arms on a second postcode.
+- 402-label resolve sweep vs live build+live data: **0 unintended differences**.
+- Data patched by literal string replacement on raw file text; hash from the
+  app's own `wildHash` (FNV-1a 32-bit over `charCodeAt(i)&0xff`), validated by
+  reproducing the live `75fb7859` stamp first. Plain UTF-8 FNV-1a gives
+  `d5744e66` and is wrong — the file has non-ASCII characters.
 
 ## After uploading
-- Allow 1–2 min for GitHub CDN edge cache before the raw URLs serve the new files.
-- The first update check runs on the old code — check twice.
+- Allow 1–2 min for GitHub CDN edge cache.
+- First update check runs on the old code — check twice.
 
-## Still outstanding (unchanged by this build)
-- A-Z sheet lists BUCKHILL LODGE under "Bayswater Road" on walk 15; address data
-  has it on "Hyde Park". Not touched here.
-- GitHub PAT for the Issues upload feature still needs regenerating, scoped to
+## Still outstanding
+- A-Z sheet lists BUCKHILL LODGE under "Bayswater Road" on walk 15; address
+  data has it on "Hyde Park".
+- GitHub PAT for the Issues upload feature needs regenerating, scoped to
   Issues: Read and write only.
-- Master `wild_data.xlsx` is now in sync with the shipped JSON — the Spa row was
-  the only drift.
