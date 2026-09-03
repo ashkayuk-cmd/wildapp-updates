@@ -1,8 +1,17 @@
-# Wild App — build 206 (v4.91), OTA only
+# Wild App — build 207 (v4.92), OTA only
 
-Five changes, all web-layer. No native/dex change, no sideload.
+Six changes, all web-layer. No native/dex change, no sideload.
 
-## 1. UPDATE IN PROGRESS screen (new)
+## 1. Centred "or" on the idle screen (new)
+A centred **or** now sits between *Scan a QR code to show walk* and the two
+buttons, so the screen reads as one choice: scan, or type, or search.
+
+Added in both places the idle screen can come from — the static markup (which
+is what gets captured into `HAND_EMPTY_HTML` at start-up and replayed on every
+Back) and `handIdleActionsHtml()`, so it's there on a fresh launch and after
+going Back from any sub-screen.
+
+## 2. UPDATE IN PROGRESS screen (build 205)
 Applying an update is a reload through the loader, and on a kiosk PDA that just
 looks like the app dying — a blank screen for a second or two with nothing to
 say why. There's now a full-screen red panel with **UPDATE** in big bold white
@@ -27,7 +36,7 @@ and installed by hand, and that isn't a reload — showing "update in progress"
 over Android's installer would be wrong. Only the over-the-air app/address
 apply shows it. Say if you want it on the APK download too.
 
-## 2. Labels (builds 204, 206)
+## 3. Labels (builds 204, 206)
 | Where | Now |
 |---|---|
 | Main button + postcode screen heading | **Type a postcode to show walk** |
@@ -39,16 +48,16 @@ which rebuilds the idle screen on every Back) — both copies changed.
 Untouched, different screens: the **Walks simple** search placeholder, the
 "Find any address" empty state on the scan tab, the scan textarea placeholder.
 
-## 3. Street/building keypad scrolls with the page (build 203)
+## 4. Street/building keypad scrolls with the page (build 203)
 `#handStTop` was `position:sticky; top:0`. Now a normal block — scroll up and
 the keyboard goes with it. The postcode, House number and Flat/door pads are
 still pinned.
 
-## 4. Postcode keypad searches on the 5th character (build 202)
+## 5. Postcode keypad searches on the 5th character (build 202)
 The fifth keystroke runs the lookup; **Look up** stays as a fallback for a
 partial like `W2 5D`, and backspacing within 90 ms cancels.
 
-## 5. Data build 201
+## 6. Data build 201
 | Address | Was | Now |
 |---|---|---|
 | The Spa Porchester Centre, Porchester Road, W2 5DP | 22 PORCHESTER | 24 QUEENSWAY |
@@ -58,7 +67,7 @@ partial like `W2 5D`, and backspacing within 90 ms cancels.
 bare-postcode lookup on it offers the walk picker; labels carrying the Spa's
 name still resolve confidently.
 
-**Items 2–5 are still unpublished** — live is build 200 / v4.85, data build 200.
+**Items 2–6 are still unpublished** — live is build 200 / v4.85, data build 200.
 
 ## Files to upload (both, together)
 - `index.html`
@@ -67,15 +76,15 @@ name still resolve confidently.
 ## Stamps
 | Stamp | Live (was) | This build |
 |---|---|---|
-| THIS_BUILD_NUM | 200 | **206** |
-| BUILD_NAME | v4.85 | **v4.91** |
+| THIS_BUILD_NUM | 200 | **207** |
+| BUILD_NAME | v4.85 | **v4.92** |
 | REPO_DATA_BUILD | 200 | **201** |
 | REPO_DATA_HASH | 75fb7859 | **9ef79ff6** |
 | REPO_DATA_ROWS | 24102 | 24102 (unchanged) |
 | REPO_APK_BUILD | 199 | 199 (unchanged — see below) |
 | BAKED_DATA_BUILD | 57 | 57 (unchanged) |
 
-Update gate re-simulated: code 206 / data 201 / apk 199 / rows 24102 / hash
+Update gate re-simulated: code 207 / data 201 / apk 199 / rows 24102 / hash
 9ef79ff6. The app's own `liveHtmlLooksSane()` was extracted and run against the
 delivered file — returns **true**, so devices will accept this as an update.
 
@@ -86,8 +95,7 @@ Repo `WildApp.apk` is versionCode **199**, `BUILD_NAME "v4.84"`,
 would advertise an APK that isn't in the repo.
 
 ## Verification performed
-- Diff from the previous build is 5 lines: two stamps, the static street button,
-  the street heading and the rebuilt street button.
+- Diff from the previous build is 4 hunks: two stamps and the two `or` insertions.
 - jsdom harness, all 6 app scripts loaded, zero script errors.
 - Update screen, driven through the real functions:
   - `liveApplyNow()` → panel present, `position:fixed`, `background: rgb(196,0,0)`,
@@ -109,6 +117,11 @@ would advertise an APK that isn't in the repo.
   `⌨ Search Street, Building or Business Name`, headings match, both onclicks
   intact, 36 + 26 keys. The rebuilt idle HTML from `handIdleActionsHtml()`
   carries both new labels and zero occurrences of any old string.
+- Idle screen: exactly one `.handIdleOr`, text `or`, `text-align:center`, sitting
+  inside `#handEmpty` in the order prompt → `or` → buttons (verified by
+  `compareDocumentPosition`, and the previous build has none). Both
+  `handIdleHtml()` and `handIdleActionsHtml()` carry it, and re-rendering the
+  idle screen the way Back does still yields one `or` and both buttons.
 - 402-label resolve sweep vs live build+live data: **0 unintended differences**.
 - Data patched by literal string replacement on raw file text; hash from the
   app's own `wildHash` (FNV-1a over `charCodeAt(i)&0xff`), validated against the
