@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=202;
+const THIS_BUILD_NUM=203;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v4.87";
+const BUILD_NAME="v4.88";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -1033,15 +1033,17 @@ function wireUpdateButton(){
    alive at once — the one running and the one waiting — and whichever way the
    app came back up decided which you got ("the app seems to have two versions
    running"). The waiting copy is now applied by itself, but ONLY at a genuinely
-   quiet moment: nothing open, nothing on screen from a recent scan, screen
-   awake. Applying is just a reload through the loader, so nothing is lost —
+   quiet moment: nothing open and nothing on screen from a recent scan.
+   v4.88: the quiet window after a scan is 20s (was 90s), the check runs every
+   half hour (was 3 hours), and a switched-off screen no longer blocks the
+   apply — it is the quietest moment there is, not a reason to keep waiting.
+   Applying is just a reload through the loader, so nothing is lost —
    corrections, added addresses and scan history all live in storage. */
 let handLastScanAt=0;
-const AUTO_APPLY_QUIET_MS=90*1000;
+const AUTO_APPLY_QUIET_MS=20*1000;
 function autoApplyReady(){
   try{
     if(liveCodeBuild()<=runningBuild())return false;      // nothing waiting
-    if(document.hidden)return false;
     const box=document.getElementById("handResult");
     if(box&&box.dataset&&box.dataset.sub)return false;    // a sub-screen is open
     if(document.getElementById("wildOptSheet")||document.getElementById("wildVoiceSheet"))return false;
@@ -1081,25 +1083,27 @@ function liveBanner(title,sub,onTap){
   });
   (document.body||document.documentElement).appendChild(bar);
 }
-// Check at boot, then every few hours, and whenever the screen comes back
+// Check at boot, then every half hour, and whenever the screen comes back
 // after a gap — the app is never restarted on a kiosk PDA, so a launch-only
-// check could sit unnoticed for days.
+// check could sit unnoticed for days. Every wake also retries the apply, so a
+// download that arrived mid-round goes in the moment the round pauses.
 function startUpdateChecks(){
-  const EVERY=3*60*60*1000, WAKE_GAP=30*60*1000;
+  const EVERY=30*60*1000, WAKE_GAP=5*60*1000;
   wireUpdateButton();
   // Every automatic check reports back to the button, so a waiting update is
   // visible in the corner without the person tapping anything.
   const run=(why)=>Promise.resolve(checkForUpdate(why))
     .then((r)=>{if(r&&r.found)updBtnReady(r.found);try{autoApplyLive();}catch(e){}})
     .catch(()=>{});
-  setTimeout(()=>{run("boot");},4000);          // let the scan screen come up first
+  setTimeout(()=>{run("boot");},2500);          // let the scan screen come up first
   // v4.2: and take the first quiet moment to actually apply what's waiting.
-  setInterval(()=>{try{autoApplyLive();}catch(e){}},20000);
+  setInterval(()=>{try{autoApplyLive();}catch(e){}},5000);
   setInterval(()=>{run("timer");},EVERY);
   document.addEventListener("visibilitychange",()=>{
     if(document.hidden)return;
     let last=0;try{last=parseInt(localStorage.getItem(LIVE_LAST_KEY)||"0",10)||0;}catch(e){}
     if(Date.now()-last>WAKE_GAP)run("wake");
+    else {try{autoApplyLive();}catch(e){}}
   });
 }
 
