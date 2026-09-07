@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=212;
+const THIS_BUILD_NUM=213;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v4.97";
+const BUILD_NAME="v4.98";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -6600,6 +6600,26 @@ function showHandWalkLists(){
     if(i>25)i=25;
     return String.fromCharCode(65+i);
   }
+  /* Scroll by hand rather than with scrollIntoView: putting one of the last
+     rows AT THE TOP leaves a screen of nothing under it, which is what the
+     blank bottom was. Clamping to scrollHeight-clientHeight means the last
+     letters land on the end of the list with the rows still filling the view. */
+  function scrollRowTo(tr){
+    if(!tr)return;
+    const sc=document.getElementById("handBody");
+    if(!sc||!sc.scrollHeight){try{tr.scrollIntoView({block:"start"});}catch(e){}return;}
+    /* Measured off the container's own box: offsetParent walks are wrong here
+       because #handBody isn't positioned, so the chain runs straight past it. */
+    let y;
+    try{
+      const a=tr.getBoundingClientRect(),b=sc.getBoundingClientRect();
+      y=sc.scrollTop+(a.top-b.top);
+    }catch(e){ y=tr.offsetTop||0; }
+    const max=Math.max(0,sc.scrollHeight-sc.clientHeight);
+    if(y<0)y=0;
+    if(y>max)y=max;
+    sc.scrollTop=y;
+  }
   function jumpTo(L){
     if(!L||!body)return;
     const trs=body.querySelectorAll("tr");
@@ -6609,13 +6629,10 @@ function showHandWalkLists(){
       last=trs[i];
       // The letter itself, or - when nothing starts with it - the next letter
       // along, so every letter on the strip still lands somewhere sensible.
-      if(trs[i].dataset.l===L||trs[i].dataset.l>L){
-        try{trs[i].scrollIntoView({block:"start"});}catch(e){try{trs[i].scrollIntoView();}catch(e2){}}
-        return;
-      }
+      if(trs[i].dataset.l===L||trs[i].dataset.l>L){scrollRowTo(trs[i]);return;}
     }
-    // Dragged past the last entry (Z with no Z rows): show the end of the list.
-    if(last){try{last.scrollIntoView({block:"start"});}catch(e){}}
+    // Dragged past the last entry (Z with no Z rows): the end of the list.
+    scrollRowTo(last);
   }
   function showBub(L){ if(bub){bub.textContent=L;bub.style.display="block";} }
   function hideBub(){ if(bub)bub.style.display="none"; }
