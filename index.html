@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=203;
+const THIS_BUILD_NUM=204;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v4.88";
+const BUILD_NAME="v4.89";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -6063,6 +6063,24 @@ function splitPostcodes(){
 
    Timings and wording below are lifted from the shipped APK: hints at 3s and
    7s, menu at 10s. */
+/* ANDROID SCREEN JUMPS (v4.89).
+   WildKiosk.pick(i) can only fire the six items the wrapper's own back-hold
+   menu has (0 kiosk, 1 exit, 2 StageNow, 3 Android Settings, 4 launcher,
+   5 Display) and silently returns for anything above 5. Indexes 6 (Security
+   & location) and 7 (Screen lock) need a native change, so until an APK
+   carrying them is installed these rows drop the user at the Android
+   Settings root instead of doing nothing at all. */
+var SEC_APK_MIN=205;
+function androidJump(idx){
+  const k=wildKiosk();
+  if(!k)return false;
+  try{
+    var direct=false;
+    try{direct=installedApkBuildNow()>=SEC_APK_MIN;}catch(e){direct=false;}
+    k.pick(direct?idx:3);
+    return true;
+  }catch(e){return false;}
+}
 function wildKiosk(){
   try{return (window.WildKiosk&&typeof WildKiosk.pick==="function")?WildKiosk:null;}catch(e){return null;}
 }
@@ -10317,6 +10335,14 @@ function openOptionsMenu(){
     {e:"ℹ️",label:"App version",sub:"Which build is running, and updates",go:goHand(()=>openAppVersion())},
     {e:"⬅️",label:"Back button menu",sub:"Kiosk mode, exit, StageNow, Android settings",go:goHand(()=>showHandBackHold())},
     ...(wildBrightness()?[{e:"🔆",label:"Brightness",sub:"Screen brightness, auto or fixed",go:goHand(()=>showHandBrightness())}]:[]),
+    {e:"🔒",label:"Security &amp; location",sub:"Opens Android's Security &amp; location \u2014 device admin, screen lock, location",go:()=>{
+      ov.remove();
+      androidJump(6);
+    }},
+    {e:"🔓",label:"Screen lock",sub:"Opens Android's screen lock setting \u2014 PIN, pattern or swipe",go:()=>{
+      ov.remove();
+      androidJump(7);
+    }},
     {e:"👆",label:"Display &amp; touch",sub:"Opens Android's Display settings — touch panel mode for gloves &amp; screen protector",go:()=>{
       ov.remove();
       try{if(window.WildKiosk&&typeof WildKiosk.pick==="function")WildKiosk.pick(5);}catch(e){}
