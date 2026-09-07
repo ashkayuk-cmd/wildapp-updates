@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=222;
+const THIS_BUILD_NUM=224;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v5.7";
+const BUILD_NAME="v5.9";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -6565,10 +6565,20 @@ function showHandWalkLists(){
      of the screen around: the table sets its own width from its content and
      sticky inside a flex item is unreliable on this WebView. The A-Z strip is
      its own fixed overlay now, so it cannot affect the list's layout at all. */
-  const rows=list.map((r,i)=>`<div class="handWlR" data-i="${i}" data-l="${walkListLetter(r[1])}" style="display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border-bottom:1px solid var(--div)">
+  /* A heavy rule wherever the first letter changes, so the A-Z blocks read
+     apart at a glance (between ROYAL OAK STATION and SALE PLACE, say). It is
+     drawn on the FIRST row of each letter; the search only hides rows, so
+     handWlRules() redraws them against whatever is actually showing. */
+  let prevL="";
+  const rows=list.map((r,i)=>{
+    const L=walkListLetter(r[1]);
+    const rule=(i>0&&L!==prevL)?"border-top:3px solid #d32f2f;":"";
+    prevL=L;
+    return `<div class="handWlR" data-i="${i}" data-l="${L}" style="display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border-bottom:1px solid var(--div);${rule}">
       <span class="handWlN" data-w="${encodeURIComponent(r[0])}" style="flex:0 0 auto;display:inline-block;box-sizing:border-box;width:38px;padding:3px 2px;border:2px solid #000;border-radius:4px;font-weight:800;color:#000;text-align:center;line-height:1.15;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">${escHtml(r[0])}</span>
       <span style="flex:1;min-width:0;font-size:14px;font-weight:800;color:var(--txt);word-break:break-word">${escHtml(r[1])}${r[2]?`<span style="display:block;font-size:11.5px;font-weight:400;color:var(--sub);margin-top:2px;word-break:break-word">${escHtml(r[2])}</span>`:""}</span>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   const LETTERS=[];
   for(let i=65;i<=90;i++)LETTERS.push(String.fromCharCode(i));
   const rail=LETTERS.map(L=>`<div style="flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--sub);line-height:1;text-align:center;pointer-events:none">${L}</div>`).join("");
@@ -6641,7 +6651,7 @@ function showHandWalkLists(){
     try{
       const sb=document.getElementById("handBody");
       const r=sb&&sb.getBoundingClientRect();
-      if(r&&r.top>=0)t=r.top;
+      if(r&&r.top>=0)t=r.top+26;   // a touch below the heading, not tight against it
     }catch(e){}
     rl.style.top=t+"px";
     rl.style.visibility="visible";
@@ -6702,6 +6712,7 @@ function showHandWalkLists(){
         rs[i].style.display=hit?"":"none";
         if(hit)n++;
       }
+      handWlRules(rs);
       if(cnt)cnt.textContent=q
         ?(n+" entr"+(n===1?"y":"ies")+(walkQ?(" on walk "+find.value.trim().toUpperCase()):(" matching \u201c"+find.value.trim()+"\u201d")))
         :(list.length+" entries \u2014 drag the A\u2011Z strip to jump.");
@@ -6735,6 +6746,17 @@ function showHandWalkLists(){
   }
   const bk=document.getElementById("handWlBack");
   if(bk)bk.onclick=function(){try{handGoIdle();}catch(e){}};
+}
+/* The rule belongs on the first SHOWING row of each letter, so a search that
+   hides the row carrying it doesn't take the line with it. */
+function handWlRules(rs){
+  let prev="";
+  for(let i=0;i<rs.length;i++){
+    if(rs[i].style.display==="none"){rs[i].style.borderTop="";continue;}
+    const L=rs[i].dataset.l||"";
+    rs[i].style.borderTop=(prev&&L!==prev)?"3px solid #d32f2f":"";
+    prev=L;
+  }
 }
 var walkNameTimer=null;
 function showHandWalksSimple(){
