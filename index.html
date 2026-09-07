@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=226;
+const THIS_BUILD_NUM=227;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v6.1";
+const BUILD_NAME="v6.2";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -6599,10 +6599,10 @@ function showHandWalkLists(){
     <div id="handWlBody" style="background:var(--sur);border-radius:10px;box-shadow:var(--shad);overflow:hidden">${rows}</div>
     <button id="handWlBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
     <div id="handWlRail" style="position:fixed;right:0;top:52px;bottom:0;visibility:hidden;z-index:40;width:26px;display:flex;flex-direction:column;justify-content:space-around;align-items:stretch;padding:2px 0;background:var(--sur);border-left:1px solid var(--div);box-shadow:var(--shad);touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none">${rail}</div>
-    <div id="handWlPeek" style="display:none;position:fixed;right:32px;top:50%;transform:translateY(-50%);z-index:41;min-width:52px;padding:8px 10px;border:2px solid #000;border-radius:12px;background:var(--sur);text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none">
-      <div id="handWlPeekP" style="font-size:15px;font-weight:800;color:var(--sub);opacity:.35;line-height:1.1;min-height:16px"></div>
-      <div id="handWlPeekC" style="font-size:32px;font-weight:900;color:#000;line-height:1.15"></div>
-      <div id="handWlPeekN" style="font-size:15px;font-weight:800;color:var(--sub);opacity:.35;line-height:1.1;min-height:16px"></div>
+    <div id="handWlPeek" style="display:none;position:fixed;right:34px;top:50%;transform:translateY(-50%);z-index:41;min-width:104px;padding:16px 20px;border:3px solid #000;border-radius:18px;background:var(--sur);text-align:center;box-shadow:0 8px 22px rgba(0,0,0,.35);pointer-events:none">
+      <div id="handWlPeekP" style="font-size:30px;font-weight:800;color:var(--sub);opacity:.35;line-height:1.1;min-height:32px"></div>
+      <div id="handWlPeekC" style="font-size:64px;font-weight:900;color:#000;line-height:1.15"></div>
+      <div id="handWlPeekN" style="font-size:30px;font-weight:800;color:var(--sub);opacity:.35;line-height:1.1;min-height:32px"></div>
     </div>
     <div id="handWlBub" style="display:none;position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:41;min-width:78px;padding:14px 18px;border:3px solid #000;border-radius:14px;background:var(--sur);font-size:38px;font-weight:900;color:#000;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35)"></div>
   </div>`;
@@ -6666,7 +6666,7 @@ function showHandWalkLists(){
     if(peekN)peekN.textContent=(i>=0&&i<LETTERS.length-1)?LETTERS[i+1]:"";
     if(typeof y==="number"){
       let t=y;
-      const h=44;
+      const h=88;   // half the panel's height, so it can't run off an edge
       if(t<h)t=h;
       try{ const vh=window.innerHeight||0; if(vh&&t>vh-h)t=vh-h; }catch(e){}
       peek.style.top=t+"px";
