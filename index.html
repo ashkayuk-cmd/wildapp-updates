@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=213;
+const THIS_BUILD_NUM=214;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v4.98";
+const BUILD_NAME="v4.99";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -6560,101 +6560,91 @@ function showHandWalkLists(){
   try{box.dataset.sub="walklists";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
   const list=walkListRows();
-  /* The sheet's own A-Z order, each line as typed. The street column is left
-     off on purpose - see the note handed over with build 210. */
-  const rows=list.map((r,i)=>`<tr data-i="${i}" data-l="${walkListLetter(r[1])}">
-      <td style="padding:6px 6px;border-bottom:1px solid var(--div);white-space:nowrap;vertical-align:top"><span style="display:inline-block;min-width:26px;padding:3px 6px;border:2px solid #000;border-radius:4px;font-weight:800;color:#000;text-align:center;line-height:1.15">${escHtml(r[0])}</span></td>
-      <td style="padding:6px 8px;border-bottom:1px solid var(--div);font-size:14px;font-weight:800;color:var(--txt);word-break:break-word">${escHtml(r[1])}${r[2]?`<div style="font-size:11.5px;font-weight:400;color:var(--sub);margin-top:2px;word-break:break-word">${escHtml(r[2])}</div>`:""}</td>
-    </tr>`).join("");
+  /* v4.99: plain rows in ONE normal block - no table, no flex row, no sticky
+     rail. A 591-row table beside a sticky flex child is what pushed the rest
+     of the screen around: the table sets its own width from its content and
+     sticky inside a flex item is unreliable on this WebView. The A-Z strip is
+     its own fixed overlay now, so it cannot affect the list's layout at all. */
+  const rows=list.map((r,i)=>`<div class="handWlR" data-i="${i}" data-l="${walkListLetter(r[1])}" style="display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border-bottom:1px solid var(--div)">
+      <span style="flex:0 0 auto;display:inline-block;min-width:26px;padding:3px 6px;border:2px solid #000;border-radius:4px;font-weight:800;color:#000;text-align:center;line-height:1.15">${escHtml(r[0])}</span>
+      <span style="flex:1;min-width:0;font-size:14px;font-weight:800;color:var(--txt);word-break:break-word">${escHtml(r[1])}${r[2]?`<span style="display:block;font-size:11.5px;font-weight:400;color:var(--sub);margin-top:2px;word-break:break-word">${escHtml(r[2])}</span>`:""}</span>
+    </div>`).join("");
   const LETTERS=[];
   for(let i=65;i<=90;i++)LETTERS.push(String.fromCharCode(i));
-  const rail=LETTERS.map(L=>`<div class="handWlL" data-l="${L}" style="font-size:10.5px;font-weight:800;color:var(--sub);line-height:1;padding:1px 0;text-align:center">${L}</div>`).join("");
-  box.innerHTML=`<div style="width:100%;text-align:left">
+  const rail=LETTERS.map(L=>`<div style="font-size:10.5px;font-weight:800;color:var(--sub);line-height:1;padding:1px 0;text-align:center;pointer-events:none">${L}</div>`).join("");
+  box.innerHTML=`<div style="width:100%;max-width:100%;text-align:left;box-sizing:border-box;padding-right:30px">
     ${handTopBar("Walk lists")}
     <input id="handWlFind" type="text" placeholder="Search the list\u2026" style="width:100%;margin-top:6px;padding:11px 12px;font-size:15px;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt);box-sizing:border-box">
     <div id="handWlCount" style="font-size:12px;color:var(--sub);margin:6px 0 8px">${list.length} entries \u2014 drag the A\u2011Z strip to jump.</div>
-    <div style="display:flex;align-items:flex-start;gap:6px">
-      <table style="flex:1;min-width:0;border-collapse:collapse;font-size:13px;line-height:1.35;background:var(--sur);border-radius:10px;box-shadow:var(--shad);overflow:hidden">
-        <tbody id="handWlBody">${rows}</tbody>
-      </table>
-      <div id="handWlRail" style="position:-webkit-sticky;position:sticky;top:4px;flex:0 0 22px;width:22px;padding:6px 0;background:var(--sur);border:1px solid var(--div);border-radius:11px;box-shadow:var(--shad);touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none">${rail}</div>
-    </div>
-    <div id="handWlBub" style="display:none;position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:60;min-width:78px;padding:14px 18px;border:3px solid #000;border-radius:14px;background:var(--sur);font-size:38px;font-weight:900;color:#000;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35)"></div>
+    <div id="handWlBody" style="background:var(--sur);border-radius:10px;box-shadow:var(--shad);overflow:hidden">${rows}</div>
     <button id="handWlBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
+    <div id="handWlRail" style="position:fixed;right:4px;top:50%;transform:translateY(-50%);z-index:40;width:24px;padding:6px 0;background:var(--sur);border:1px solid var(--div);border-radius:12px;box-shadow:var(--shad);touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none">${rail}</div>
+    <div id="handWlBub" style="display:none;position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:41;min-width:78px;padding:14px 18px;border:3px solid #000;border-radius:14px;background:var(--sur);font-size:38px;font-weight:900;color:#000;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35)"></div>
   </div>`;
   const body=document.getElementById("handWlBody");
   const cnt=document.getElementById("handWlCount");
   const bub=document.getElementById("handWlBub");
-  /* DRAG A-Z (v4.95): the letter is worked out from where the finger is on the
-     strip, not from which letter element got the touch - a touchmove keeps
-     firing on the element the drag STARTED on, so hit-testing the target would
-     stick on the first letter for the whole drag. */
-  function letterAt(y){
-    const rl=document.getElementById("handWlRail");
-    if(!rl)return "";
-    const r=rl.getBoundingClientRect();
-    if(!r.height)return "";
-    let f=(y-r.top)/r.height;
-    if(f<0)f=0; if(f>1)f=1;
-    let i=Math.floor(f*26);
-    if(i>25)i=25;
-    return String.fromCharCode(65+i);
+  /* Whatever is actually scrolling: #handBody normally, but found by looking
+     rather than assumed, so a layout change can't leave the jump pointing at
+     an element that never scrolls. */
+  function scroller(){
+    let el=body;
+    while(el&&el!==document.body){
+      if(el.scrollHeight-el.clientHeight>4){
+        const ov=(getComputedStyle(el).overflowY||"");
+        if(ov==="auto"||ov==="scroll")return el;
+      }
+      el=el.parentElement;
+    }
+    return document.getElementById("handBody")||null;
   }
-  /* Scroll by hand rather than with scrollIntoView: putting one of the last
-     rows AT THE TOP leaves a screen of nothing under it, which is what the
-     blank bottom was. Clamping to scrollHeight-clientHeight means the last
-     letters land on the end of the list with the rows still filling the view. */
-  function scrollRowTo(tr){
-    if(!tr)return;
-    const sc=document.getElementById("handBody");
-    if(!sc||!sc.scrollHeight){try{tr.scrollIntoView({block:"start"});}catch(e){}return;}
-    /* Measured off the container's own box: offsetParent walks are wrong here
-       because #handBody isn't positioned, so the chain runs straight past it. */
+  function scrollRowTo(el){
+    if(!el)return;
+    const sc=scroller();
+    if(!sc){try{el.scrollIntoView({block:"start"});}catch(e){}return;}
     let y;
     try{
-      const a=tr.getBoundingClientRect(),b=sc.getBoundingClientRect();
+      const a=el.getBoundingClientRect(),b=sc.getBoundingClientRect();
       y=sc.scrollTop+(a.top-b.top);
-    }catch(e){ y=tr.offsetTop||0; }
+    }catch(e){ y=el.offsetTop||0; }
     const max=Math.max(0,sc.scrollHeight-sc.clientHeight);
-    if(y<0)y=0;
+    if(!(y>0))y=0;
     if(y>max)y=max;
     sc.scrollTop=y;
   }
   function jumpTo(L){
     if(!L||!body)return;
-    const trs=body.querySelectorAll("tr");
+    const rs=body.querySelectorAll(".handWlR");
     let last=null;
-    for(let i=0;i<trs.length;i++){
-      if(trs[i].style.display==="none")continue;
-      last=trs[i];
-      // The letter itself, or - when nothing starts with it - the next letter
-      // along, so every letter on the strip still lands somewhere sensible.
-      if(trs[i].dataset.l===L||trs[i].dataset.l>L){scrollRowTo(trs[i]);return;}
+    for(let i=0;i<rs.length;i++){
+      if(rs[i].style.display==="none")continue;
+      last=rs[i];
+      if(rs[i].dataset.l===L||rs[i].dataset.l>L){scrollRowTo(rs[i]);return;}
     }
-    // Dragged past the last entry (Z with no Z rows): the end of the list.
     scrollRowTo(last);
   }
   function showBub(L){ if(bub){bub.textContent=L;bub.style.display="block";} }
   function hideBub(){ if(bub)bub.style.display="none"; }
-  window.__wildWlJump=function(L){showBub(L);jumpTo(L);};   // for tests
+  window.__wildWlJump=function(L){showBub(L);jumpTo(L);};
   const rl=document.getElementById("handWlRail");
   if(rl){
     let live=false,last="";
+    function letterAt(y){
+      const r=rl.getBoundingClientRect();
+      if(!r||!r.height)return "";
+      let f=(y-r.top)/r.height;
+      if(!(f>0))f=0; if(f>1)f=1;
+      let i=Math.floor(f*26);
+      if(i>25)i=25;
+      return String.fromCharCode(65+i);
+    }
     const move=function(y){
       const L=letterAt(y);
-      if(!L)return;
-      if(L!==last){last=L;showBub(L);jumpTo(L);}
+      if(!L||L===last)return;
+      last=L;showBub(L);jumpTo(L);
     };
-    rl.addEventListener("touchstart",function(e){
-      live=true;last="";
-      if(e.touches&&e.touches[0])move(e.touches[0].clientY);
-      e.preventDefault();
-    },{passive:false});
-    rl.addEventListener("touchmove",function(e){
-      if(!live)return;
-      if(e.touches&&e.touches[0])move(e.touches[0].clientY);
-      e.preventDefault();
-    },{passive:false});
+    rl.addEventListener("touchstart",function(e){live=true;last="";if(e.touches&&e.touches[0])move(e.touches[0].clientY);e.preventDefault();},{passive:false});
+    rl.addEventListener("touchmove",function(e){if(!live)return;if(e.touches&&e.touches[0])move(e.touches[0].clientY);e.preventDefault();},{passive:false});
     rl.addEventListener("touchend",function(){live=false;hideBub();});
     rl.addEventListener("touchcancel",function(){live=false;hideBub();});
     rl.addEventListener("mousedown",function(e){live=true;last="";move(e.clientY);e.preventDefault();});
@@ -6666,18 +6656,15 @@ function showHandWalkLists(){
   if(find&&body){
     find.oninput=function(){
       const q=String(find.value||"").trim().toLowerCase();
-      /* A bare walk code is a walk, not a word: "6" means walk 6 (never 16 or
-         26) and "f" means the FIRM, so typing one shows that whole walk.
-         Anything else is a plain search over the entry and its street. */
       const walkQ=q&&walkListCodes()[q]?q:"";
-      const trs=body.querySelectorAll("tr");
+      const rs=body.querySelectorAll(".handWlR");
       let n=0;
-      for(let i=0;i<trs.length;i++){
+      for(let i=0;i<rs.length;i++){
         const r=list[i];
         const hit=!q||(walkQ
           ?String(r[0]).toLowerCase()===walkQ
           :((r[0]+" "+r[1]+" "+r[2]).toLowerCase().indexOf(q)>=0));
-        trs[i].style.display=hit?"":"none";
+        rs[i].style.display=hit?"":"none";
         if(hit)n++;
       }
       if(cnt)cnt.textContent=q
