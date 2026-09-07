@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=224;
+const THIS_BUILD_NUM=226;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v5.9";
+const BUILD_NAME="v6.1";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -6550,7 +6550,10 @@ function walkListCodes(){
 function walkListLetter(name){
   const m=String(name||"").toUpperCase().replace(/^[^0-9A-Z]+/,"");
   const c=m.charAt(0);
-  return (c>="A"&&c<="Z")?c:"#";
+  if(c>="A"&&c<="Z")return c;
+  /* Entries that start with a number ("55 N wharf rd") get their own "0",
+     which sorts ahead of A and so sits at the top of both list and strip. */
+  return (c>="0"&&c<="9")?"0":"0";
 }
 function showHandWalkLists(){
   const box=document.getElementById("handResult");
@@ -6579,8 +6582,15 @@ function showHandWalkLists(){
       <span style="flex:1;min-width:0;font-size:14px;font-weight:800;color:var(--txt);word-break:break-word">${escHtml(r[1])}${r[2]?`<span style="display:block;font-size:11.5px;font-weight:400;color:var(--sub);margin-top:2px;word-break:break-word">${escHtml(r[2])}</span>`:""}</span>
     </div>`;
   }).join("");
-  const LETTERS=[];
-  for(let i=65;i<=90;i++)LETTERS.push(String.fromCharCode(i));
+  /* Only the letters the list actually has - no dead X/Y/Z to drag past -
+     with "0" first for the entries that start with a number. Built from the
+     data, so it follows the sheet rather than needing editing again. */
+  const LETTERS=(function(){
+    const seen={};
+    list.forEach(r=>{seen[walkListLetter(r[1])]=1;});
+    const out=Object.keys(seen).sort();
+    return out;
+  })();
   const rail=LETTERS.map(L=>`<div style="flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--sub);line-height:1;text-align:center;pointer-events:none">${L}</div>`).join("");
   box.innerHTML=`<div style="width:100%;max-width:100%;text-align:left;box-sizing:border-box;padding-right:30px">
     ${handTopBar("Walk lists")}
@@ -6589,6 +6599,11 @@ function showHandWalkLists(){
     <div id="handWlBody" style="background:var(--sur);border-radius:10px;box-shadow:var(--shad);overflow:hidden">${rows}</div>
     <button id="handWlBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
     <div id="handWlRail" style="position:fixed;right:0;top:52px;bottom:0;visibility:hidden;z-index:40;width:26px;display:flex;flex-direction:column;justify-content:space-around;align-items:stretch;padding:2px 0;background:var(--sur);border-left:1px solid var(--div);box-shadow:var(--shad);touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none">${rail}</div>
+    <div id="handWlPeek" style="display:none;position:fixed;right:32px;top:50%;transform:translateY(-50%);z-index:41;min-width:52px;padding:8px 10px;border:2px solid #000;border-radius:12px;background:var(--sur);text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none">
+      <div id="handWlPeekP" style="font-size:15px;font-weight:800;color:var(--sub);opacity:.35;line-height:1.1;min-height:16px"></div>
+      <div id="handWlPeekC" style="font-size:32px;font-weight:900;color:#000;line-height:1.15"></div>
+      <div id="handWlPeekN" style="font-size:15px;font-weight:800;color:var(--sub);opacity:.35;line-height:1.1;min-height:16px"></div>
+    </div>
     <div id="handWlBub" style="display:none;position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:41;min-width:78px;padding:14px 18px;border:3px solid #000;border-radius:14px;background:var(--sur);font-size:38px;font-weight:900;color:#000;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35)"></div>
   </div>`;
   const body=document.getElementById("handWlBody");
@@ -6633,12 +6648,35 @@ function showHandWalkLists(){
     }
     scrollRowTo(last);
   }
-  function showBub(L){
-    if(!bub)return;
+  /* Dragging shows the letter BESIDE the strip, tracking the finger, with the
+     letter before it above and the one after below, both faint - so the next
+     stop up or down is visible without lifting off. #handWlBub stays for the
+     tap-a-number walk name, which belongs in the middle of the screen. */
+  const peek=document.getElementById("handWlPeek");
+  const peekP=document.getElementById("handWlPeekP");
+  const peekC=document.getElementById("handWlPeekC");
+  const peekN=document.getElementById("handWlPeekN");
+  function showBub(L,y){
     if(walkNameTimer){clearTimeout(walkNameTimer);walkNameTimer=null;}
-    bub.textContent=L;bub.style.fontSize="38px";bub.style.display="block";
+    if(bub)bub.style.display="none";
+    if(!peek)return;
+    const i=LETTERS.indexOf(L);
+    if(peekP)peekP.textContent=(i>0)?LETTERS[i-1]:"";
+    if(peekC)peekC.textContent=L;
+    if(peekN)peekN.textContent=(i>=0&&i<LETTERS.length-1)?LETTERS[i+1]:"";
+    if(typeof y==="number"){
+      let t=y;
+      const h=44;
+      if(t<h)t=h;
+      try{ const vh=window.innerHeight||0; if(vh&&t>vh-h)t=vh-h; }catch(e){}
+      peek.style.top=t+"px";
+    }
+    peek.style.display="block";
   }
-  function hideBub(){ if(bub)bub.style.display="none"; }
+  function hideBub(){
+    if(bub)bub.style.display="none";
+    if(peek)peek.style.display="none";
+  }
   window.__wildWlJump=function(L){showBub(L);jumpTo(L);};
   const rl=document.getElementById("handWlRail");
   /* Start the strip at the top of the list area rather than a guessed 52px,
@@ -6674,19 +6712,25 @@ function showHandWalkLists(){
       if(r&&r.bottom>0)rl.style.top=Math.round(r.bottom)+"px";
     }catch(e){}
     let live=false,last="";
+    /* Reads off LETTERS, not a fixed A-Z, so the strip and the drag always
+       agree - hard-coding 26 here would send the finger to the wrong letter
+       the moment the list gains or loses one. */
     function letterAt(y){
       const r=rl.getBoundingClientRect();
-      if(!r||!r.height)return "";
+      if(!r||!r.height||!LETTERS.length)return "";
       let f=(y-r.top)/r.height;
       if(!(f>0))f=0; if(f>1)f=1;
-      let i=Math.floor(f*26);
-      if(i>25)i=25;
-      return String.fromCharCode(65+i);
+      let i=Math.floor(f*LETTERS.length);
+      if(i>LETTERS.length-1)i=LETTERS.length-1;
+      return LETTERS[i];
     }
     const move=function(y){
       const L=letterAt(y);
-      if(!L||L===last)return;
-      last=L;showBub(L);jumpTo(L);
+      if(!L)return;
+      // The panel follows the finger even when the letter hasn't changed.
+      showBub(L,y);
+      if(L===last)return;
+      last=L;jumpTo(L);
     };
     rl.addEventListener("touchstart",function(e){live=true;last="";if(e.touches&&e.touches[0])move(e.touches[0].clientY);e.preventDefault();},{passive:false});
     rl.addEventListener("touchmove",function(e){if(!live)return;if(e.touches&&e.touches[0])move(e.touches[0].clientY);e.preventDefault();},{passive:false});
@@ -6733,6 +6777,7 @@ function showHandWalkLists(){
         try{if(WALK_AZ_NAMES&&WALK_AZ_NAMES[k])nm=k+" "+WALK_AZ_NAMES[k];}catch(e3){}
       }
       if(!nm)nm=String(k);
+      try{const pk=document.getElementById("handWlPeek");if(pk)pk.style.display="none";}catch(e2b){}
       if(bub){
         bub.textContent=nm;
         bub.style.fontSize="22px";
