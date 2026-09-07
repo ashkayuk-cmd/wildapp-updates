@@ -602,7 +602,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=227;
+const THIS_BUILD_NUM=228;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 // The APK build whose baked wild_data.json sits next to this file. The
 // data gate below compares against THIS, not the code build: a downloaded
@@ -612,7 +612,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v6.2";
+const BUILD_NAME="v6.3";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -3852,7 +3852,7 @@ function showHandStreetIn(keep){
   box.innerHTML=`<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:10px 2px 4px">
     <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Search a street or building</div>
     <div style="font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45">${nStreets} streets and ${nBldgs} named buildings. Tap one to see its addresses and which walk each is on.</div>
-    <div id="handStTop" style="position:-webkit-sticky;position:sticky;top:0;z-index:6;background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
+    <div id="handStTop" style="background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
       <div id="handStDisp" style="margin-top:4px;padding:12px;border:2px solid var(--div);border-radius:12px;
         font-size:19px;font-weight:800;letter-spacing:.04em;text-align:center;min-height:26px;color:var(--sub);word-break:break-word">Street…</div>
       ${pad}
@@ -3959,7 +3959,7 @@ function showHandStreetAddrs(street,num,bldg){
   box.innerHTML=`<div style="width:100%;text-align:left">
     ${handTopBar(NAME)}
     <div style="font-size:12px;color:var(--sub);margin-top:4px">${total} address${total===1?"":"es"} · ${walks.length} walk${walks.length===1?"":"s"}</div>
-    <div id="handStNumTop" style="position:-webkit-sticky;position:sticky;top:0;z-index:6;background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
+    <div id="handStNumTop" style="background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
       <div style="font-size:12px;font-weight:800;color:var(--txt);margin-top:4px">House number</div>
       <div id="handStNum" style="margin-top:6px;padding:9px;border:2px solid var(--div);border-radius:11px;text-align:center;
         font-size:17px;font-weight:800;letter-spacing:.05em;color:${filt?"var(--txt)":"var(--sub)"}">${filt?escHtml(filt):"all"}</div>
@@ -4073,7 +4073,7 @@ function showHandStreetBldg(street,bldg,num){
     ${handTopBar(B)}
     <div style="font-size:12px;color:var(--sub);margin-top:4px">${escHtml(NAME)} · ${rows.length} address${rows.length===1?"":"es"}</div>
     <div>${chips}</div>
-    <div id="handStBTop" style="position:-webkit-sticky;position:sticky;top:0;z-index:6;background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
+    <div id="handStBTop" style="background:var(--bg);padding:6px 0 8px;margin:0 -2px;padding-left:2px;padding-right:2px">
       <div style="font-size:12px;font-weight:800;color:var(--txt);margin-top:4px">Flat or door number</div>
       <div id="handStBNum" style="margin-top:6px;padding:9px;border:2px solid var(--div);border-radius:11px;text-align:center;
         font-size:17px;font-weight:800;letter-spacing:.05em;color:${filt?"var(--txt)":"var(--sub)"}">${filt?escHtml(filt):"all"}</div>
