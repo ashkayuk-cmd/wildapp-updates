@@ -213,6 +213,11 @@ body.addr-locked #rl .lockmsg{display:flex}
 #camBtnRow>button{width:62px!important;height:62px!important;min-width:62px!important;flex:0 0 auto!important;font-size:20px!important}
 #camBtnRow>button span{font-size:11px!important}
 .qrbar{min-height:52px!important;padding-top:3px!important;padding-bottom:3px!important}
+/* v7.2: Ash — the top bar is always the same size. Fixed height, nothing
+   inside it can grow it; the RESET button shrinks its text to fit instead. */
+#handPanel .qrbar{height:52px!important;min-height:52px!important;max-height:52px!important;box-sizing:border-box!important;overflow:hidden!important}
+#wildResetBtn{height:44px!important;min-height:44px!important;max-height:44px!important;box-sizing:border-box!important;overflow:hidden!important;flex-shrink:1!important}
+#wildResetBtn>span{display:block;max-width:100%;white-space:nowrap;overflow:hidden}
 /* Scanner toggle strip lives in the top bar next to the title — one
    horizontally-scrollable line, scrollbar hidden (drag to reach the rest). */
 
@@ -501,7 +506,7 @@ body.addr-locked #rl .lockmsg{display:flex}
 <!-- HANDHELD PANEL — no camera; results driven by the Bluetooth/USB handheld scanner -->
 <div id="handPanel">
   <div class="qrbar">
-    <div id="wildBattWrap" style="flex:0 0 auto;display:none;margin-right:6px;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #23220a;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#23220a;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#23220a;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="font-size:12px;font-weight:800;color:#23220a;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div><button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#23220a;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button>
+    <div id="wildBattWrap" style="flex:0 0 auto;display:flex;visibility:hidden;margin-right:6px;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #23220a;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#23220a;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#23220a;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="display:inline-block;min-width:4.6ch;text-align:left;font-size:12px;font-weight:800;color:#23220a;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div><button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#23220a;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button>
     <button type="button" id="wildAreaBtn" title="Area" aria-label="Area" style="flex:0 0 auto;margin-left:6px;min-width:44px;height:34px;padding:0 8px;font-size:15px;font-weight:900;line-height:1;font-family:inherit;color:#23220a;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">W2</button>
     <!-- v7.1: Ash — "have a note next to w2 or w8 at the top left saying tap
          here to change offices". Tapping the note does the same as the button. -->
@@ -13976,6 +13981,24 @@ document.addEventListener("visibilitychange",()=>{
       if(armed){fullRestart();return;}
       arm();
     }
+    /* v7.2: fixed-size top bar — shrink the RESET wording to fit the button
+       rather than letting it wrap onto extra lines and push the bar taller. */
+    function fit(){
+      try{
+        [L1,L2,L3].forEach(function(el){
+          if(!el)return;
+          var base=el===L2?14:13, f=base;
+          el.style.fontSize=f+"px";
+          var room=btn.clientWidth-16;
+          while(f>8 && el.scrollWidth>room){f-=0.5;el.style.fontSize=f+"px";}
+        });
+      }catch(e){}
+    }
+    window.__wildFitReset=fit;
+    try{new MutationObserver(function(){requestAnimationFrame(fit);}).observe(btn,{childList:true,subtree:true,characterData:true});}catch(e){}
+    try{var bw=document.getElementById("wildBattWrap");if(bw)new MutationObserver(function(){requestAnimationFrame(fit);}).observe(bw,{attributes:true,subtree:true,childList:true,characterData:true});}catch(e){}
+    window.addEventListener("resize",fit);
+    setTimeout(fit,0);setTimeout(fit,600);
     btn.addEventListener("click",function(e){e.preventDefault();tap();});
     btn.addEventListener("touchend",function(e){e.preventDefault();tap();});
   })();
@@ -14441,9 +14464,9 @@ document.addEventListener("visibilitychange",()=>{
 
   function paint(p, charging){
     if(!els()) return;
-    if(p===null||p===undefined||p!==p||p<0){ wrap.style.display="none"; return; }
+    if(p===null||p===undefined||p!==p||p<0){ wrap.style.visibility="hidden"; return; }
     p = Math.max(0, Math.min(100, Math.round(p)));
-    wrap.style.display="flex";
+    wrap.style.visibility="visible";
     if(p===last && !charging) return;
     last = charging ? -2 : p;
     fill.style.width = p + "%";
