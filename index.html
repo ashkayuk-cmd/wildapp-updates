@@ -271,7 +271,7 @@ body.addr-locked #rl .lockmsg{display:flex}
 .bbtn{flex:1;padding:12px;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
 .bbtn.pri{background:var(--prib);color:#23220a}
 .bbtn.sec{background:var(--chip);color:var(--pri)}
-#loader{position:absolute;inset:0;background:var(--prib);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:300;transition:opacity .4s}
+#loader{position:absolute;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:300;transition:opacity .4s}
 #loader.done{opacity:0;pointer-events:none}
 #lock{position:absolute;inset:0;background:var(--pri2);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:400;padding:24px;color:#fff}
 #lock.show{display:flex}
@@ -296,8 +296,10 @@ body.addr-locked #rl .lockmsg{display:flex}
 #lockScan .scanbar button{background:#fff;color:#5c5810;border:none;font-weight:600;padding:10px 18px;border-radius:10px;cursor:pointer}
 #lockScan .scanframe{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:35%;max-width:140px;aspect-ratio:1;border:3px solid rgba(255,255,255,.7);border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
 .licon{font-size:54px}.ltxt{color:#23220a;font-size:19px;font-weight:600}
+#loader .ltxt{color:#fff}
 .lbar{width:180px;height:4px;background:rgba(0,0,0,.22);border-radius:2px;overflow:hidden}
 .lfill{height:100%;background:#23220a;animation:lb 1.2s ease-in-out forwards}
+#loader .lbar{background:rgba(255,255,255,.25)}#loader .lfill{background:#fff}
 @keyframes lb{from{width:0}to{width:100%}}
 
 /* WildMoves — walk reassignment overrides */
@@ -604,7 +606,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=234;
+const THIS_BUILD_NUM=235;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 /* ── AREA: W2 or W8 (v6.7) ──────────────────────────────────────────────
    Ash: "add the west 8 walk list to the app. have a option on the pda to
@@ -646,7 +648,13 @@ const W8_THEME="#498059";
     const st=document.createElement("style");
     st.id="wildW8Theme";
     st.textContent=
-      ":root{--pri:#498059;--prib:#498059;--pri2:#355f41;--chip:#e5f0e8}"+
+      /* v7.0: html:root + !important. On the PDA the downloaded copy is
+         written into the loader's page, which can leave this sheet AHEAD of
+         the app's own stylesheet — so a plain :root lost and the top bar
+         stayed yellow while the (!important) buttons turned green. This
+         wins whatever order the sheets end up in. */
+      "html:root{--pri:#498059!important;--prib:#498059!important;--pri2:#355f41!important;--chip:#e5f0e8!important}"+
+      "html #handPanel .qrbar{background:#498059!important}"+
       "#handIdleActions button,#pdBtn{background:#498059!important;color:#fff!important;"+
         "border:1px solid #355f41!important;border-top:1px solid #6fa37f!important;"+
         "box-shadow:0 4px 0 #355f41,0 6px 12px rgba(0,0,0,.28)!important}"+
@@ -668,7 +676,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v6.9";
+const BUILD_NAME="v7.0";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
