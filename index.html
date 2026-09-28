@@ -506,7 +506,10 @@ body.addr-locked #rl .lockmsg{display:flex}
 <!-- HANDHELD PANEL — no camera; results driven by the Bluetooth/USB handheld scanner -->
 <div id="handPanel">
   <div class="qrbar">
-    <div id="wildBattWrap" style="flex:0 0 auto;display:flex;visibility:hidden;margin-right:6px;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #23220a;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#23220a;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#23220a;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="display:inline-block;min-width:4.6ch;text-align:left;font-size:12px;font-weight:800;color:#23220a;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div><button type="button" id="wildOptBtn" title="Options" aria-label="Options" style="flex:0 0 auto;width:38px;height:34px;padding:0;font-size:18px;line-height:1;font-family:inherit;color:#23220a;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center">⚙️</button>
+    <!-- v7.3: Ash — "remove gear logo and have the battery percent work as the gear icon".
+         The battery IS the Settings button now (id wildOptBtn kept, so the PIN door
+         and the update badges that recolour it keep working). -->
+    <button type="button" id="wildOptBtn" title="Options" aria-label="Options (battery)" style="flex:0 0 auto;height:34px;margin:0 6px 0 0;padding:2px;font-family:inherit;color:#23220a;background:transparent;border:1px solid transparent;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center"><div id="wildBattWrap" style="flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #23220a;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#23220a;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#23220a;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="display:inline-block;min-width:4.6ch;text-align:left;font-size:12px;font-weight:800;color:#23220a;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div></button>
     <button type="button" id="wildAreaBtn" title="Area" aria-label="Area" style="flex:0 0 auto;margin-left:6px;min-width:44px;height:34px;padding:0 8px;font-size:15px;font-weight:900;line-height:1;font-family:inherit;color:#23220a;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">W2</button>
     <!-- v7.1: Ash — "have a note next to w2 or w8 at the top left saying tap
          here to change offices". Tapping the note does the same as the button. -->
@@ -613,7 +616,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=237;
+const THIS_BUILD_NUM=238;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 /* ── AREA: W2 or W8 (v6.7) ──────────────────────────────────────────────
    Ash: "add the west 8 walk list to the app. have a option on the pda to
@@ -683,7 +686,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v7.2";
+const BUILD_NAME="v7.3";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -14464,7 +14467,7 @@ document.addEventListener("visibilitychange",()=>{
 
   function paint(p, charging){
     if(!els()) return;
-    if(p===null||p===undefined||p!==p||p<0){ wrap.style.visibility="hidden"; return; }
+    if(p===null||p===undefined||p!==p||p<0){ wrap.style.visibility="visible"; fill.style.width="0%"; pct.textContent="--%"; last=-3; return; }
     p = Math.max(0, Math.min(100, Math.round(p)));
     wrap.style.visibility="visible";
     if(p===last && !charging) return;
