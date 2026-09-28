@@ -509,16 +509,15 @@ body.addr-locked #rl .lockmsg{display:flex}
     <!-- v7.3: Ash — "remove gear logo and have the battery percent work as the gear icon".
          The battery IS the Settings button now (id wildOptBtn kept, so the PIN door
          and the update badges that recolour it keep working). -->
-    <button type="button" id="wildOptBtn" title="Options" aria-label="Options (battery)" style="flex:0 0 auto;height:34px;margin:0 6px 0 0;padding:2px;font-family:inherit;color:#23220a;background:transparent;border:1px solid transparent;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center"><div id="wildBattWrap" style="flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #23220a;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#23220a;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#23220a;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="display:inline-block;min-width:4.6ch;text-align:left;font-size:12px;font-weight:800;color:#23220a;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div></button>
-    <button type="button" id="wildAreaBtn" title="Area" aria-label="Area" style="flex:0 0 auto;margin-left:6px;min-width:44px;height:34px;padding:0 8px;font-size:15px;font-weight:900;line-height:1;font-family:inherit;color:#23220a;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">W2</button>
+    <button type="button" id="wildOptBtn" title="Options" aria-label="Options (battery)" style="flex:0 0 auto;height:34px;margin:0;padding:1px;font-family:inherit;color:#23220a;background:transparent;border:1px solid transparent;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;align-items:center;justify-content:center"><div id="wildBattWrap" style="flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:2px 5px;border-radius:7px;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);line-height:1" aria-live="off"><div style="position:relative;width:24px;height:12px;flex:0 0 auto"><div style="position:absolute;inset:0;border:1.5px solid #23220a;border-radius:3px;box-sizing:border-box"></div><div id="wildBattFill" style="position:absolute;left:2px;top:2px;bottom:2px;width:0%;background:#23220a;border-radius:1px"></div><div style="position:absolute;left:24px;top:3.5px;width:2px;height:5px;background:#23220a;border-radius:0 1px 1px 0"></div></div><span id="wildBattPct" style="display:inline-block;min-width:4.6ch;text-align:left;font-size:12px;font-weight:800;color:#23220a;font-family:inherit;letter-spacing:.01em;white-space:nowrap">--%</span></div></button>
+    <button type="button" id="wildAreaBtn" title="Area" aria-label="Area" style="flex:0 0 auto;margin-left:0;min-width:40px;height:34px;padding:0 7px;font-size:15px;font-weight:900;line-height:1;font-family:inherit;color:#23220a;background:rgba(0,0,0,.10);border:1px solid rgba(0,0,0,.25);border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">W2</button>
     <!-- v7.1: Ash — "have a note next to w2 or w8 at the top left saying tap
          here to change offices". Tapping the note does the same as the button. -->
-    <div id="wildAreaNote" role="button" aria-label="Tap here to change offices" style="flex:0 1 auto;min-width:0;margin-left:2px;font-size:11px;font-weight:800;line-height:1.15;color:#23220a;white-space:nowrap;overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none">&#9664; tap here to<br>change offices</div>
+    <div id="wildAreaNote" role="button" aria-label="Tap here to change offices" style="flex:0 0 auto;min-width:0;margin-left:-2px;font-size:10.5px;font-weight:800;line-height:1.15;color:#23220a;white-space:nowrap;overflow:visible;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none">&#9664; tap here to<br>change offices</div>
     <!-- v3.7: the title is the website version now. "Handheld Scanner" and its
          icon are gone at Ash's request; this block keeps the h1 so the
          tap-to-go-home wiring below is untouched. -->
-    <div style="flex:1;min-width:0"></div>
-    <button type="button" id="wildResetBtn" aria-label="If the scanner stops working, tap here to reset the app" style="flex:1 1 auto;width:auto;min-width:0;max-width:none;margin-left:6px;padding:5px 8px;font-size:13px;font-weight:700;font-family:inherit;letter-spacing:.01em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.2;white-space:normal"><span id="wildResetL1" style="font-size:13px;font-weight:700">If scanner stops working</span><span id="wildResetL2" style="font-size:14px;letter-spacing:.01em;opacity:1;font-weight:900">TAP HERE TO RESET APP</span></button>
+    <button type="button" id="wildResetBtn" aria-label="If the scanner stops working, tap here to reset the app" style="flex:1 1 auto;width:auto;min-width:0;max-width:none;margin-left:0;padding:4px 5px;font-size:13px;font-weight:700;font-family:inherit;letter-spacing:.01em;color:#fff;background:#c62828;border:none;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.2;white-space:normal"><span id="wildResetL1" style="font-size:13px;font-weight:700">If scanner stops working</span><span id="wildResetL2" style="font-size:14px;letter-spacing:.01em;opacity:1;font-weight:900">TAP HERE TO RESET APP</span></button>
   </div>
   <!-- Invisible catcher so a scanner that types into a focused field has a home;
        the wedge detector works regardless, this just keeps stray characters off other tabs -->
@@ -616,7 +615,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=238;
+const THIS_BUILD_NUM=239;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 /* ── AREA: W2 or W8 (v6.7) ──────────────────────────────────────────────
    Ash: "add the west 8 walk list to the app. have a option on the pda to
@@ -686,7 +685,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v7.3";
+const BUILD_NAME="v7.4";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -13992,7 +13991,7 @@ document.addEventListener("visibilitychange",()=>{
           if(!el)return;
           var base=el===L2?14:13, f=base;
           el.style.fontSize=f+"px";
-          var room=btn.clientWidth-16;
+          var room=btn.clientWidth-10;
           while(f>8 && el.scrollWidth>room){f-=0.5;el.style.fontSize=f+"px";}
         });
       }catch(e){}
