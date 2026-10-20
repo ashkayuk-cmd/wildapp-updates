@@ -1,140 +1,49 @@
-# Wild App — build 207 (v4.92), OTA only
+# WildApp.apk — build 241 / v7.6 (versionCode 200)
 
-Six changes, all web-layer. No native/dex change, no sideload.
+Adds a **Wi-Fi setup** screen so you can set the RM network on a PDA without StageNow.
 
-## 1. Centred "or" on the idle screen (new)
-A centred **or** now sits between *Scan a QR code to show walk* and the two
-buttons, so the screen reads as one choice: scan, or type, or search.
+## What changed
+- New native bridge method `WildKiosk.wifiApply(...)` — pushes a Wi-Fi config to the
+  device through EMDK MX, the same path the notification pull-down toggle already uses.
+  This is the only change to the app's code (verified: exactly one method added, nothing
+  else in the dex touched).
+- New **Wi-Fi setup** row in the gear (⚙️) → Options menu.
+- versionCode bumped 199 → 200. Signed with your `wild` key (fingerprint
+  `2C:3A:BB:7A:B7:00:AF:19…`), so it installs **over the top** — corrections and history
+  are kept. v1+v2+v3 signatures, zipaligned.
 
-Added in both places the idle screen can come from — the static markup (which
-is what gets captured into `HAND_EMPTY_HTML` at start-up and replayed on every
-Back) and `handIdleActionsHtml()`, so it's there on a fresh launch and after
-going Back from any sub-screen.
+## Install
+Same as always — upload `WildApp.apk` to the repo and let StageNow pull/install it, or
+sideload. No `index.html` to upload this time: the new app content (build 241) is baked
+into the APK, and because it's build 241 it takes over from the downloaded build 240 your
+PDAs are currently running, automatically, the moment the APK is installed. Install it on
+all three PDAs.
 
-## 2. UPDATE IN PROGRESS screen (build 205)
-Applying an update is a reload through the loader, and on a kiosk PDA that just
-looks like the app dying — a blank screen for a second or two with nothing to
-say why. There's now a full-screen red panel with **UPDATE** in big bold white
-letters and **IN PROGRESS** underneath it.
+(If StageNow does the install, the usual scanner note applies: Wild App holds the EMDK
+engine, so use the Back-button menu → Launch StageNow, or force-stop the app first.)
 
-- Red `#C40000`, white text, `UPDATE` at 56 px and `IN PROGRESS` at 34 px, both
-  weight 900, centred, `z-index` at the maximum so nothing sits over it.
-- Painted **before** the reload is requested (400 ms head start, measured at
-  ~5 ms to paint), so it's on screen for the whole gap rather than flashing.
-- The reload throws the page away, so a flag is left in storage and the build
-  that comes back up puts the same screen straight back, then clears it once
-  the app is actually on screen. That covers the blank loader gap end to end.
-- The flag is cleared the instant it's read, and ignored if older than 30 s, so
-  a stale one can never show the screen twice or strand a device.
-- Safety net: if the reload somehow never happens, the screen removes itself
-  after 12 s rather than leaving a red brick.
-- Inline styles appended to `<body>` — doesn't depend on the stylesheet
-  surviving the reload, and no `inset` or `clamp()` (this WebView is Android 8).
+## How to use it
+1. Tap the gear ⚙️, enter PIN **1984**.
+2. **Wi-Fi setup**.
+3. Type the network name (SSID) and the password. "Show password" lets you check it.
+4. **Save & connect**. The status line shows **SUCCESS** (accepted) or an error straight
+   away — test it indoors, not mid-round.
+5. "Reconnect automatically on start-up if offline" is on by default: if a PDA boots and
+   isn't online, it re-pushes the saved network once. It does nothing when already online.
 
-**The APK path is deliberately excluded.** A new APK still has to be downloaded
-and installed by hand, and that isn't a reload — showing "update in progress"
-over Android's installer would be wrong. Only the over-the-air app/address
-apply shows it. Say if you want it on the APK download too.
+The SSID + password are saved **on that device only** (localStorage). Nothing goes to the
+repo or anywhere else.
 
-## 3. Labels (builds 204, 206)
-| Where | Now |
-|---|---|
-| Main button + postcode screen heading | **Type a postcode to show walk** |
-| Main button + street screen heading | **Search Street, Building or Business Name** |
-
-Both main-screen buttons exist twice (static HTML and `handIdleActionsHtml()`,
-which rebuilds the idle screen on every Back) — both copies changed.
-
-Untouched, different screens: the **Walks simple** search placeholder, the
-"Find any address" empty state on the scan tab, the scan textarea placeholder.
-
-## 4. Street/building keypad scrolls with the page (build 203)
-`#handStTop` was `position:sticky; top:0`. Now a normal block — scroll up and
-the keyboard goes with it. The postcode, House number and Flat/door pads are
-still pinned.
-
-## 5. Postcode keypad searches on the 5th character (build 202)
-The fifth keystroke runs the lookup; **Look up** stays as a fallback for a
-partial like `W2 5D`, and backspacing within 90 ms cancels.
-
-## 6. Data build 201
-| Address | Was | Now |
-|---|---|---|
-| The Spa Porchester Centre, Porchester Road, W2 5DP | 22 PORCHESTER | 24 QUEENSWAY |
-
-24,102 rows, identical order, no adds/removals, no street changes, same 4
-`_folder` entries, same 36 walks. W2 5DP now spans two walks, so a
-bare-postcode lookup on it offers the walk picker; labels carrying the Spa's
-name still resolve confidently.
-
-**Items 2–6 are still unpublished** — live is build 200 / v4.85, data build 200.
-
-## Files to upload (both, together)
-- `index.html`
-- `wild_data.json`
-
-## Stamps
-| Stamp | Live (was) | This build |
-|---|---|---|
-| THIS_BUILD_NUM | 200 | **207** |
-| BUILD_NAME | v4.85 | **v4.92** |
-| REPO_DATA_BUILD | 200 | **201** |
-| REPO_DATA_HASH | 75fb7859 | **9ef79ff6** |
-| REPO_DATA_ROWS | 24102 | 24102 (unchanged) |
-| REPO_APK_BUILD | 199 | 199 (unchanged — see below) |
-| BAKED_DATA_BUILD | 57 | 57 (unchanged) |
-
-Update gate re-simulated: code 207 / data 201 / apk 199 / rows 24102 / hash
-9ef79ff6. The app's own `liveHtmlLooksSane()` was extracted and run against the
-delivered file — returns **true**, so devices will accept this as an update.
-
-## APK build 199 is what is actually published
-Repo `WildApp.apk` is versionCode **199**, `BUILD_NAME "v4.84"`,
-`BAKED_DATA_BUILD 199`. The build-200 APK was never uploaded and live
-`index.html` still carries `REPO_APK_BUILD=199`, so it stays at 199 — raising it
-would advertise an APK that isn't in the repo.
-
-## Verification performed
-- Diff from the previous build is 4 hunks: two stamps and the two `or` insertions.
-- jsdom harness, all 6 app scripts loaded, zero script errors.
-- Update screen, driven through the real functions:
-  - `liveApplyNow()` → panel present, `position:fixed`, `background: rgb(196,0,0)`,
-    `z-index: 2147483647`, parent `BODY`, two children reading `UPDATE` and
-    `IN PROGRESS`, font sizes 56/34 px, weight 900/900, no `inset`, no `clamp()`
-  - panel is up **before** any navigation is attempted (0 navigations at 200 ms,
-    1 by 800 ms), and stays up through the attempt
-  - fresh boot flag → panel present at boot, flag cleared on read, gone after the
-    hide timers
-  - stale flag (2 min old) → panel never shows, flag still cleared
-  - `applyUpdateNow("apk")` → no panel, APK download still starts
-  - `applyUpdateNow("code")` → panel shows
-  - 12 s safety hide fires
-- Postcode keypad suite still green (single fire, backspace cancels, chip fires
-  once, partial + **Look up** works, re-arms, keys dead after third character).
-- Street screen suite still green (`#handStTop` unpinned, same 14 hits and
-  byte-identical 11,001-char hit list, other three pads still `sticky`).
-- Label suite still green: buttons read `⌨ Type a postcode to show walk` and
-  `⌨ Search Street, Building or Business Name`, headings match, both onclicks
-  intact, 36 + 26 keys. The rebuilt idle HTML from `handIdleActionsHtml()`
-  carries both new labels and zero occurrences of any old string.
-- Idle screen: exactly one `.handIdleOr`, text `or`, `text-align:center`, sitting
-  inside `#handEmpty` in the order prompt → `or` → buttons (verified by
-  `compareDocumentPosition`, and the previous build has none). Both
-  `handIdleHtml()` and `handIdleActionsHtml()` carry it, and re-rendering the
-  idle screen the way Back does still yields one `or` and both buttons.
-- 402-label resolve sweep vs live build+live data: **0 unintended differences**.
-- Data patched by literal string replacement on raw file text; hash from the
-  app's own `wildHash` (FNV-1a over `charCodeAt(i)&0xff`), validated against the
-  live `75fb7859` stamp first.
-
-## After uploading
-- Allow 1–2 min for GitHub CDN edge cache.
-- First update check runs on the old code — check twice. The red screen will
-  only appear from the *next* update onwards, since the build doing the applying
-  has to be one that knows about it.
-
-## Still outstanding
-- A-Z sheet lists BUCKHILL LODGE under "Bayswater Road" on walk 15; address
-  data has it on "Hyde Park".
-- GitHub PAT for the Issues upload feature needs regenerating, scoped to
-  Issues: Read and write only.
+## Things to know
+- **I couldn't test the MX Wi-Fi call from here** — there's no device in the build sandbox.
+  The schema is Zebra's documented WPA2-PSK MX Wi-Fi doc (version 8.4), and the app tries a
+  short ladder of CSP versions and remembers whichever your TC56 accepts (same trick the
+  pull-down uses). The on-screen status is your confirmation. If it says FAILURE, the most
+  likely cause is a wrong password; if it says "MX/EMDK not ready", wait a moment and retry.
+- **This is WPA2-Personal (a network name + one password).** If the RM network is actually
+  WPA2-**Enterprise** (a username *and* password / 802.1X), this form won't connect — tell
+  me and I'll build the enterprise version.
+- **Getting future updates still needs the device online first** — the auto-reconnect only
+  helps a PDA rejoin a network it already has saved. If RM changes the password, type the
+  new one in on each PDA.
+- As agreed, this does **not** include the "try a list of passwords" behaviour.
