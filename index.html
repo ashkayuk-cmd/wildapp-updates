@@ -617,7 +617,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=240;
+const THIS_BUILD_NUM=241;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 /* ── AREA: W2 or W8 (v6.7) ──────────────────────────────────────────────
    Ash: "add the west 8 walk list to the app. have a option on the pda to
@@ -687,7 +687,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v7.5";
+const BUILD_NAME="v7.6";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -14545,6 +14545,126 @@ document.addEventListener("visibilitychange",()=>{
     window.addEventListener("DOMContentLoaded",function(){ setTimeout(start,0); });
   }
   window.__wildBatteryRefresh = function(){ try{ tick(); }catch(e){} };
+})();
+</script>
+
+<script>
+/* ══════════ v7.6 MESSAGES FROM ASH'S PHONE ══════════
+   A message is just the text of message.txt in the update repo. Ash edits
+   it on his phone (GitHub app or website → Commit) and every PDA shows it
+   as a card at the bottom of the screen, with a chime and read out once.
+     • file has text      → that text is the message
+     • file empty/missing → no message (any card still showing goes away)
+     • same text as last time → nothing new; a dismissed one stays dismissed
+   The card is NOT full-screen (no inset:0), on purpose: scanning keeps
+   working underneath, a scan doesn't wipe it (handClearSheets) and the
+   BACK key doesn't eat it (wildBack) — only its own OK button closes it.
+   The repo is PUBLIC: anyone can read message.txt. */
+(function(){
+  var MSG_FILE="message.txt";
+  var EVERY=2*60*1000;               // poll every 2 minutes while the screen is on
+  var KEY_CUR="wildMsg_v1";          // {t:text, at:first-seen ms}
+  var KEY_ACK="wildMsgAck_v1";       // text of the message OK'd on this PDA
+  var lastPoll=0, busy=false;
+
+  function get(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+  function set(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){}}
+  function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+  function hhmm(ms){var d=new Date(ms);return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);}
+
+  function chime(){
+    try{if(typeof wildVibrate==="function")wildVibrate([120,80,120]);}catch(e){}
+    try{
+      var peak=(typeof beepPeak==="function")?beepPeak():0.3;
+      if(!peak)return;                                  // sound set to 0 — buzz only
+      audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();
+      if(audioCtx.state==="suspended")audioCtx.resume();
+      var t0=audioCtx.currentTime;
+      [[880,0],[1320,0.16]].forEach(function(n){
+        var o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=t0+n[1];
+        o.type="sine";o.frequency.value=n[0];
+        g.gain.setValueAtTime(0.0001,t);
+        g.gain.exponentialRampToValueAtTime(peak,t+0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+0.14);
+        o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+0.15);
+      });
+    }catch(e){}
+  }
+
+  function hide(){var el=document.getElementById("wildMsgCard");if(el)try{el.remove();}catch(e){}}
+
+  function show(cur){
+    hide();
+    var card=document.createElement("div");
+    card.id="wildMsgCard";
+    card.style.cssText=["position:fixed","left:8px","right:8px","bottom:8px","z-index:2147483645",
+      "background:#0d2a4a","color:#fff","border-radius:12px","padding:12px 14px",
+      "box-shadow:0 4px 16px rgba(0,0,0,.45)","font-family:inherit","max-height:60vh",
+      "display:flex","flex-direction:column","gap:10px","border:3px solid #ffd54f"].join(";");
+    card.innerHTML=
+      '<div style="font-size:12px;font-weight:800;letter-spacing:.06em;color:#ffd54f">📨 MESSAGE · '+esc(hhmm(cur.at))+'</div>'+
+      '<div id="wildMsgText" style="font-size:19px;font-weight:700;line-height:1.3;white-space:pre-wrap;overflow-y:auto;word-break:break-word">'+esc(cur.t)+'</div>'+
+      '<button id="wildMsgOk" type="button" style="font:inherit;font-size:17px;font-weight:800;padding:12px;border:0;border-radius:10px;background:#ffd54f;color:#0d2a4a">OK ✓</button>';
+    card.querySelector("#wildMsgOk").addEventListener("click",function(e){
+      e.stopPropagation();
+      set(KEY_ACK,cur.t);
+      hide();
+    });
+    (document.body||document.documentElement).appendChild(card);
+  }
+
+  /* Decide what the card should show for the text now in the repo. Returns
+     "new" when a message arrived this time, so the caller can chime. */
+  function apply(text,announce){
+    text=String(text==null?"":text).replace(/\r/g,"").replace(/^﻿/,"").trim();
+    if(!text){                                   // message taken down
+      set(KEY_CUR,null);set(KEY_ACK,null);hide();
+      return "none";
+    }
+    var cur=null;try{cur=JSON.parse(get(KEY_CUR)||"null");}catch(e){}
+    var isNew=!cur||cur.t!==text;
+    if(isNew){cur={t:text,at:Date.now()};set(KEY_CUR,JSON.stringify(cur));}
+    if(get(KEY_ACK)===text){hide();return "acked";}
+    var showing=document.getElementById("wildMsgCard");
+    if(isNew||!showing)show(cur);
+    if(isNew&&announce){
+      try{if(window.__wildNoteActivity)window.__wildNoteActivity();}catch(e){}   // wake a dimmed screen
+      chime();
+      try{if(typeof speakText==="function")setTimeout(function(){speakText("Message. "+text);},450);}catch(e){}
+      return "new";
+    }
+    return "shown";
+  }
+
+  function poll(){
+    if(busy)return Promise.resolve(null);
+    if(navigator.onLine===false)return Promise.resolve(null);
+    busy=true;lastPoll=Date.now();
+    var base=(typeof WILD_UPDATE_BASE!=="undefined"?WILD_UPDATE_BASE:"https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/").replace(/\/+$/,"");
+    // The ?t= skips GitHub's 5-minute cache so a new message lands on the next poll.
+    return fetch(base+"/"+MSG_FILE+"?t="+Date.now(),{cache:"no-store"})
+      .then(function(r){
+        if(r.status===404)return "";             // no file = no message
+        if(!r.ok)throw new Error("HTTP "+r.status);
+        return r.text();
+      })
+      .then(function(txt){busy=false;return apply(txt,true);})
+      .catch(function(){busy=false;return null;}); // offline/blip: leave things as they are
+  }
+
+  function start(){
+    // A message OK'd or not before a restart is put back as it was — no repeat chime.
+    try{var cur=JSON.parse(get(KEY_CUR)||"null");if(cur&&cur.t)apply(cur.t,false);}catch(e){}
+    setTimeout(poll,4000);
+    setInterval(function(){if(!document.hidden)poll();},EVERY);
+    document.addEventListener("visibilitychange",function(){
+      if(!document.hidden&&Date.now()-lastPoll>30*1000)poll();
+    });
+  }
+  window.__wildMsgPoll=poll;
+  window.__wildMsgApply=apply;
+  if(document.readyState==="complete"||document.readyState==="interactive")setTimeout(start,0);
+  else window.addEventListener("DOMContentLoaded",function(){setTimeout(start,0);});
 })();
 </script>
 
