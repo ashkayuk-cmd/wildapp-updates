@@ -2,6 +2,27 @@
 <html lang="en"><head>
 <meta charset="UTF-8">
 <script>
+/* v7.33 DEEP SLEEP interval gate. After an hour with no use the app sets
+   window.__wildDeep, and every repeating timer in the page simply skips its
+   turn until it is cleared again, so nothing ticks, polls or downloads while
+   the PDA sits unused. Timers keep their handles, so clearInterval still
+   works. window.__wildIntervalAlways is the way round it, for the deep-sleep
+   code's own clock and the throttled fleet poll. */
+(function(){
+  var _si=window.setInterval;
+  window.__wildDeep=false;
+  window.__wildIntervalAlways=function(fn,ms){return _si.call(window,fn,ms);};
+  window.setInterval=function(fn,ms){
+    if(typeof fn!=="function")return _si.apply(window,arguments);
+    var args=Array.prototype.slice.call(arguments,2);
+    return _si.call(window,function(){
+      if(window.__wildDeep)return;
+      return fn.apply(this,args);
+    },ms);
+  };
+})();
+</script>
+<script>
 /* Boot watchdog (APK build) — written in old-style JS so it parses on ANY
    WebView. If the main app script fails to parse or start (e.g. the engine
    is too old for modern syntax), this shows what happened instead of a
@@ -618,7 +639,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=267;
+const THIS_BUILD_NUM=269;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 /* ── AREA: W2 or W8 (v6.7) ──────────────────────────────────────────────
    Ash: "add the west 8 walk list to the app. have a option on the pda to
@@ -688,7 +709,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v7.32";
+const BUILD_NAME="v7.34";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -10913,6 +10934,7 @@ function openOptionsMenu(){
     {e:"📶",label:"Wi-Fi setup",sub:"Enter the RM network login (username + password)",go:goHand(()=>showHandWifi())},
     {e:"📟",label:"Fleet",sub:"See the PDAs, send alarm / lock / message",go:goHand(()=>showHandFleet())},
     {e:"📣",label:"Notice to fleet",sub:"Flash a note to every PDA",go:goHand(()=>showHandNotice())},
+    {e:"💬",label:"Timed message",sub:"Message the other PDAs — it disappears after a time you pick",go:goHand(()=>showHandTimedMsg())},
     {e:"🔗",label:"Fleet setup",sub:"Scan the setup code, name this PDA",go:goHand(()=>showHandFleetSetup())},
     {e:"✅",label:"Health check",sub:"Scanner, Wi-Fi, text-scan, fleet link — all at a glance",go:goHand(()=>showHandHealth())},
     {e:"⬅️",label:"Back button menu",sub:"Kiosk mode, exit, StageNow, Android settings",go:goHand(()=>showHandBackHold())},
@@ -14298,7 +14320,94 @@ document.addEventListener("visibilitychange",()=>{
   function resetIdle(){
     clearTimeout(idleTimer);
     idleTimer=setTimeout(goToSleep, IDLE_MS);
+    lastUse=Date.now();
+    if(isDeep)leaveDeep();
   }
+
+  /* ---- DEEP SLEEP (v7.33). After DEEP_MS (1 hour) with no taps, keys or
+     scans the PDA goes as quiet as the current APK allows: the scanner is
+     handed back to the system, the backlight drops to 1%, the camera closes
+     and every repeating timer (update checks, messages, watchdogs) stops via
+     the interval gate at the top of the page. The fleet poll still runs, but
+     only every 15 minutes, so a lost PDA can still be found. The screen
+     itself still goes off on the wrapper's own 3-minute timer. ANY touch or
+     key, or the screen coming back on, wakes it and puts everything back.
+     The hardware trigger can't wake it - the scanner is released - so press
+     power and tap the screen. Wi-Fi stays on (switching it off needs an APK). */
+  var DEEP_MS=60*60*1000, DEEP_BRIGHT_KEY="wildDeepBright_v1",
+      FLEET_DEEP_MS=15*60*1000;
+  var lastUse=Date.now(), isDeep=false, deepReleased=false;
+  function kb(){try{return (window.WildKiosk&&typeof WildKiosk.scanRelease==="function")?WildKiosk:null;}catch(e){return null;}}
+  function br(){try{return (window.WildBrightness&&typeof WildBrightness.set==="function")?WildBrightness:null;}catch(e){return null;}}
+  function blockedByFleet(){
+    return !!(document.getElementById("wildAlarmOv")||document.getElementById("wildLockOv"));
+  }
+  function enterDeep(){
+    if(isDeep||blockedByFleet())return;
+    isDeep=true;
+    window.__wildDeep=true;
+    if(!isAsleep)goToSleep();
+    try{var qp=document.getElementById("qrPanel");if(qp&&qp.classList.contains("show")&&typeof closeQR==="function")closeQR();}catch(e){}
+    try{if(typeof speakCancel==="function")speakCancel();}catch(e){}
+    // Scanner: only release it if it's ours. A deliberate release to StageNow
+    // is left exactly as it is, and never "given back" on wake.
+    deepReleased=false;
+    try{var k=kb();if(k&&!(typeof k.scanHeld==="function"&&k.scanHeld())){k.scanRelease();deepReleased=true;}}catch(e){}
+    // Backlight: remember the setting FIRST (localStorage, so a restart mid-
+    // sleep can never leave the screen stuck at 1%), then dim.
+    try{var b=br();if(b){
+      var rec={a:!!(typeof b.isAuto==="function"&&b.isAuto()),p:(typeof b.get==="function"?b.get():60)};
+      localStorage.setItem(DEEP_BRIGHT_KEY,JSON.stringify(rec));
+      b.set(1);
+    }}catch(e){}
+  }
+  function restoreBright(){
+    try{
+      var raw=localStorage.getItem(DEEP_BRIGHT_KEY);if(!raw)return;
+      var rec=JSON.parse(raw),b=br();
+      if(b&&rec){
+        if(rec.a&&typeof b.auto==="function")b.auto();
+        else b.set(Math.max(1,Math.min(100,parseInt(rec.p,10)||60)));
+      }
+      localStorage.removeItem(DEEP_BRIGHT_KEY);
+    }catch(e){}
+  }
+  function leaveDeep(){
+    if(!isDeep)return;
+    isDeep=false;
+    window.__wildDeep=false;
+    restoreBright();
+    if(deepReleased){try{var k=kb();if(k&&typeof k.scanResume==="function")k.scanResume();}catch(e){}}
+    deepReleased=false;
+    // Catch up on what was skipped: an update check and a message poll.
+    setTimeout(function(){
+      try{if(typeof checkForUpdate==="function")Promise.resolve(checkForUpdate("wake"))
+        .then(function(r){try{if(r&&r.found&&typeof updBtnReady==="function")updBtnReady(r.found);}catch(e){}}).catch(function(){});}catch(e){}
+      try{if(window.__wildMsgPoll)window.__wildMsgPoll();}catch(e){}
+    },3000);
+  }
+  window.__wildDeepState=function(){return {deep:isDeep,idleMin:Math.round((Date.now()-lastUse)/60000)};};
+  window.__wildFleetDeepOk=(function(){var last=0;return function(){
+    if(!window.__wildDeep)return true;
+    var now=Date.now();if(now-last>=FLEET_DEEP_MS){last=now;return true;}return false;
+  };})();
+  // Boot: a restart in the middle of a deep sleep puts the backlight back.
+  restoreBright();
+  // The deep-sleep clock. Uses wall time, not a long setTimeout, because
+  // timers are frozen while the CPU sleeps. A tick that arrives late (the
+  // device was asleep) while the page has focus means the screen came back.
+  var deepTick=Date.now();
+  window.__wildIntervalAlways(function(){
+    var now=Date.now(), gap=now-deepTick; deepTick=now;
+    if(isDeep){
+      var focused=true;try{focused=document.hasFocus()&&!document.hidden;}catch(e){}
+      if(gap>20000&&focused){wakeUp();}
+      return;
+    }
+    if(now-lastUse>=DEEP_MS)enterDeep();
+  },10000);
+  try{document.addEventListener("visibilitychange",function(){if(!document.hidden&&isDeep)wakeUp();});}catch(e){}
+  try{window.addEventListener("focus",function(){if(isDeep)wakeUp();});}catch(e){}
   // Any user interaction resets the idle timer (and wakes if asleep). Capture
   // phase so we see it before app handlers; we never stop propagation, so the
   // underlying control still works — a wake tap that also lands on a button is
@@ -15082,6 +15191,8 @@ function execCmd(cmd){
     case "message": fleetFlash(cmd.text); break;
     case "lostmode": fleetLost(cmd.text); break;
     case "clear": fleetClearAll(); break;
+    case "tmsg": tmAdd(cmd); break;
+    case "tmsgclear": tmDrop(cmd.ref); break;
     case "area_W2": try{if(typeof wildAreaSwitch==="function")wildAreaSwitch("W2");}catch(e){} break;
     case "area_W8": try{if(typeof wildAreaSwitch==="function")wildAreaSwitch("W8");}catch(e){} break;
   }
@@ -15182,15 +15293,21 @@ function pullCommands(c){
       // Older than 24h, or sent before this PDA was set up: historic, don't replay.
       if(cmd.ts&&(cmd.ts<cutoff||cmd.ts<since)){markDone(cmd.id);return;}
       if(cmd.target!=="ALL" && cmd.target!==me)return;
+      // v7.34: a timed message sent to ALL is for the OTHER PDAs, not the sender.
+      if((cmd.type==="tmsg"||cmd.type==="tmsgclear")&&cmd.by&&cmd.by===me){markDone(cmd.id);return;}
+      // ...and one already taken back by the time this PDA sees it never shows.
+      if(cmd.type==="tmsg"&&items.some(function(x){return x&&x.type==="tmsgclear"&&x.ref===cmd.id;})){markDone(cmd.id);return;}
       execCmd(cmd); markDone(cmd.id);
     });
   });
 }
-function sendCommand(target,type,text,pin){
+function sendCommand(target,type,text,pin,extra){
   var c=cfg();if(!c)return Promise.reject(new Error("not set up"));
   return ghGet(c,"commands.json").then(function(f){
     var o=(f&&P(f.text))||{items:[]};if(!o.items)o.items=[];
-    o.items.push({id:uid(),target:target,type:type,text:text||"",pin:pin||"",by:myName(),ts:nowTs()});
+    var item={id:(extra&&extra.id)||uid(),target:target,type:type,text:text||"",pin:pin||"",by:myName(),ts:nowTs()};
+    if(extra)for(var k in extra)if(Object.prototype.hasOwnProperty.call(extra,k))item[k]=extra[k];
+    o.items.push(item);
     while(o.items.length>60)o.items.shift();
     return ghPut(c,"commands.json",J(o),"cmd "+type+" -> "+target);
   });
@@ -15398,6 +15515,140 @@ window.showHandNotice=function(){
   b.querySelector("#ntClear").onclick=function(){writeNotice("");};
 };
 
+/* ══════ v7.34 TIMED MESSAGES ══════════════════════════════════════════
+   Sent from Settings → 💬 Timed message on any set-up PDA. It goes through
+   the fleet command queue (commands.json) as {type:"tmsg", text, until},
+   where until is the clock time it disappears. Each PDA that picks it up
+   shows a card at the bottom of the screen (NOT full-screen, so scans and
+   BACK leave it alone) and removes it by itself at that time. OK takes it
+   off this PDA early; "Take it back" on the sender removes it everywhere.
+   Kept in localStorage so a restart puts a live message back until it's due. */
+var TM_KEY="wildTimedMsgs_v1", TM_SENT_KEY="wildTimedSent_v1", tmTimer=null;
+function tmList(){var a=P(localStorage.getItem(TM_KEY));return Array.isArray(a)?a:[];}
+function tmSave(a){try{if(a.length)localStorage.setItem(TM_KEY,J(a));else localStorage.removeItem(TM_KEY);}catch(e){}}
+function tmHHMM(ms){var d=new Date(ms);return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);}
+function tmLeft(ms){var m=Math.ceil((ms-Date.now())/60000);if(m<1)return "under a minute left";if(m<60)return m+" min left";var h=Math.floor(m/60),r=m%60;return h+" h"+(r?" "+r+" min":"")+" left";}
+function tmDur(ms){var m=Math.round(ms/60000);if(m<60)return m+" min";var h=m/60;return (h===Math.floor(h)?h:h.toFixed(1))+(h===1?" hour":" hours");}
+function tmAdd(cmd){
+  if(!cmd||!cmd.text)return;
+  var until=parseInt(cmd.until,10)||0;
+  if(!until||until<=Date.now())return;                 // already over by the time it arrived
+  var a=tmList().filter(function(m){return m.id!==cmd.id;});
+  a.push({id:cmd.id,text:String(cmd.text),by:cmd.by||"",ts:cmd.ts||Date.now(),until:until});
+  tmSave(a);tmRender();
+  try{if(window.__wildNoteActivity)window.__wildNoteActivity();}catch(e){}   // wake a dimmed / deep-asleep screen
+  try{if(typeof wildVibrate==="function")wildVibrate([120,80,120]);else if(navigator.vibrate)navigator.vibrate([120,80,120]);}catch(e){}
+  try{if(typeof speakText==="function")setTimeout(function(){speakText("Message"+(cmd.by?" from "+cmd.by:"")+". "+cmd.text);},450);}catch(e){}
+}
+function tmDrop(id){if(!id)return;tmSave(tmList().filter(function(m){return m.id!==id;}));tmRender();}
+function tmRender(){
+  var now=Date.now(),a=tmList(),live=a.filter(function(m){return m.until>now;});
+  if(live.length!==a.length)tmSave(live);
+  var box=document.getElementById("wildTMsgBox");
+  if(!live.length){if(box)try{box.remove();}catch(e){}if(tmTimer){clearTimeout(tmTimer);tmTimer=null;}return;}
+  if(!box){
+    box=document.createElement("div");box.id="wildTMsgBox";
+    box.style.cssText="position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483090;display:flex;flex-direction:column;gap:8px;max-height:70vh;overflow-y:auto;font-family:inherit";
+    (document.body||document.documentElement).appendChild(box);
+  }
+  live.sort(function(x,y){return x.ts-y.ts;});
+  box.innerHTML=live.map(function(m){
+    return '<div class="wtmCard" style="background:#14361f;color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,.45);border:3px solid #81c784;display:flex;flex-direction:column;gap:9px">'+
+      '<div style="font-size:12px;font-weight:800;letter-spacing:.05em;color:#a5d6a7">💬 MESSAGE'+(m.by?' FROM '+esc(String(m.by).toUpperCase()):'')+' · '+esc(tmHHMM(m.ts))+'</div>'+
+      '<div style="font-size:19px;font-weight:700;line-height:1.3;white-space:pre-wrap;word-break:break-word">'+esc(m.text)+'</div>'+
+      '<div style="font-size:12px;color:#c8e6c9">Disappears at '+esc(tmHHMM(m.until))+' · '+esc(tmLeft(m.until))+'</div>'+
+      '<button type="button" class="wtmOk" data-id="'+esc(m.id)+'" style="font:inherit;font-size:16px;font-weight:800;padding:11px;border:0;border-radius:10px;background:#81c784;color:#0b2414">OK ✓</button>'+
+    '</div>';
+  }).join("");
+  var oks=box.querySelectorAll(".wtmOk");
+  for(var i=0;i<oks.length;i++){(function(b){b.onclick=function(e){try{e.stopPropagation();}catch(_){}tmDrop(b.getAttribute("data-id"));};})(oks[i]);}
+  // A plain timeout to the next expiry: timeouts aren't paused by the
+  // deep-sleep gate, and wake/visibility re-renders catch a late one.
+  var next=Math.min.apply(null,live.map(function(m){return m.until;}));
+  if(tmTimer)clearTimeout(tmTimer);
+  tmTimer=setTimeout(tmRender,Math.max(500,Math.min(next-now+200,60000)));
+}
+try{setTimeout(tmRender,1500);}catch(e){}
+try{document.addEventListener("visibilitychange",function(){if(!document.hidden)tmRender();});}catch(e){}
+try{window.addEventListener("focus",tmRender);}catch(e){}
+try{window.addEventListener("pageshow",tmRender);}catch(e){}
+window.__wildTmRender=tmRender;window.__wildTmAdd=tmAdd;
+
+window.showHandTimedMsg=function(){
+  var b=box();if(!b)return;try{handNav("timedmsg",showHandTimedMsg);}catch(e){}b.dataset.sub="timedmsg";
+  try{window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
+  var goBack=function(){try{openOptionsMenu();}catch(e){try{handGoIdle();}catch(_){}}};
+  if(!provisioned()){b.innerHTML=top1("Timed message")+'<div style="padding:20px;text-align:center;color:#5f6368">This PDA isn\u2019t on the fleet yet. Use <b>Fleet setup</b> first.</div>'+backBtn("tmBack","Back to Options");b.querySelector("#tmBack").onclick=goBack;return;}
+  var DURS=[[5,"5 min"],[15,"15 min"],[30,"30 min"],[60,"1 hour"],[120,"2 hours"],[240,"4 hours"],[480,"8 hours"],[720,"12 hours"]];
+  var pickMin=30, pickTo="ALL";
+  var chip=function(cls,val,label,on){return '<button type="button" class="'+cls+'" data-v="'+esc(val)+'" style="min-height:42px;padding:0 13px;margin:0 6px 7px 0;border-radius:21px;font-size:14px;font-weight:800;border:2px solid '+(on?'#2e7d32':'#c6ccd2')+';background:'+(on?'#e8f5e9':'#fff')+';color:'+(on?'#1b5e20':'#202124')+'">'+label+'</button>';};
+  var sentRec=P(localStorage.getItem(TM_SENT_KEY));
+  if(sentRec&&!(sentRec.until>Date.now()))sentRec=null;
+  b.innerHTML=top1("Timed message")+
+    '<div style="max-width:360px;margin:0 auto;text-align:left">'+
+    '<div style="font-size:13px;color:#5f6368;margin-bottom:10px">Shows on the other PDAs as a card, then disappears by itself at the time you pick. They pick it up on their next check-in, usually within 3 minutes.</div>'+
+    '<textarea id="tmTxt" rows="3" maxlength="400" style="display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #c6ccd2;border-radius:10px;font-size:15px;margin-bottom:12px" placeholder="e.g. Van 3 is back at 2pm"></textarea>'+
+    '<div style="font-size:11px;font-weight:800;color:#5f6368;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Send to</div>'+
+    '<div id="tmTo">'+chip("tmToC","ALL","All other PDAs",true)+'<span id="tmToMore" style="font-size:12px;color:#5f6368">Loading PDAs…</span></div>'+
+    '<div style="font-size:11px;font-weight:800;color:#5f6368;text-transform:uppercase;letter-spacing:.06em;margin:8px 0 6px">Disappears after</div>'+
+    '<div id="tmDur">'+DURS.map(function(d){return chip("tmDurC",d[0],d[1],d[0]===pickMin);}).join("")+chip("tmDurC","other","Other…",false)+'</div>'+
+    '<div id="tmWhen" style="font-size:12.5px;color:#1b5e20;margin:4px 0 12px"></div>'+
+    '<button type="button" id="tmSend" style="display:block;width:100%;min-height:54px;border:none;border-radius:14px;background:#2e7d32;color:#fff;font-size:15px;font-weight:900;margin-bottom:10px">Send message</button>'+
+    (sentRec?'<button type="button" id="tmTake" style="display:block;width:100%;min-height:48px;border:1px solid #c6ccd2;border-radius:12px;background:#fff;font-size:14px;font-weight:800">Take back my last message<div style="font-size:11.5px;font-weight:600;color:#5f6368;margin-top:2px">\u201c'+esc(String(sentRec.text).slice(0,40))+(String(sentRec.text).length>40?"\u2026":"")+'\u201d \u00b7 '+esc(sentRec.target==="ALL"?"all PDAs":sentRec.target)+' \u00b7 until '+esc(tmHHMM(sentRec.until))+'</div></button>':'')+
+    '<div id="tmMsg" style="font-size:12.5px;color:#5f6368;margin-top:10px;min-height:16px"></div>'+
+    '</div>'+backBtn("tmBack","Back to Options");
+  b.querySelector("#tmBack").onclick=goBack;
+  var msg=b.querySelector("#tmMsg");
+  var say=function(t,col){if(msg){msg.textContent=t;msg.style.color=col||"#5f6368";}};
+  var paint=function(sel,val){var cs=b.querySelectorAll(sel);for(var i=0;i<cs.length;i++){var on=cs[i].getAttribute("data-v")===String(val);cs[i].style.borderColor=on?"#2e7d32":"#c6ccd2";cs[i].style.background=on?"#e8f5e9":"#fff";cs[i].style.color=on?"#1b5e20":"#202124";}};
+  var when=function(){var w=b.querySelector("#tmWhen");if(w)w.textContent="Gone at "+tmHHMM(Date.now()+pickMin*60000)+" ("+tmDur(pickMin*60000)+" from sending)";};
+  var wireTo=function(){var cs=b.querySelectorAll(".tmToC");for(var i=0;i<cs.length;i++){(function(c){c.onclick=function(){pickTo=c.getAttribute("data-v");paint(".tmToC",pickTo);};})(cs[i]);}};
+  var cs=b.querySelectorAll(".tmDurC");
+  for(var i=0;i<cs.length;i++){(function(c){c.onclick=function(){
+    var v=c.getAttribute("data-v");
+    if(v==="other"){
+      var n=0;try{n=parseInt(prompt("Disappear after how many minutes? (1 to 720)",String(pickMin)),10);}catch(e){}
+      if(!(n>=1&&n<=720)){say("Pick between 1 minute and 12 hours.","#8a5300");return;}
+      pickMin=n;paint(".tmDurC","other");c.textContent=tmDur(n*60000);
+    }else{pickMin=parseInt(v,10);paint(".tmDurC",v);var o=b.querySelector('.tmDurC[data-v="other"]');if(o)o.textContent="Other…";}
+    when();say("");
+  };})(cs[i]);}
+  when();wireTo();
+  // Fill in the named PDAs from the fleet board (this one left out).
+  try{var c=cfg();ghList(c,"roster").then(function(files){
+    var me=myName();
+    var names=(files||[]).map(function(x){return String(x.name).replace(/\.json$/,"");}).filter(function(n){return n&&n!==safeName(me);});
+    return Promise.all(names.map(function(n){return ghGet(c,"roster/"+n+".json").then(function(f){var r=f&&P(f.text);return r&&r.name&&r.name!==me?r.name:null;}).catch(function(){return null;});}));
+  }).then(function(list){
+    var m=b.querySelector("#tmToMore");if(!m)return;
+    list=(list||[]).filter(Boolean).sort();
+    var span=document.createElement("span");
+    span.innerHTML=list.map(function(n){return chip("tmToC",n,esc(n),false);}).join("");
+    m.replaceWith(span);wireTo();
+  },function(){var m=b.querySelector("#tmToMore");if(m)m.textContent="(couldn\u2019t load the PDA list \u2014 All still works)";});}catch(e){}
+  b.querySelector("#tmSend").onclick=function(){
+    var t=((b.querySelector("#tmTxt")||{}).value||"").trim();
+    if(!t){say("Type a message first.","#8a5300");return;}
+    var until=Date.now()+pickMin*60000, id=uid(), btn=this;
+    btn.disabled=true;say("Sending…");
+    sendCommand(pickTo,"tmsg",t,"",{id:id,until:until,mins:pickMin}).then(function(){
+      try{localStorage.setItem(TM_SENT_KEY,J({id:id,text:t,target:pickTo,until:until}));}catch(e){}
+      say("Sent to "+(pickTo==="ALL"?"all the other PDAs":pickTo)+". It disappears at "+tmHHMM(until)+".","#1b5e20");
+      var ta=b.querySelector("#tmTxt");if(ta)ta.value="";btn.disabled=false;
+    },function(){btn.disabled=false;say("Failed \u2014 check the connection.","#8a5300");});
+  };
+  var tk=b.querySelector("#tmTake");
+  if(tk)tk.onclick=function(){
+    var s=P(localStorage.getItem(TM_SENT_KEY));if(!s)return;
+    say("Taking it back…");
+    sendCommand(s.target,"tmsgclear","","",{ref:s.id}).then(function(){
+      try{localStorage.removeItem(TM_SENT_KEY);}catch(e){}
+      try{tk.remove();}catch(e){}
+      say("Taken back. It goes off the PDAs on their next check-in.","#1b5e20");
+    },function(){say("Failed \u2014 check the connection.","#8a5300");});
+  };
+};
+
 function agoTxt(ts){
   if(!ts)return "never";
   var m=Math.round((Date.now()-ts)/60000);
@@ -15536,7 +15787,9 @@ try{setTimeout(kioskWatch,3000);}catch(e){}
 try{setInterval(kioskWatch,2500);}catch(e){}
 try{
   setTimeout(function(){try{selfHeal();}catch(e){} try{pollOnce();}catch(e){}},8000);
-  setInterval(function(){try{selfHeal();}catch(e){} try{pollOnce();}catch(e){}},POLL_MS);
+  (window.__wildIntervalAlways||setInterval)(function(){
+    try{if(window.__wildFleetDeepOk&&!window.__wildFleetDeepOk())return;}catch(e){}
+    try{selfHeal();}catch(e){} try{pollOnce();}catch(e){}},POLL_MS);
 }catch(e){}
 })();
 </script>
