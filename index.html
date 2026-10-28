@@ -475,6 +475,7 @@ body.addr-locked #rl .lockmsg{display:flex}
       <div class="cam-corner bl"></div>
       <div class="cam-corner br"></div>
     </div>
+    <button id="pdaFreezeBtn" type="button" style="display:none;position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:260;min-width:170px;height:58px;padding:0 16px;border:2px solid #fff;border-radius:26px;background:rgba(26,115,232,.92);color:#fff;font-size:17px;font-weight:900;letter-spacing:.03em;box-shadow:0 3px 10px rgba(0,0,0,.45);-webkit-tap-highlight-color:transparent;touch-action:manipulation">❄️ FREEZE</button>
     <div id="camStatus" style="position:absolute;bottom:16px;left:16px;right:16px;text-align:center;color:#fff;font-size:13px;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:10px">Starting camera…</div>
   </div>
   <div id="camHiddenBanner" style="display:none;flex-shrink:0;align-items:center;justify-content:center;gap:9px;padding:10px 14px;background:#000;color:#9aa0a6;font-size:13px;line-height:1.3">
@@ -617,7 +618,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=241;
+const THIS_BUILD_NUM=267;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 /* ── AREA: W2 or W8 (v6.7) ──────────────────────────────────────────────
    Ash: "add the west 8 walk list to the app. have a option on the pda to
@@ -687,7 +688,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v7.6";
+const BUILD_NAME="v7.32";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -712,7 +713,7 @@ const REPO_DATA_BUILD=202;                 // build of the wild_data.json beside
    app from GitHub" compared the repo's APK (170) against the installed one
    (182) and reported the repo as behind. It is the sixth release stamp and
    was the one nobody was counting. */
-const REPO_APK_BUILD=199;
+const REPO_APK_BUILD=225;
 // Fingerprint + row count of that wild_data.json. A data file that was
 // NOT re-uploaded with this one (or that arrived truncated) fails these
 // and is thrown away, instead of quietly putting older addresses back.
@@ -3539,6 +3540,11 @@ function handTypeKeysRefresh(){
     b.style.border=on?live:dead;
     b.style.color=on?"var(--txt)":"var(--sub)";
     b.style.cursor=on?"pointer":"default";
+    // available keys extra large & bold; dead keys small. Fixed line height so rows never jump.
+    b.style.lineHeight="30px";b.style.padding="8px 0";
+    b.style.fontSize=on?"27px":"13px";b.style.fontWeight=on?"900":"700";
+    b.style.background=on?"#fff8c2":"var(--sur)";
+    b.style.border=on?"2px solid #8f8a25":dead;
   });
 }
 const HAND_TYPE_LOCK=WILD_AREA+" ";
@@ -3612,7 +3618,17 @@ function showHandTypeIn(keep){
       border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
   </div>`;
   box.querySelectorAll(".handKey").forEach(b=>{
-    b.onclick=()=>handTypeSet(handTypeBuf+b.dataset.k);
+    b.onclick=()=>{
+      const before=handTypeBuf.length;
+      handTypeSet(handTypeBuf+b.dataset.k);
+      // 3rd character typed -> look it up straight away (short pause so the
+      // full postcode is seen on the display first)
+      if(handTypeBuf.length===HAND_TYPE_LOCK.length+3&&before<handTypeBuf.length){
+        const typed=handTypeBuf;
+        setTimeout(()=>{try{const hr=document.getElementById("handResult");
+          if(handTypeBuf===typed&&hr&&hr.dataset.sub==="typein")handTypeLookup();}catch(e){}},250);
+      }
+    };
   });
   const del=document.getElementById("handTypeDel");
   if(del)del.onclick=()=>{if(handTypeBuf.length>HAND_TYPE_LOCK.length)handTypeSet(handTypeBuf.slice(0,-1));};
@@ -5293,7 +5309,7 @@ async function freezeAndScan(){
     // stream become 6-8px in the still — the difference between the DPM
     // enhancement failing and biting. Raced against a timeout because
     // takePhoto wedges on some devices; the frame pass has already run.
-    if(!pick&&window.ImageCapture&&camStream){
+    if(!pick&&window.ImageCapture&&camStream&&!window.WildKiosk){
       try{
         setStatus("🧊 Trying a full-resolution shot…");
         const track=camStream.getVideoTracks()[0];
@@ -5323,8 +5339,64 @@ async function freezeAndScan(){
     photoBusy=false;
   }
 }
+function pdaFreezeRefresh(){
+  const b=document.getElementById("pdaFreezeBtn");if(!b)return;
+  b.style.display=window.WildKiosk?"block":"none";
+  // the button sits on the very bottom of the screen: leave room under the results so nothing is hidden behind it
+  try{const qb=document.getElementById("qrBottom");if(qb&&window.WildKiosk)qb.style.paddingBottom="84px";}catch(e){}
+  if(pdaFreezeBusy&&frameFrozen){b.textContent="⏳ READING";b.style.background="rgba(95,99,104,.92)";}
+  else if(frameFrozen){b.textContent="▶️ RESUME";b.style.background="rgba(24,128,56,.95)";}
+  else{b.textContent="❄️ FREEZE";b.style.background="rgba(26,115,232,.92)";}
+}
+let pdaFreezeBusy=false;
+async function pdaFreezeTap(){
+  if(frameFrozen){unfreezeFrame();return;}   // tap again = unfreeze (also cancels a read in progress)
+  if(pdaFreezeBusy)return;
+  const v=document.getElementById("camVideo");
+  if(!scanning||!v||!v.videoWidth){setStatus("📷 Camera not ready yet");return;}
+  if(photoBusy||stillBusy||ocrBusy){setStatus("⏳ Still reading — try again in a moment");return;}
+  frameFrozen=true; pdaFreezeBusy=true; pdaFreezeRefresh();
+  try{
+    setStatus("✋ Hold still…");
+    // let the tap's own wobble die down; take the first still moment (max 0.8 s)
+    const t0=Date.now();
+    await new Promise(r=>setTimeout(r,250));
+    while(Date.now()-t0<800){ if(typeof shakeLast!=="undefined"&&shakeLast&&shakeSteadyRun>=3)break; await new Promise(r=>setTimeout(r,40)); }
+    if(!frameFrozen)return;
+    try{v.pause();}catch(e){}
+    setStatus("❄️ Frozen — reading…");
+    let pick=null;
+    photoBusy=true;
+    try{
+      const c=document.createElement("canvas");c.width=v.videoWidth;c.height=v.videoHeight;
+      c.getContext("2d").drawImage(v,0,0);
+      pick=await runPhotoLadder(c);
+      c.width=c.height=0;
+    }catch(e){}finally{photoBusy=false;}
+    if(!frameFrozen)return;
+    if(pick){
+      lastRaw=""; acceptScan(pick.rawValue);
+      setStatus("❄️ Frozen — tap RESUME to scan the next one");
+      return;
+    }
+    if(ocrEnabled){
+      ocrAutoTried=true;
+      await runOCR();
+      ocrAutoTried=false;
+      if(!frameFrozen)return;
+      const st=document.getElementById("camStatus");
+      if(st&&!/No |Couldn|not ready/.test(st.textContent))setStatus("❄️ Frozen — tap RESUME to scan the next one");
+      else if(st)setStatus(st.textContent+" — tap RESUME and try again");
+    }else{
+      setStatus("❄️ No barcode in that picture — tap RESUME (turn TEXT SCAN on to read printed text)");
+    }
+  }finally{
+    pdaFreezeBusy=false; pdaFreezeRefresh();
+  }
+}
 function unfreezeFrame(){
   frameFrozen=false;
+  try{pdaFreezeRefresh();}catch(e){}
   const fb=document.getElementById("freezeBtn");
   if(fb)fb.style.background="rgba(0,0,0,.55)";
   const v=document.getElementById("camVideo");
@@ -5340,7 +5412,7 @@ function openScanInfoSheet(){
     ["ℹ️<br>INFO","Info","This guide — what every button on the scanner does."],
     ["✕","Close","Closes the scanner and goes back to the app. (The ✕ at the far left of the bar.)"],
     ["AUTO<br>ZOOM","Auto zoom","Zooms the camera in 2× to help read small or far-away codes. Turn off for the normal wide view."],
-    ["TEXT<br>SCAN","Text scan","Reads the printed address with text recognition — for labels where no barcode will decode."],
+    ...(window.WildKiosk?[]:[["TEXT<br>SCAN","Text scan","Reads the printed address with text recognition — for labels where no barcode will decode."]]),
     ["5 SEC<br>WAIT","5 sec wait","Adds a 5-second countdown before each scan is accepted, so you don't scan the same item twice by accident."],
     ["RM<br>ONLY","RM only","Off by default. When ON, only Royal Mail Data Matrix codes are read — 1D barcodes, QR and other label codes are ignored. Turn it on if Amazon or other label codes keep getting picked up."],
     ["BOX<br>ONLY","Box only","On by default. Only reads codes inside the square viewfinder frame, so a label just outside the box can't be scanned by mistake. Turn it off to scan the whole camera view."],
@@ -10285,7 +10357,8 @@ let ocrAutoTried=false;
 // TEXT SCAN is a toggle like AUTO ZOOM: when ON, OCR runs automatically once
 // barcode detection has been stuck for a few seconds. Persisted per device.
 let ocrEnabled=false;
-try{if(localStorage.getItem("ocrDisabled")==="0")ocrEnabled=true;}catch(e){}
+try{if(localStorage.getItem("ocrDisabled")==="0"&&!window.WildKiosk)ocrEnabled=true;}catch(e){}
+try{if(window.WildKiosk)localStorage.setItem("ocrDisabled","1");}catch(e){}
 
 function loadTesseract(){
   if(window.Tesseract)return Promise.resolve(true);
@@ -10352,13 +10425,13 @@ function normalizeOcrPostcode(tok){
   const t=tok.toUpperCase().replace(/[^A-Z0-9]/g,"");
   if(t.length!==5)return null;
   if(t[0]!=="W")return null;
-  const d2={"2":"2","Z":"2","?":"2"}[t[1]];if(!d2)return null;
+  const d2=(WILD_AREA==="W8"?{"8":"8","B":"8","3":"8"}:{"2":"2","Z":"2","?":"2"})[t[1]];if(!d2)return null;
   const dig={"0":"0","O":"0","1":"1","I":"1","L":"1","2":"2","Z":"2","3":"3","4":"4","5":"5","S":"5","6":"6","7":"7","8":"8","B":"8","9":"9","G":"9"}[t[2]];
   if(!dig)return null;
   const L=c=>({"0":"O","1":"I","5":"S","8":"B","2":"Z","6":"G"}[c]||c);
   const l1=L(t[3]),l2=L(t[4]);
   if(!/[A-Z]/.test(l1)||!/[A-Z]/.test(l2))return null;
-  return "W2 "+dig+l1+l2;
+  return "W"+d2+" "+dig+l1+l2;
 }
 
 function extractOcrPostcodes(text){
@@ -10366,7 +10439,7 @@ function extractOcrPostcodes(text){
   // and keep only postcodes that actually exist in the dataset.
   const known=new Set(allData.map(d=>{const p=d.d.split(",");return p[p.length-1].replace(/\s/g,"").toUpperCase();}));
   const out=[];
-  const re=/W\s*[2Z]\s*[0-9OSILB]\s*[A-Z0-9]\s*[A-Z0-9]/gi;
+  const re=new RegExp("W\\s*"+(WILD_AREA==="W8"?"[8B3]":"[2Z]")+"\\s*[0-9OSILB]\\s*[A-Z0-9]\\s*[A-Z0-9]","gi");
   let m;
   while((m=re.exec(text))!==null){
     const pc=normalizeOcrPostcode(m[0]);
@@ -10404,10 +10477,11 @@ async function runOCR(){
     // recognition more than any contrast tweak on its own.
     if(!ocrCanvas){ocrCanvas=document.createElement("canvas");ocrCtx=ocrCanvas.getContext("2d",{willReadFrequently:true});}
     const vw=vid.videoWidth,vh=vid.videoHeight;
-    const target=1800;
-    const scale=Math.min(2,Math.max(0.5,target/Math.max(1,vw)));
+    const target=(window.WildKiosk?1280:1800);
+    const scale=Math.min((window.WildKiosk?1:2),Math.max(0.5,target/Math.max(1,vw)));
     ocrCanvas.width=Math.round(vw*scale);ocrCanvas.height=Math.round(vh*scale);
     ocrCtx.imageSmoothingEnabled=true;ocrCtx.imageSmoothingQuality="high";
+    if(window.WildKiosk&&!frameFrozen)await ocrWaitSteady(vid);
     ocrCtx.drawImage(vid,0,0,ocrCanvas.width,ocrCanvas.height);
     setStatus("\u{1F4D6} Reading text\u2026");
     // Build a high-contrast black & white copy with an adaptive threshold.
@@ -10445,13 +10519,19 @@ async function runOCR(){
     }else{
       const rb=document.getElementById("qrResult");if(rb)rb.value="";
       const wk=document.getElementById("qrWalk");if(wk)wk.innerHTML="";
-      setStatus("\u26A0\uFE0F No W2 postcode found in the text \u2014 try again");
+      setStatus("\u26A0\uFE0F No "+WILD_AREA+" postcode found in the text \u2014 try again");
     }
   }finally{
     ocrBusy=false;
     if(b)b.style.opacity="1";
+    if(window.WildKiosk)ocrIdleArm();
   }
 }
+let ocrIdleTimer=null;
+function ocrRelease(){try{if(ocrIdleTimer){clearTimeout(ocrIdleTimer);ocrIdleTimer=null;}}catch(e){}
+  if(ocrWorker){const w=ocrWorker;ocrWorker=null;try{const r=w.terminate();if(r&&r.catch)r.catch(()=>{});}catch(e){}}}
+function ocrIdleArm(){try{if(ocrIdleTimer)clearTimeout(ocrIdleTimer);}catch(e){}ocrIdleTimer=setTimeout(()=>{if(!ocrBusy)ocrRelease();},120000);}
+window.__wildOcrRelease=ocrRelease;
 
 function refreshOcrBtn(){
   const b=document.getElementById("ocrBtn");
@@ -10467,6 +10547,7 @@ function refreshOcrBtn(){
 function setupOcrButton(){
   const b=document.getElementById("ocrBtn");
   if(!b)return;
+  if(window.WildKiosk){b.style.display="none";ocrEnabled=false;return;}
   refreshOcrBtn();
   b.onclick=()=>{
     ocrEnabled=!ocrEnabled;
@@ -10829,6 +10910,11 @@ function openOptionsMenu(){
   const MENU=[
     {e:"🗺️",label:"Area \u2014 W2 or W8",sub:"Now on "+WILD_AREA+" ("+WILD_AREA_NAMES[WILD_AREA]+"). Switch round",go:goHand(()=>showHandArea("options"))},
     {e:"ℹ️",label:"App version",sub:"Which build is running, and updates",go:goHand(()=>openAppVersion())},
+    {e:"📶",label:"Wi-Fi setup",sub:"Enter the RM network login (username + password)",go:goHand(()=>showHandWifi())},
+    {e:"📟",label:"Fleet",sub:"See the PDAs, send alarm / lock / message",go:goHand(()=>showHandFleet())},
+    {e:"📣",label:"Notice to fleet",sub:"Flash a note to every PDA",go:goHand(()=>showHandNotice())},
+    {e:"🔗",label:"Fleet setup",sub:"Scan the setup code, name this PDA",go:goHand(()=>showHandFleetSetup())},
+    {e:"✅",label:"Health check",sub:"Scanner, Wi-Fi, text-scan, fleet link — all at a glance",go:goHand(()=>showHandHealth())},
     {e:"⬅️",label:"Back button menu",sub:"Kiosk mode, exit, StageNow, Android settings",go:goHand(()=>showHandBackHold())},
     ...(wildBrightness()?[{e:"🔆",label:"Brightness",sub:"Screen brightness, auto or fixed",go:goHand(()=>showHandBrightness())}]:[]),
     {e:"🔒",label:"Security &amp; location",sub:"Opens Android's Security &amp; location \u2014 device admin, screen lock, location",go:()=>{
@@ -11429,8 +11515,8 @@ setupLensButton();
 
 // ---- Camera resolution preference. 1080p reads smaller/further codes;
 // 720p is lighter and smoother on older phones. Persisted per device.
-let camRes=1080;
-try{if(localStorage.getItem("camRes")==="720")camRes=720;}catch(e){}
+let camRes=(window.WildKiosk?720:1080);
+try{const _cr=localStorage.getItem("camRes");if(_cr==="720")camRes=720;else if(_cr==="1080")camRes=1080;}catch(e){}
 function resDims(){return camRes===720?{w:1280,h:720}:{w:1920,h:1080};}
 function refreshResBtn(){
   const b=document.getElementById("resBtn");
@@ -11455,6 +11541,11 @@ function setupResButton(){
   };
 }
 
+function camFailMsg(e){const n=String((e&&e.name)||"");
+  if(/NotAllowed|Permission|Security/i.test(n))return "\u26D4 Camera permission is OFF for this app \u2014 Android Settings \u2192 Apps \u2192 Wild App \u2192 Permissions \u2192 Camera";
+  if(/NotFound|Devices/i.test(n))return "No camera found on this device";
+  if(/NotReadable|Track|Abort/i.test(n))return "Camera is busy or failed to start ("+n+") \u2014 close other camera apps and try again";
+  return "Camera unavailable"+(n?" ("+n+")":"")+" \u2014 paste code text below instead";}
 async function startCamera(){
   const devId=manualLensId||await resolveStandardRearDeviceId();
   const dims=resDims();
@@ -11523,7 +11614,7 @@ async function startCamera(){
         watchCamTrack();
         startScanLoop();
       }catch(e3){
-        setStatus("Camera unavailable — paste code text below instead");
+        setStatus(camFailMsg(e3));
         document.getElementById("qrResult").removeAttribute("readonly");
       }
     }
@@ -12207,9 +12298,38 @@ function getBarcodeDetector(){
 //   • steady  — motion has stayed low for a couple of samples in a row.
 // ~5k pixels of integer math — negligible beside a single decode. It fails
 // OPEN (returns steady+sharp) so a hiccup never blocks scanning.
-let shakeCanvas=null,shakeCtx=null,shakePrev=null,shakeSharpMax=0,shakeSteadyRun=0;
-function resetShakeSampler(){shakePrev=null;shakeSharpMax=0;shakeSteadyRun=0;}
+let shakeCanvas=null,shakeCtx=null,shakePrev=null,shakeSharpMax=0,shakeSteadyRun=0,shakeMovingRun=0;
+let shakeTimer=null,shakeLast=null;
+function resetShakeSampler(){shakePrev=null;shakeSharpMax=0;shakeSteadyRun=0;shakeMovingRun=0;}
 function sampleSteadiness(vid){
+  if(window.WildKiosk){
+    if(!shakeTimer){
+      shakeTimer=setInterval(()=>{
+        try{
+          const v=document.getElementById("camVideo");
+          if(!scanning){clearInterval(shakeTimer);shakeTimer=null;shakeLast=null;resetShakeSampler();return;}
+          if(!v||v.readyState<2)return;
+          shakeLast=sampleSteadinessNow(v);
+        }catch(e){}
+      },66);
+    }
+    return shakeLast||{motion:0,sharp:0,sharpEnough:true,steady:false,movingHard:false,movingRun:0};
+  }
+  return sampleSteadinessNow(vid);
+}
+// PDA "stabilised" capture for the text read: wait (up to 1.5 s) for a still,
+// sharp frame before grabbing it; if the hand never settles, read anyway.
+async function ocrWaitSteady(vid){
+  const t0=Date.now(); let said=false;
+  while(Date.now()-t0<1500){
+    const s=shakeLast;
+    if(s && shakeSteadyRun>=4 && s.sharpEnough) return true;
+    if(!said && Date.now()-t0>250){said=true;setStatus("\u270B Hold still\u2026 reading the text");}
+    await new Promise(r=>setTimeout(r,50));
+  }
+  return false;
+}
+function sampleSteadinessNow(vid){
   try{
     const W=80,H=60,n=W*H;
     if(!shakeCanvas){shakeCanvas=document.createElement("canvas");shakeCanvas.width=W;shakeCanvas.height=H;shakeCtx=shakeCanvas.getContext("2d",{willReadFrequently:true});}
@@ -12240,7 +12360,8 @@ function sampleSteadiness(vid){
     const sharpEnough=sharp>=Math.max(60,shakeSharpMax*0.55);
     const MOTION_STEADY=6; // handheld-still measures ~1–4; visibly moving ~10–40
     if(motion<=MOTION_STEADY)shakeSteadyRun++;else shakeSteadyRun=0;
-    return {motion,sharp,sharpEnough,steady:shakeSteadyRun>=2,movingHard:motion>MOTION_STEADY*2.2};
+    const movingHard=motion>MOTION_STEADY*2.2; shakeMovingRun=movingHard?shakeMovingRun+1:0;
+    return {motion,sharp,sharpEnough,steady:shakeSteadyRun>=2,movingHard,movingRun:shakeMovingRun};
   }catch(e){
     return {motion:0,sharp:0,sharpEnough:true,steady:true,movingHard:false};
   }
@@ -12288,7 +12409,7 @@ function startScanLoop(){
     // Throttle detection attempts. The raw pass now runs on a downscaled
     // frame so it's cheap; ~16 attempts/sec keeps response snappy without
     // spinning the CPU flat out. rAF still caps the true ceiling at 60Hz.
-    if(vid.readyState>=2 && now-lastAttempt>=60){
+    if(vid.readyState>=2 && now-lastAttempt>=60 && !(window.WildKiosk&&ocrBusy)){
       lastAttempt=now;
       try{
         const vw=vid.videoWidth,vh=vid.videoHeight;
@@ -12325,7 +12446,7 @@ function startScanLoop(){
         // sharp picture of a blur, so hold it until the frame is steady AND
         // sharp. A long-stuck fallback still fires so it can't wait forever.
         // One shot per stuck period, re-armed after 8s.
-        if(failFor>3000 && ((mo.steady && mo.sharpEnough) || failFor>5000) && !stillTried && !stillBusy && !ocrBusy && window.ImageCapture){
+        if(failFor>3000 && ((mo.steady && mo.sharpEnough) || failFor>5000) && !stillTried && !stillBusy && !ocrBusy && window.ImageCapture && !window.WildKiosk){
           stillTried=true;
           runStillRescue(bd);
         }
@@ -12333,25 +12454,25 @@ function startScanLoop(){
         // clean black/white. If we've been stuck a good while (past the zoom
         // attempt) and haven't hinted the torch, nudge the user to side-light
         // it. One-shot per session so it isn't nagging.
-        if(stuck && failFor>3200 && !stillBusy && !rakeHinted && !torchHinted){
+        if(stuck && failFor>3200 && !stillBusy && !rakeHinted && !torchHinted && !(window.WildKiosk&&ocrEnabled)){
           rakeHinted=true;
           setStatus("↘️ Raised/embossed code? Tilt it to catch light from the side");
         }
         // If the miss is most likely just movement, say so plainly. Placed
         // after the other tips so it wins the status line while shaking, and
         // re-armed shortly after so it can nag again if the wobble persists.
-        if(stuck && failFor>1200 && mo.movingHard && !steadyHinted && !stillBusy){
+        if(stuck && failFor>1200 && mo.movingHard && !steadyHinted && !stillBusy && (!window.WildKiosk||((mo.movingRun||0)>=8&&!ocrBusy))){
           steadyHinted=true;
           setStatus("✋ Hold steady — the camera's moving");
-          setTimeout(()=>{steadyHinted=false;},2500);
+          setTimeout(()=>{steadyHinted=false;},(window.WildKiosk?6000:2500));
         }
         // TEXT SCAN toggle on + stuck for a good while → read the printed
         // label automatically (once per stuck period; re-armed on a timer).
-        if(ocrEnabled && failFor>4000 && !ocrBusy && !ocrAutoTried){
+        if(ocrEnabled && failFor>(window.WildKiosk?1500:4000) && !ocrBusy && !ocrAutoTried){
           ocrAutoTried=true;
           runOCR().finally(()=>{
             noDetectSince=Date.now(); // give barcodes another window first
-            setTimeout(()=>{ocrAutoTried=false;},8000);
+            setTimeout(()=>{ocrAutoTried=false;},(window.WildKiosk?2500:8000));
           });
         }
         // Digital recovery (centre crops → contrast → DPM) always runs when
@@ -13677,6 +13798,12 @@ function releaseWakeLock(){
   try{if(wakeLock){wakeLock.release();wakeLock=null;}}catch(e){wakeLock=null;}
 }
 function closeQR(){
+  try{scanGen++;}catch(e){}
+  try{if(typeof shakeTimer!=="undefined"&&shakeTimer){clearInterval(shakeTimer);shakeTimer=null;shakeLast=null;}}catch(e){}
+  try{frameFrozen=false;if(typeof pdaFreezeBusy!=="undefined")pdaFreezeBusy=false;if(typeof pdaFreezeRefresh==="function")pdaFreezeRefresh();}catch(e){}
+  try{const v=document.getElementById("camVideo");if(v){try{v.pause();}catch(_){}v.srcObject=null;}}catch(e){}
+  try{if(window.WildKiosk){if(typeof ocrRelease==="function")ocrRelease();
+    if(ocrCanvas){ocrCanvas.width=ocrCanvas.height=0;}if(ocrBwCanvas){ocrBwCanvas.width=ocrBwCanvas.height=0;}}}catch(e){}
   releaseWakeLock();
   scanning=false;
   cancelAnimationFrame(scanLoop);
@@ -13766,10 +13893,17 @@ document.addEventListener("visibilitychange",()=>{
     var p=document.getElementById("handPanel");
     if(typeof openHand==="function"&&p){
       try{openHand();}catch(e){}
+      var camWas=false;
       setInterval(function(){
         var hp=document.getElementById("handPanel");
+        var qp=document.getElementById("qrPanel");
+        var cam=!!(qp&&qp.classList.contains("show"));
+        if(cam){camWas=true;return;}                 // camera (text scan) in use: leave it alone
+        try{if((typeof camStream!=="undefined"&&camStream)||(typeof scanning!=="undefined"&&scanning)){closeQR();}}catch(e){}   // a late camera start after closing
+        if(camWas){camWas=false;try{if(window.__wildOcrRelease)window.__wildOcrRelease();}catch(e){}}
         if(hp&&!hp.classList.contains("show")){try{openHand();}catch(e){}}
-      },800);
+      },300);
+      try{var qc=document.getElementById("qrClose");if(qc)qc.addEventListener("click",function(){setTimeout(function(){try{openHand();}catch(e){}},0);});}catch(e){}
       return;
     }
     if(tries++<100)setTimeout(boot,100);
@@ -14548,8 +14682,867 @@ document.addEventListener("visibilitychange",()=>{
 })();
 </script>
 
+
 <script>
-/* ══════════ v7.6 MESSAGES FROM ASH'S PHONE ══════════
+/* === RM Wi-Fi setup (WPA2-Enterprise / PEAP-MSCHAPv2) =======================
+   RM Wi-Fi needs a username + password (one shared login). This hands an MX
+   Enterprise Wi-Fi profile to the device through EMDK (native WildKiosk.wifiApply,
+   the same path the pull-down uses). Credentials live in localStorage on THIS
+   device only. The MX CSP version differs per device, so we try a short ladder
+   and remember the one this PDA accepts, like the pull-down does. -------------*/
+(function(){
+  var SSID_KEY="wildWifiSsid_v1", USER_KEY="wildWifiUser_v1", PASS_KEY="wildWifiPass_v1",
+      VER_KEY="wildWifiVer_v1",  AUTO_KEY="wildWifiAuto_v1";
+  var WIFI_VERSIONS=["8.4","7.0","9.2","6.0","10.1","5.0","4.4"];
+
+  function escXml(v){
+    return String(v==null?"":v)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+  function wifiBridge(){
+    try{return (window.WildKiosk&&typeof WildKiosk.wifiApply==="function")?WildKiosk:null;}catch(e){return null;}
+  }
+  window.wifiCreds=function(){
+    var o={ssid:"",user:"",pass:""};
+    try{o.ssid=localStorage.getItem(SSID_KEY)||"";}catch(e){}
+    try{o.user=localStorage.getItem(USER_KEY)||"";}catch(e){}
+    try{o.pass=localStorage.getItem(PASS_KEY)||"";}catch(e){}
+    return o;
+  };
+  function wifiAuto(){try{return localStorage.getItem(AUTO_KEY)!=="0";}catch(e){return true;}}
+  function wifiVerStored(){try{return localStorage.getItem(VER_KEY)||"";}catch(e){return "";}}
+
+  /* Enterprise profile: SecurityMode=2 (Enterprise), WPAMode=2 (WPA2),
+     EncryptionWPA2=1 (AES-CCMP), Authentication=2 (PEAP-MSCHAPV2),
+     Identity=username, PasswordClear=password. No certificate (username+password
+     only), so no server-cert parm is set. */
+  function wifiDoc(ssid,user,pass,ver){
+    var S=escXml(ssid),U=escXml(user),P=escXml(pass);
+    function blk(action,full){
+      var x='<characteristic version="'+ver+'" type="Wi-Fi">'
+        +'<characteristic type="System"><parm name="WiFiAction" value="enable"/></characteristic>'
+        +'<parm name="UseRegulatory" value="0"/><parm name="UseDiagnosticOptions" value="0"/><parm name="UseAdvancedOptions" value="0"/>'
+        +'<parm name="NetworkAction" value="'+action+'"/>'
+        +'<characteristic type="network-profile">'
+        +'<parm name="SSID" value="'+S+'"/>';
+      if(full){
+        x+='<parm name="SecurityMode" value="2"/>'
+          +'<parm name="WPAMode" value="2"/>'
+          +'<parm name="EncryptionWPA2" value="1"/>'
+          +'<parm name="Authentication" value="2"/>'
+          +'<parm name="Identity" value="'+U+'"/>'
+          +'<parm name="PasswordClear" value="'+P+'"/>'
+          +'<parm name="UseDHCP" value="1"/>'
+          +'<parm name="UseProxy" value="0"/>';
+      }
+      x+='</characteristic><parm name="UseHotspotOptions" value="0"/></characteristic>';
+      return x;
+    }
+    return '<wap-provisioningdoc>'+blk("Add",true)+blk("Connect",false)+'</wap-provisioningdoc>';
+  }
+  function wifiOk(r){return /SUCCESS|CHECK_XML/i.test(String(r||""));}
+  function wifiFatal(r){return /EMDK not open|no PROFILE feature|^ERR |no bridge/i.test(String(r||""));}
+
+  window.wifiApplyLadder=function(ssid,user,pass){
+    var b=wifiBridge();
+    if(!b)return {status:"no bridge",ver:"",tried:[]};
+    var list=WIFI_VERSIONS.slice(), first=wifiVerStored();
+    if(first){var i=list.indexOf(first);if(i>0){list.splice(i,1);list.unshift(first);}}
+    var tried=[], r="";
+    for(var n=0;n<list.length;n++){
+      var v=list[n];
+      try{r=String(b.wifiApply(wifiDoc(ssid,user,pass,v))||"");}catch(e){r="ERR "+e;}
+      tried.push(v);
+      if(wifiOk(r)){try{localStorage.setItem(VER_KEY,v);localStorage.setItem("wildWifiLastApply_v1",String(Date.now()));}catch(e){}return {status:r,ver:v,tried:tried};}
+      if(wifiFatal(r))return {status:r,ver:v,tried:tried};
+    }
+    try{localStorage.removeItem(VER_KEY);}catch(e){}
+    return {status:r,ver:"",tried:tried};
+  };
+  window.wifiExplain=function(r){
+    r=String(r||"");
+    if(/SUCCESS/i.test(r))return "Sent to the device — it accepted the network.";
+    if(/CHECK_XML/i.test(r))return "Accepted with a warning from the device.";
+    if(/no bridge/i.test(r))return "This build can't reach the device Wi-Fi settings.";
+    if(/EMDK not open|no PROFILE feature/i.test(r))return "The device isn't letting the app set Wi-Fi (MX/EMDK not ready).";
+    if(/FAILURE/i.test(r))return "The device refused it — check the username and password and try again.";
+    if(/^ERR/i.test(r))return "Something went wrong talking to the device.";
+    return "Device said: "+r;
+  };
+
+  /* Reachability probe. Two independent hosts: online if EITHER answers, so a
+     single host being down can't be mistaken for the PDA being offline. */
+  window.wifiConnected=function(cb){
+    var done=false; function fin(v){if(!done){done=true;try{cb(v);}catch(e){}}}
+    try{
+      var urls=["https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/version.txt"];
+      if(typeof WILD_SITE_URL!=="undefined"&&WILD_SITE_URL)urls.unshift(WILD_SITE_URL);
+      var pending=urls.length;
+      var to=setTimeout(function(){fin(false);},5000);
+      urls.forEach(function(url){
+        try{
+          fetch(url+(url.indexOf("?")<0?"?":"&")+"wifichk="+Date.now(),{mode:"no-cors",cache:"no-store"})
+            .then(function(){clearTimeout(to);fin(true);})
+            .catch(function(){pending--;if(pending<=0){clearTimeout(to);fin(false);}});
+        }catch(e){pending--;if(pending<=0){clearTimeout(to);fin(false);}}
+      });
+    }catch(e){fin(false);}
+  };
+
+  window.wifiBoot=function(){
+    if(!wifiAuto())return;
+    var c=wifiCreds(); if(!c.ssid||!c.user||!c.pass)return;
+    if(!wifiBridge())return;
+    // Don't double up with the fleet self-heal: skip if applied in the last 10 min.
+    try{var t=parseInt(localStorage.getItem("wildWifiLastApply_v1")||"0",10);if(t&&(Date.now()-t)<600000)return;}catch(e){}
+    wifiConnected(function(online){ if(online)return; try{wifiApplyLadder(c.ssid,c.user,c.pass);}catch(e){} });
+  };
+
+  window.showHandWifi=function(){
+    var box=document.getElementById("handResult"); if(!box)return;
+    try{handNav("wifi",showHandWifi);}catch(e){}
+    box.dataset.sub="wifi";
+    var c=wifiCreds();
+    var top=(typeof handTopBar==="function"?handTopBar("Wi-Fi setup"):"");
+    box.innerHTML=top
+      +'<div style="max-width:340px;margin:0 auto;text-align:left;line-height:1.5">'
+      +'<div style="font-size:13px;color:#5f6368;margin-bottom:12px">RM Wi-Fi login (shared username + password). Saved on this device only — never uploaded.</div>'
+      +'<div id="wfState" style="font-size:13px;font-weight:800;margin-bottom:12px">Checking connection…</div>'
+      +'<label style="font-size:12px;font-weight:700;color:#202124">Network name (SSID)</label>'
+      +'<input id="wfSsid" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" value="'+escXml(c.ssid)+'" '
+      +'style="display:block;width:100%;box-sizing:border-box;margin:5px 0 12px;padding:12px;border:1px solid #c6ccd2;border-radius:10px;font-size:15px">'
+      +'<label style="font-size:12px;font-weight:700;color:#202124">Username</label>'
+      +'<input id="wfUser" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" value="'+escXml(c.user)+'" '
+      +'style="display:block;width:100%;box-sizing:border-box;margin:5px 0 12px;padding:12px;border:1px solid #c6ccd2;border-radius:10px;font-size:15px">'
+      +'<label style="font-size:12px;font-weight:700;color:#202124">Password</label>'
+      +'<input id="wfPass" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" value="'+escXml(c.pass)+'" '
+      +'style="display:block;width:100%;box-sizing:border-box;margin:5px 0 6px;padding:12px;border:1px solid #c6ccd2;border-radius:10px;font-size:15px">'
+      +'<label style="font-size:12px;color:#5f6368;display:flex;align-items:center;gap:7px;margin-bottom:14px">'
+      +'<input id="wfShow" type="checkbox" style="width:18px;height:18px"> Show password</label>'
+      +'<button type="button" id="wfSave" style="display:block;width:100%;min-height:56px;padding:14px;border:1px solid #042A30;border-radius:14px;background:#498059;color:#fff;font-size:15px;font-weight:900;cursor:pointer">Save &amp; connect</button>'
+      +'<div id="wfMsg" style="font-size:12.5px;color:#5f6368;margin-top:12px;min-height:18px"></div>'
+      +'<label style="font-size:12px;color:#5f6368;display:flex;align-items:center;gap:7px;margin-top:14px">'
+      +'<input id="wfAuto" type="checkbox" '+(wifiAuto()?"checked":"")+' style="width:18px;height:18px"> Reconnect automatically on start-up if offline</label>'
+      +'<div style="font-size:11.5px;color:#5f6368;margin-top:12px">If the device refuses it, the username or password is probably wrong, or MX isn\'t ready yet — wait a moment and try again.</div>'
+      +'</div>'
+      +'<button type="button" id="wfBack" style="margin-top:18px;border:none;background:#f1f3f4;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">‹ Back to Options</button>';
+    if(typeof rawResultBlock==="function"){try{rawResultBlock(box);}catch(e){}}
+    if(typeof wireHandFixButtons==="function"){try{wireHandFixButtons();}catch(e){}}
+
+    var st=box.querySelector("#wfState");
+    if(st)wifiConnected(function(on){
+      st.textContent=on?"Currently connected to Wi-Fi":"Not connected to Wi-Fi";
+      st.style.color=on?"#1b5e20":"#8a5300";
+    });
+    var show=box.querySelector("#wfShow"), pass=box.querySelector("#wfPass");
+    if(show&&pass)show.onchange=function(){pass.type=show.checked?"text":"password";};
+    var auto=box.querySelector("#wfAuto");
+    if(auto)auto.onchange=function(){try{localStorage.setItem(AUTO_KEY,auto.checked?"1":"0");}catch(e){}};
+    var bk=box.querySelector("#wfBack");
+    if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){try{handGoIdle();}catch(_){}}};
+
+    var btn=box.querySelector("#wfSave"), msg=box.querySelector("#wfMsg");
+    if(btn)btn.onclick=function(){
+      var ssid=((box.querySelector("#wfSsid")||{}).value||"").trim();
+      var user=((box.querySelector("#wfUser")||{}).value||"").trim();
+      var pw=(box.querySelector("#wfPass")||{}).value||"";
+      if(!ssid){if(msg){msg.textContent="Enter the network name.";msg.style.color="#8a5300";}return;}
+      if(!user){if(msg){msg.textContent="Enter the username.";msg.style.color="#8a5300";}return;}
+      if(!pw){if(msg){msg.textContent="Enter the password.";msg.style.color="#8a5300";}return;}
+      try{localStorage.setItem(SSID_KEY,ssid);localStorage.setItem(USER_KEY,user);localStorage.setItem(PASS_KEY,pw);}catch(e){}
+      if(msg){msg.textContent="Sending to the device…";msg.style.color="#5f6368";}
+      setTimeout(function(){
+        var res=wifiApplyLadder(ssid,user,pw);
+        if(msg){msg.innerHTML=wifiExplain(res.status);msg.style.color=wifiOk(res.status)?"#1b5e20":"#8a5300";}
+        if(wifiOk(res.status)&&st){
+          setTimeout(function(){wifiConnected(function(on){
+            st.textContent=on?"Currently connected to Wi-Fi":"Not connected to Wi-Fi";
+            st.style.color=on?"#1b5e20":"#8a5300";
+          });},3000);
+        }
+      },30);
+    };
+  };
+
+  // Opens the camera scanner (where TEXT SCAN lives) with OCR switched on.
+  // The handheld screen has no camera button otherwise, so this is the way in.
+  try{
+    var _fb=document.getElementById("pdaFreezeBtn");
+    if(_fb&&window.WildKiosk){
+      _fb.addEventListener("click",function(e){e.stopPropagation();e.preventDefault();try{pdaFreezeTap();}catch(_){}});
+      try{pdaFreezeRefresh();}catch(_){}
+    }
+  }catch(e){}
+  window.openTextScan=function(){};   // (build 266) text scan removed
+
+
+  try{setTimeout(function(){try{wifiBoot();}catch(e){}},12000);}catch(e){}
+})();
+</script>
+
+
+<script>
+/* ===================================================================
+   WILD FLEET (build 242) — shared private-repo control for the PDA fleet.
+   One private GitHub repo is the shared board: Wi-Fi password, a notice,
+   a command queue, and a per-device heartbeat. Everything here is INERT
+   until the device is provisioned (Fleet setup). All network is wrapped
+   and failures are silent — the app must never be blocked by this.
+   =================================================================== */
+(function(){
+"use strict";
+var CFG_KEY="wildFleetCfg_v1";        // {owner,repo,branch,token,name}
+var DONE_KEY="wildFleetDone_v1";      // executed command ids
+var WIFI_REV_KEY="wildWifiRev_v1";    // last applied wifi rev
+var NOTICE_REV_KEY="wildNoticeRev_v1";// last dismissed notice rev
+var NOTE_KEY="wildFleetNote_v1";      // who's-got-it note for THIS pda
+var ROSTER_FILE_KEY="wildFleetRosterFile_v1"; // this pda's current roster filename (to clean up on rename)
+var LOCK_KEY="wildFleetLock_v1";      // persisted remote-lock state {pin} so a lock survives HOME/relaunch
+var BOOT_PIN_KEY="wildBootPin_v1";    // code required to start the app (default 7784, editable)
+function bootPin(){try{return localStorage.getItem(BOOT_PIN_KEY)||"7784";}catch(e){return "7784";}}
+var POLL_MS=180000;                   // 3 minutes
+
+function J(o){try{return JSON.stringify(o);}catch(e){return "";}}
+function P(s){try{return JSON.parse(s);}catch(e){return null;}}
+function cfg(){return P(localStorage.getItem(CFG_KEY));}
+function saveCfg(c){try{localStorage.setItem(CFG_KEY,J(c));}catch(e){}}
+function provisioned(){var c=cfg();return !!(c&&c.owner&&c.repo&&c.token);}
+function b64e(str){try{return btoa(unescape(encodeURIComponent(str)));}catch(e){try{return btoa(str);}catch(_){return"";}}}
+function b64d(b){try{return decodeURIComponent(escape(atob(b)));}catch(e){try{return atob(b);}catch(_){return"";}}}
+function esc(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+function nowTs(){return Date.now();}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function safeName(n){return String(n||"").replace(/[^A-Za-z0-9_-]/g,"_").slice(0,40)||"pda";}
+
+/* ---- this device ---- */
+function myName(){var c=cfg();return (c&&c.name)||"";}
+function myNote(){try{return localStorage.getItem(NOTE_KEY)||"";}catch(e){return"";}}
+function myArea(){try{return (typeof wildArea==="function")?wildArea():"";}catch(e){return"";}}
+function myBuild(){try{return (typeof THIS_BUILD_NUM!=="undefined")?THIS_BUILD_NUM:0;}catch(e){return 0;}}
+function myBattery(){
+  try{if(window.WildKiosk&&typeof WildKiosk.battery2==="function"){
+    var m=String(WildKiosk.battery2()||"").match(/\d+/);return m?parseInt(m[0],10):null;}}catch(e){}
+  return null;
+}
+
+/* ---- GitHub contents client ---- */
+function base(c){return "https://api.github.com/repos/"+c.owner+"/"+c.repo+"/contents/";}
+function hdr(c){return {"Authorization":"Bearer "+c.token,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"};}
+function ghGet(c,path){
+  var url=base(c)+path+"?ref="+(c.branch||"main")+"&_="+Date.now();
+  return fetch(url,{headers:hdr(c),cache:"no-store"}).then(function(r){
+    if(r.status===404)return null;
+    if(!r.ok)throw new Error("GET "+path+" "+r.status);
+    return r.json().then(function(o){return {text:b64d(String(o.content||"").replace(/\n/g,"")),sha:o.sha};});
+  });
+}
+function ghPut(c,path,text,msg){
+  function put(sha){
+    var body={message:msg||("wild "+path),content:b64e(text),branch:(c.branch||"main")};
+    if(sha)body.sha=sha;
+    return fetch(base(c)+path,{method:"PUT",headers:hdr(c),body:J(body)}).then(function(r){
+      if(r.status===409)return ghGet(c,path).then(function(cur){return put(cur&&cur.sha);});
+      if(!r.ok)throw new Error("PUT "+path+" "+r.status);
+      return true;
+    });
+  }
+  return ghGet(c,path).then(function(cur){return put(cur&&cur.sha);});
+}
+function ghDelete(c,path){
+  return ghGet(c,path).then(function(cur){
+    if(!cur)return true;  // already gone
+    return fetch(base(c)+path,{method:"DELETE",headers:hdr(c),
+      body:J({message:"remove "+path,sha:cur.sha,branch:(c.branch||"main")})})
+      .then(function(r){ if(!r.ok&&r.status!==404)throw new Error("DEL "+path+" "+r.status); return true; });
+  });
+}
+function ghList(c,dir){
+  var url=base(c)+dir+"?ref="+(c.branch||"main")+"&_="+Date.now();
+  return fetch(url,{headers:hdr(c),cache:"no-store"}).then(function(r){
+    if(r.status===404)return [];
+    if(!r.ok)throw new Error("LIST "+dir+" "+r.status);
+    return r.json().then(function(a){return (a||[]).filter(function(x){return x.type==="file";});});
+  });
+}
+
+/* ---- overlays: alarm / lock / flash / lost ---- */
+var alarmCtx=null,alarmTimer=null,vibTimer=null;
+function alarmStart(){
+  if(alarmTimer)return;
+  // Max the device volume on the media/alarm/notification streams so the
+  // alarm is actually audible (STREAM_MUSIC=3, STREAM_ALARM=4, STREAM_NOTIFICATION=5).
+  try{if(window.WildAudio&&WildAudio.set&&WildAudio.max){
+    [3,4,5].forEach(function(st){try{WildAudio.set(st,WildAudio.max(st));}catch(e){}});
+  }}catch(e){}
+  // Web Audio fallback (used in a browser; on the PDA it's often suspended
+  // with no user gesture, which is why only vibrate came through before).
+  var wa=null;
+  try{var AC=window.AudioContext||window.webkitAudioContext;if(AC){alarmCtx=alarmCtx||new AC();try{alarmCtx.resume&&alarmCtx.resume();}catch(e){}wa=alarmCtx;}}catch(e){}
+  function sound(){
+    var played=false;
+    // Native alarm tone (ToneGenerator on the alarm stream) — the reliable
+    // path on the handheld; works with no user gesture, unlike web audio.
+    try{if(window.WildKiosk&&typeof WildKiosk.alarmTone==="function"){WildKiosk.alarmTone(1);played=true;}}catch(e){}
+    if(!played&&wa){try{
+      var o=wa.createOscillator(),g=wa.createGain();
+      o.type="square";o.frequency.value=1000;g.gain.value=0.9;
+      o.connect(g);g.connect(wa.destination);o.start();
+      setTimeout(function(){try{o.stop();}catch(e){}},400);
+    }catch(e){}}
+  }
+  alarmTimer=setInterval(sound,1300);sound();  // native tone is 1.5s; re-trigger to keep it ringing
+  try{if(navigator.vibrate){vibTimer=setInterval(function(){try{navigator.vibrate(500);}catch(e){}},700);navigator.vibrate(500);}}catch(e){}
+}
+function alarmStop(){
+  if(alarmTimer){clearInterval(alarmTimer);alarmTimer=null;}
+  if(vibTimer){clearInterval(vibTimer);vibTimer=null;try{navigator.vibrate(0);}catch(e){}}
+  try{if(window.WildKiosk&&typeof WildKiosk.alarmTone==="function")WildKiosk.alarmTone(0);}catch(e){}
+}
+function removeOv(id){var e=document.getElementById(id);if(e&&e.parentNode)e.parentNode.removeChild(e);}
+function fleetClearAll(){
+  lockClear();alarmStop();removeOv("wildLockOv");removeOv("wildFlashOv");removeOv("wildAlarmOv");
+}
+/* Boot code: require a code to start the app. Shown once per app start (a
+   fresh launch / process relaunch re-asks, which is also what re-locks after
+   HOME on a kiosk device). */
+function showBootGate(){
+  try{if(sessionStorage.getItem("wildBootOk")==="1")return;}catch(e){}
+  if(document.getElementById("wildBootOv"))return;
+  var ov=document.createElement("div");ov.id="wildBootOv";
+  ov.style.cssText="position:fixed;inset:0;z-index:2147483645;background:#0b1f33;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:system-ui,sans-serif;padding:20px";
+  ov.innerHTML='<div style="font-size:44px">🔒</div><div style="font-size:20px;font-weight:900;margin:12px 0 14px">Enter code to start</div>'+
+    '<input id="wildBootPin" type="tel" inputmode="numeric" maxlength="8" style="font-size:26px;text-align:center;letter-spacing:6px;width:180px;padding:12px;border-radius:12px;border:none;margin-bottom:14px">'+
+    '<button type="button" id="wildBootBtn" style="min-width:180px;min-height:56px;font-size:17px;font-weight:900;border:none;border-radius:14px;background:#498059;color:#fff">Start</button>'+
+    '<div id="wildBootMsg" style="font-size:13px;color:#ffd4d4;margin-top:12px;min-height:16px"></div>';
+  document.body.appendChild(ov);
+  var inp=ov.querySelector("#wildBootPin"),btn=ov.querySelector("#wildBootBtn"),msg=ov.querySelector("#wildBootMsg");
+  function go(){ var ent=(inp.value||""),master=(typeof WILD_PIN!=="undefined"?String(WILD_PIN):"1984");
+    if(ent===bootPin()||ent===master){try{sessionStorage.setItem("wildBootOk","1");}catch(e){}if(ov.parentNode)ov.parentNode.removeChild(ov);} else {if(msg)msg.textContent="Wrong code";inp.value="";} }
+  if(btn)btn.onclick=go;
+  if(inp)inp.onkeydown=function(e){if(e.key==="Enter")go();};
+  try{inp.focus();}catch(e){}
+}
+function fleetAlarm(text){
+  alarmStart();
+  if(document.getElementById("wildAlarmOv"))return;
+  var ov=document.createElement("div");ov.id="wildAlarmOv";
+  ov.style.cssText="position:fixed;inset:0;z-index:2147483600;background:#b3261e;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:system-ui,sans-serif;padding:20px";
+  ov.innerHTML='<div style="font-size:54px">🔔</div><div style="font-size:22px;font-weight:900;margin:14px 0 24px">'+esc(text||"PDA ALARM")+'</div>'+
+    '<button type="button" id="wildAlarmBtn" style="min-width:200px;min-height:60px;font-size:18px;font-weight:900;border:none;border-radius:14px;background:#fff;color:#b3261e">Silence</button>';
+  document.body.appendChild(ov);
+  var b=ov.querySelector("#wildAlarmBtn");if(b)b.onclick=function(){alarmStop();removeOv("wildAlarmOv");};
+}
+function lockPersist(pin){try{localStorage.setItem(LOCK_KEY,J({pin:String(pin||"")}));}catch(e){}}
+function lockClear(){try{localStorage.removeItem(LOCK_KEY);}catch(e){}}
+function lockRestore(){try{var o=P(localStorage.getItem(LOCK_KEY));if(o)fleetLock(o.pin);}catch(e){}}
+function fleetLock(pin){
+  pin=pin||"7784";
+  lockPersist(pin);                 // survive HOME / relaunch
+  if(document.getElementById("wildLockOv"))return;
+  var ov=document.createElement("div");ov.id="wildLockOv";
+  ov.style.cssText="position:fixed;inset:0;z-index:2147483640;background:#0b1f33;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:system-ui,sans-serif;padding:20px";
+  ov.innerHTML='<div style="font-size:48px">🔒</div><div style="font-size:20px;font-weight:900;margin:12px 0 6px">This PDA is locked</div>'+
+    '<div style="font-size:14px;opacity:.85;margin-bottom:18px">Enter the PIN to unlock</div>'+
+    '<input id="wildLockPin" type="tel" inputmode="numeric" maxlength="8" style="font-size:26px;text-align:center;letter-spacing:6px;width:180px;padding:12px;border-radius:12px;border:none;margin-bottom:14px">'+
+    '<button type="button" id="wildLockBtn" style="min-width:180px;min-height:56px;font-size:17px;font-weight:900;border:none;border-radius:14px;background:#498059;color:#fff">Unlock</button>'+
+    '<div id="wildLockMsg" style="font-size:13px;color:#ffd4d4;margin-top:12px;min-height:16px"></div>';
+  document.body.appendChild(ov);
+  var inp=ov.querySelector("#wildLockPin"),btn=ov.querySelector("#wildLockBtn"),msg=ov.querySelector("#wildLockMsg");
+  function tryUnlock(){
+    var ent=(inp.value||""), master=(typeof WILD_PIN!=="undefined"?String(WILD_PIN):"1984");
+    if(ent===String(pin)||ent===master){lockClear();removeOv("wildLockOv");alarmStop();removeOv("wildFlashOv");removeOv("wildAlarmOv");}
+    else{if(msg)msg.textContent="Wrong PIN";inp.value="";}
+  }
+  if(btn)btn.onclick=tryUnlock;
+  if(inp)inp.onkeydown=function(e){if(e.key==="Enter")tryUnlock();};
+  try{inp.focus();}catch(e){}
+}
+function fleetFlash(text){
+  text=text||"RETURN TO DELIVERY OFFICE";
+  removeOv("wildFlashOv");
+  var ov=document.createElement("div");ov.id="wildFlashOv";
+  ov.style.cssText="position:fixed;left:0;right:0;top:0;z-index:2147483620;background:#8a1414;color:#fff;padding:18px 16px;text-align:center;font-family:system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.4)";
+  ov.innerHTML='<div id="wildFlashTxt" style="font-size:20px;font-weight:900;line-height:1.3">'+esc(text)+'</div>'+
+    '<button type="button" id="wildFlashBtn" style="margin-top:12px;min-height:44px;padding:0 18px;font-size:14px;font-weight:800;border:none;border-radius:10px;background:#fff;color:#8a1414">Dismiss</button>';
+  document.body.appendChild(ov);
+  var on=true;try{if(fleetFlash._t)clearInterval(fleetFlash._t);}catch(e){}
+  fleetFlash._t=setInterval(function(){var el=document.getElementById("wildFlashOv");if(!el){clearInterval(fleetFlash._t);return;}on=!on;el.style.background=on?"#8a1414":"#d32f2f";},600);
+  var b=ov.querySelector("#wildFlashBtn");if(b)b.onclick=function(){removeOv("wildFlashOv");};
+}
+function fleetLost(text){fleetLock();fleetFlash(text||"RETURN TO DELIVERY OFFICE");alarmStart();}
+
+/* ---- command execution ---- */
+function doneIds(){return P(localStorage.getItem(DONE_KEY))||[];}
+function markDone(id){var d=doneIds();if(d.indexOf(id)<0){d.push(id);while(d.length>200)d.shift();try{localStorage.setItem(DONE_KEY,J(d));}catch(e){}}}
+function execCmd(cmd){
+  switch(cmd.type){
+    case "alarm": fleetAlarm(cmd.text); break;
+    case "lock": fleetLock(cmd.pin); break;
+    case "message": fleetFlash(cmd.text); break;
+    case "lostmode": fleetLost(cmd.text); break;
+    case "clear": fleetClearAll(); break;
+    case "area_W2": try{if(typeof wildAreaSwitch==="function")wildAreaSwitch("W2");}catch(e){} break;
+    case "area_W8": try{if(typeof wildAreaSwitch==="function")wildAreaSwitch("W8");}catch(e){} break;
+  }
+}
+
+/* ---- Wi-Fi auto-pull (reuses the manual screen's ladder from build 241) ---- */
+function applyWifi(ssid,user,pass){
+  try{if(typeof wifiApplyLadder==="function")return wifiApplyLadder(ssid,user,pass);}catch(e){}
+  return null;
+}
+var WIFI_STAGED_KEY="wildWifiStaged_v1";      // a login not yet due (applyAfter in the future)
+var WIFI_LAST_APPLY_KEY="wildWifiLastApply_v1";
+var _offlineCount=0;
+function setCurrentWifi(ssid,user,pass){try{localStorage.setItem("wildWifiSsid_v1",ssid);localStorage.setItem("wildWifiUser_v1",user);localStorage.setItem("wildWifiPass_v1",pass);}catch(e){}}
+function applyWifiNow(ssid,user,pass){var r=applyWifi(ssid,user,pass);try{localStorage.setItem(WIFI_LAST_APPLY_KEY,String(Date.now()));}catch(e){}return r;}
+function wifiRecentlyApplied(){try{var t=parseInt(localStorage.getItem(WIFI_LAST_APPLY_KEY)||"0",10);return !!t&&(Date.now()-t)<600000;}catch(e){return false;}}
+/* A staged login becomes current only once its applyAfter time has passed. */
+function promoteStagedIfDue(){
+  try{
+    var st=P(localStorage.getItem(WIFI_STAGED_KEY));if(!st||!st.ssid)return;
+    var after=st.applyAfter?Date.parse(st.applyAfter):0;
+    if(after&&Date.now()<after)return;
+    setCurrentWifi(st.ssid,st.user,st.pass);
+    applyWifiNow(st.ssid,st.user,st.pass);
+    try{localStorage.setItem(WIFI_REV_KEY,String(st.rev||""));localStorage.removeItem(WIFI_STAGED_KEY);}catch(e){}
+  }catch(e){}
+}
+function pullWifi(c){
+  return ghGet(c,"wifi.json").then(function(f){
+    if(!f||!f.text)return;
+    var w=P(f.text);if(!w||!w.ssid||!w.user||!w.pass)return;  // Enterprise: needs username too
+    var rev=String(w.rev||w.ssid+"|"+w.user+"|"+w.pass);
+    var last="";try{last=localStorage.getItem(WIFI_REV_KEY)||"";}catch(e){}
+    if(rev===last){try{localStorage.removeItem(WIFI_STAGED_KEY);}catch(e){}return;}
+    var after=w.applyAfter?Date.parse(w.applyAfter):0;
+    if(after&&Date.now()<after){
+      // Not due yet: hold it SEPARATELY so the current working login is
+      // untouched until changeover (the self-heal uses current, never staged).
+      try{localStorage.setItem(WIFI_STAGED_KEY,J({ssid:w.ssid,user:w.user,pass:w.pass,rev:rev,applyAfter:w.applyAfter}));}catch(e){}
+      return;
+    }
+    setCurrentWifi(w.ssid,w.user,w.pass);
+    applyWifiNow(w.ssid,w.user,w.pass);
+    try{localStorage.setItem(WIFI_REV_KEY,rev);localStorage.removeItem(WIFI_STAGED_KEY);}catch(e){}
+  });
+}
+/* If the device is offline, re-push the CURRENT login once. Guarded: two
+   consecutive offline checks AND not re-applied in the last 10 minutes, so a
+   flaky reachability probe can't re-apply Wi-Fi (and bounce the connection)
+   every few minutes. */
+function selfHeal(){
+  try{
+    promoteStagedIfDue();
+    if(typeof wifiConnected!=="function")return;
+    var ssid="",user="",pass="";
+    try{ssid=localStorage.getItem("wildWifiSsid_v1")||"";user=localStorage.getItem("wildWifiUser_v1")||"";pass=localStorage.getItem("wildWifiPass_v1")||"";}catch(e){}
+    if(!ssid||!user||!pass)return;
+    wifiConnected(function(online){
+      if(online){_offlineCount=0;return;}
+      _offlineCount++;
+      if(_offlineCount<2||wifiRecentlyApplied())return;
+      _offlineCount=0;
+      applyWifiNow(ssid,user,pass);
+    });
+  }catch(e){}
+}
+
+/* ---- notice banner ---- */
+function showNotice(text){
+  removeOv("wildNoticeBar");
+  if(!text)return;
+  var ov=document.createElement("div");ov.id="wildNoticeBar";
+  ov.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:2147483000;background:#0b3d2e;color:#fff;padding:12px 14px;font-family:system-ui,sans-serif;font-size:14px;display:flex;gap:10px;align-items:center";
+  ov.innerHTML='<div style="flex:1;line-height:1.35">'+esc(text)+'</div><button type="button" id="wildNoticeX" style="border:none;background:#ffffff22;color:#fff;border-radius:8px;padding:8px 12px;font-weight:800">Got it</button>';
+  document.body.appendChild(ov);
+  var b=ov.querySelector("#wildNoticeX");if(b)b.onclick=function(){removeOv("wildNoticeBar");};
+}
+function pullNotice(c){
+  return ghGet(c,"notice.json").then(function(f){
+    if(!f||!f.text){removeOv("wildNoticeBar");return;}
+    var n=P(f.text);if(!n){return;}
+    var rev=String(n.rev||n.text||"");
+    var seen="";try{seen=localStorage.getItem(NOTICE_REV_KEY)||"";}catch(e){}
+    if(n.text&&rev!==seen){ showNotice(n.text); try{localStorage.setItem(NOTICE_REV_KEY,rev);}catch(e){} }
+    else if(!n.text){ removeOv("wildNoticeBar"); }
+  });
+}
+
+/* ---- commands ---- */
+function pullCommands(c){
+  return ghGet(c,"commands.json").then(function(f){
+    if(!f||!f.text)return;
+    var o=P(f.text);var items=(o&&o.items)||[];var me=myName();var done=doneIds();
+    var since=(c&&c.since)||0, cutoff=Date.now()-86400000;
+    items.forEach(function(cmd){
+      if(!cmd||!cmd.id)return;
+      if(done.indexOf(cmd.id)>=0)return;
+      // Older than 24h, or sent before this PDA was set up: historic, don't replay.
+      if(cmd.ts&&(cmd.ts<cutoff||cmd.ts<since)){markDone(cmd.id);return;}
+      if(cmd.target!=="ALL" && cmd.target!==me)return;
+      execCmd(cmd); markDone(cmd.id);
+    });
+  });
+}
+function sendCommand(target,type,text,pin){
+  var c=cfg();if(!c)return Promise.reject(new Error("not set up"));
+  return ghGet(c,"commands.json").then(function(f){
+    var o=(f&&P(f.text))||{items:[]};if(!o.items)o.items=[];
+    o.items.push({id:uid(),target:target,type:type,text:text||"",pin:pin||"",by:myName(),ts:nowTs()});
+    while(o.items.length>60)o.items.shift();
+    return ghPut(c,"commands.json",J(o),"cmd "+type+" -> "+target);
+  });
+}
+
+/* ---- heartbeat ---- */
+function heartbeat(c){
+  var name=myName();if(!name)return Promise.resolve();
+  var file="roster/"+safeName(name)+".json";
+  var bat=myBattery();
+  var rec={name:name,battery:bat,area:myArea(),build:myBuild(),note:myNote(),ts:Date.now()};
+  // Write only when something meaningful changed (battery in 5% steps) or
+  // every 10 minutes - not every poll - to keep the repo from churning.
+  var sig=J([name,(bat==null?null:Math.round(bat/5)*5),rec.area,rec.build,rec.note]);
+  var lastSig="",lastTs=0;
+  try{lastSig=localStorage.getItem("wildFleetHbSig_v1")||"";lastTs=parseInt(localStorage.getItem("wildFleetHbTs_v1")||"0",10)||0;}catch(e){}
+  if(sig===lastSig && (Date.now()-lastTs)<600000)return Promise.resolve();
+  var prev="";try{prev=localStorage.getItem(ROSTER_FILE_KEY)||"";}catch(e){}
+  var pre=Promise.resolve();
+  if(prev&&prev!==file){ pre=ghDelete(c,prev).catch(function(){}); }   // renamed: clear old entry
+  return pre.then(function(){ return ghPut(c,file,J(rec),"heartbeat "+name); })
+            .then(function(){ try{localStorage.setItem(ROSTER_FILE_KEY,file);localStorage.setItem("wildFleetHbSig_v1",sig);localStorage.setItem("wildFleetHbTs_v1",String(Date.now()));}catch(e){} });
+}
+
+/* ---- the poll ---- */
+var polling=false;
+function pollOnce(){
+  try{promoteStagedIfDue();}catch(e){}        // a staged login that has come due goes live promptly
+  if(polling||!provisioned())return;
+  polling=true;var c=cfg();
+  Promise.resolve()
+    .then(function(){return heartbeat(c).catch(function(){});})
+    .then(function(){return pullWifi(c).catch(function(){});})
+    .then(function(){return pullNotice(c).catch(function(){});})
+    .then(function(){return pullCommands(c).catch(function(){});})
+    .then(function(){polling=false;},function(){polling=false;});
+}
+window.wildFleetPoll=pollOnce;
+window.wildFleetSelfHeal=selfHeal;   // exposed for diagnostics/testing
+
+/* ---- provisioning from a scanned WILDFLEET: code ---- */
+window.fleetProvisionFromScan=function(raw){
+  try{
+    var r=String(raw).trim();
+    var payload=r.slice("WILDFLEET:".length).replace(/\s+/g,"");  // drop any trailing CR/newline the scanner adds
+    var o=P(b64d(payload))||P(payload);
+    if(!o||!o.o||!o.r||!o.t){try{alert("That isn't a Wild fleet setup code.");}catch(e){}return;}
+    var c=cfg()||{};
+    c.owner=o.o;c.repo=o.r;c.token=o.t;c.branch=o.b||"main";
+    if(!c.since)c.since=Date.now();
+    if(o.n)c.name=o.n;
+    saveCfg(c);
+    try{if(typeof openHand==="function")openHand();}catch(e){}
+    if(!c.name){ showHandSetName(true); }
+    else { try{alert("Fleet set up on this PDA ("+c.name+").");}catch(e){} pollOnce(); }
+  }catch(e){try{alert("Setup code could not be read.");}catch(_){}}
+};
+
+/* Intercept a WILDFLEET: setup code on BOTH scan paths: the camera
+   (handleQRResult) and the hardware trigger/imager (renderHandheld). Without
+   the renderHandheld hook a trigger-pull scan falls through to the address
+   resolver and shows a walk. */
+function isFleetCode(raw){try{return typeof raw==="string" && String(raw).trim().indexOf("WILDFLEET:")===0;}catch(e){return false;}}
+try{
+  if(typeof handleQRResult==="function"){
+    var _origHandleQR=handleQRResult;
+    handleQRResult=function(raw,fromCam){
+      if(isFleetCode(raw)){window.fleetProvisionFromScan(raw);return;}
+      return _origHandleQR.apply(this,arguments);
+    };
+    try{window.handleQRResult=handleQRResult;}catch(e){}
+  }
+}catch(e){}
+try{
+  if(typeof window.renderHandheld==="function"){
+    var _origRH=window.renderHandheld;
+    window.renderHandheld=function(raw,fromScanner){
+      if(isFleetCode(raw)){window.fleetProvisionFromScan(raw);return;}
+      return _origRH.apply(this,arguments);
+    };
+  }
+}catch(e){}
+
+/* ---- screens ---- */
+function box(){return document.getElementById("handResult");}
+function top1(t){return (typeof handTopBar==="function"?handTopBar(t):"");}
+function backBtn(id,label){return '<button type="button" id="'+id+'" style="margin-top:18px;border:none;background:#f1f3f4;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">‹ '+esc(label)+'</button>';}
+
+function showHandSetName(afterSetup){
+  var b=box();if(!b)return;try{handNav("fleetname",showHandSetName);}catch(e){}b.dataset.sub="fleetname";
+  var c=cfg()||{};
+  b.innerHTML=top1("Name this PDA")+
+    '<div style="max-width:340px;margin:0 auto;text-align:left">'+
+    '<div style="font-size:13px;color:#5f6368;margin-bottom:12px">A short name so you can tell this PDA apart on the fleet board (e.g. VAN-3, SPARE-1).</div>'+
+    '<input id="fnName" type="text" autocapitalize="characters" value="'+esc(c.name||"")+'" style="display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #c6ccd2;border-radius:10px;font-size:16px;margin-bottom:12px">'+
+    '<button type="button" id="fnSave" style="display:block;width:100%;min-height:54px;border:none;border-radius:14px;background:#498059;color:#fff;font-size:15px;font-weight:900">Save name</button>'+
+    '<div id="fnMsg" style="font-size:12.5px;color:#5f6368;margin-top:10px;min-height:16px"></div>'+
+    '</div>'+backBtn("fnBack","Back to Fleet");
+  var bk=b.querySelector("#fnBack");if(bk)bk.onclick=function(){try{showHandFleet();}catch(e){}};
+  var sv=b.querySelector("#fnSave"),msg=b.querySelector("#fnMsg");
+  if(sv)sv.onclick=function(){
+    var nm=(b.querySelector("#fnName")||{}).value||"";nm=nm.trim();
+    if(!nm){if(msg)msg.textContent="Enter a name.";return;}
+    var cc=cfg()||{};cc.name=nm;saveCfg(cc);
+    if(msg){msg.textContent="Saved.";msg.style.color="#1b5e20";}
+    pollOnce();
+    if(afterSetup)setTimeout(function(){try{showHandFleet();}catch(e){}},500);
+  };
+}
+window.showHandSetName=showHandSetName;
+
+window.showHandFleetSetup=function(){
+  var b=box();if(!b)return;try{handNav("fleetsetup",showHandFleetSetup);}catch(e){}b.dataset.sub="fleetsetup";
+  var c=cfg()||{};
+  var state=provisioned()?("Set up — repo <b>"+esc(c.owner+"/"+c.repo)+"</b>, this PDA is <b>"+esc(c.name||"(unnamed)")+"</b>"):"Not set up yet on this PDA.";
+  b.innerHTML=top1("Fleet setup")+
+    '<div style="max-width:340px;margin:0 auto;text-align:left;line-height:1.5">'+
+    '<div style="font-size:13px;margin-bottom:12px">'+state+'</div>'+
+    '<div style="font-size:13px;color:#5f6368;margin-bottom:14px">To set up: open the scanner on the main screen and scan the <b>Wild fleet setup code</b> (made with the QR maker tool). It loads the private repo and token automatically — nothing to type.</div>'+
+    '<button type="button" id="fsName" style="display:block;width:100%;min-height:50px;border:1px solid #c6ccd2;border-radius:12px;background:#fff;font-size:14px;font-weight:800;margin-bottom:10px">Name this PDA</button>'+
+    '<button type="button" id="fsPaste" style="display:block;width:100%;min-height:50px;border:1px solid #c6ccd2;border-radius:12px;background:#fff;font-size:14px;font-weight:800;margin-bottom:10px">Paste setup code instead</button>'+
+    '<button type="button" id="fsClear" style="display:block;width:100%;min-height:50px;border:1px solid #e0b4b4;border-radius:12px;background:#fff;color:#b3261e;font-size:14px;font-weight:800">Remove fleet setup from this PDA</button>'+
+    '<div id="fsMsg" style="font-size:12.5px;color:#5f6368;margin-top:10px;min-height:16px"></div>'+
+    '</div>'+backBtn("fsBack","Back to Fleet");
+  b.querySelector("#fsBack").onclick=function(){try{showHandFleet();}catch(e){}};
+  b.querySelector("#fsName").onclick=function(){showHandSetName(false);};
+  b.querySelector("#fsClear").onclick=function(){try{localStorage.removeItem(CFG_KEY);}catch(e){}var m=b.querySelector("#fsMsg");if(m){m.textContent="Removed.";}};
+  b.querySelector("#fsPaste").onclick=function(){
+    var code="";try{code=prompt("Paste the WILDFLEET: setup code");}catch(e){}
+    if(code&&code.indexOf("WILDFLEET:")===0)window.fleetProvisionFromScan(code);
+  };
+};
+
+window.showHandHealth=function(){
+  var b=box();if(!b)return;try{handNav("health",showHandHealth);}catch(e){}b.dataset.sub="health";
+  function dataRows(){try{return (window.allData&&allData.length)||0;}catch(e){return 0;}}
+  var facts=[
+    ["PDA name", myName()||"not named yet"],
+    ["Area", myArea()||"?"],
+    ["Running build", String(myBuild())],
+    ["Battery", (myBattery()!=null?myBattery()+"%":"unknown")],
+    ["Addresses loaded", String(dataRows())]
+  ];
+  var chkStyle="padding:9px 0;border-bottom:1px solid #eee;font-weight:700";
+  b.innerHTML=top1("Health check")+
+    '<div style="max-width:360px;margin:0 auto;text-align:left;font-size:13px">'+
+    facts.map(function(r){return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee"><span style="color:#5f6368">'+esc(r[0])+'</span><b>'+esc(r[1])+'</b></div>';}).join("")+
+    '<div id="hcScan" style="'+chkStyle+';color:#8a5300">Scanner: checking…</div>'+
+    '<div id="hcWifi" style="'+chkStyle+';color:#8a5300">Wi-Fi: checking…</div>'+
+    '<div id="hcFleet" style="'+chkStyle+';color:#8a5300">Fleet link: checking…</div>'+
+    '<div style="font-size:11.5px;color:#5f6368;margin-top:12px">A green line is good. Amber/red means that part needs a look.</div>'+
+    '</div>'+backBtn("hcBack","Back to Options");
+  b.querySelector("#hcBack").onclick=function(){try{openOptionsMenu();}catch(e){}};
+  function set(id,txt,ok){var e=b.querySelector(id);if(!e)return;e.textContent=txt;e.style.color=(ok===true?"#1b5e20":(ok===false?"#b3261e":"#8a5300"));}
+  // Scanner: can only see the bridge + last-scan time from here, not the armed state.
+  try{var hasScan=!!(window.WildReset&&WildReset.scanner);var q=-1;try{q=window.wildScanner?wildScanner.quiet():-1;}catch(e){}
+    set("#hcScan","Scanner: "+(hasScan?"bridge present":"not found")+(q>=0?(" · last scan "+Math.round(q/60000)+" min ago"):""),hasScan);
+  }catch(e){set("#hcScan","Scanner: unknown",null);}
+  // Wi-Fi reachability
+  try{if(typeof wifiConnected==="function"){wifiConnected(function(on){set("#hcWifi","Wi-Fi: "+(on?"online":"offline"),on);});}else{set("#hcWifi","Wi-Fi: unknown",null);}}catch(e){set("#hcWifi","Wi-Fi: unknown",null);}
+  // OCR engine bundled?
+  // Fleet link
+  if(!provisioned()){set("#hcFleet","Fleet link: not set up",null);}
+  else{try{ghGet(cfg(),"wifi.json").then(function(){set("#hcFleet","Fleet link: connected",true);},function(){set("#hcFleet","Fleet link: can't reach the repo",false);});}catch(e){set("#hcFleet","Fleet link: error",false);}}
+};
+window.showHandBootPin=function(){
+  var b=box();if(!b)return;try{handNav("bootpin",showHandBootPin);}catch(e){}b.dataset.sub="bootpin";
+  b.innerHTML=top1("Boot code")+
+    '<div style="max-width:340px;margin:0 auto;text-align:left">'+
+    '<div style="font-size:13px;color:#5f6368;margin-bottom:12px">The code needed to start the app on this PDA. Default 7784. Stored on this device only; takes effect next start.</div>'+
+    '<label style="font-size:12px;font-weight:700;color:#202124">Boot code (digits)</label>'+
+    '<input id="bpNew" type="tel" inputmode="numeric" maxlength="8" value="'+esc(bootPin())+'" style="display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #c6ccd2;border-radius:10px;font-size:18px;letter-spacing:4px;margin:6px 0 12px">'+
+    '<button type="button" id="bpSave" style="display:block;width:100%;min-height:54px;border:none;border-radius:14px;background:#498059;color:#fff;font-size:15px;font-weight:900">Save boot code</button>'+
+    '<div id="bpMsg" style="font-size:12.5px;color:#5f6368;margin-top:10px;min-height:16px"></div>'+
+    '</div>'+backBtn("bpBack","Back to Options");
+  b.querySelector("#bpBack").onclick=function(){try{openOptionsMenu();}catch(e){}};
+  var msg=b.querySelector("#bpMsg");
+  b.querySelector("#bpSave").onclick=function(){
+    var v=((b.querySelector("#bpNew")||{}).value||"").replace(/\D/g,"");
+    if(v.length<4){if(msg){msg.textContent="Use at least 4 digits.";msg.style.color="#8a5300";}return;}
+    try{localStorage.setItem(BOOT_PIN_KEY,v);}catch(e){}
+    if(msg){msg.textContent="Saved — takes effect next start.";msg.style.color="#1b5e20";}
+  };
+};
+window.showHandNotice=function(){
+  var b=box();if(!b)return;try{handNav("fleetnotice",showHandNotice);}catch(e){}b.dataset.sub="fleetnotice";
+  if(!provisioned()){b.innerHTML=top1("Notice to fleet")+'<div style="padding:20px;text-align:center;color:#5f6368">Set up the fleet first (Fleet setup).</div>'+backBtn("ntBack","Back to Fleet");b.querySelector("#ntBack").onclick=function(){try{showHandFleet();}catch(e){}};return;}
+  b.innerHTML=top1("Notice to fleet")+
+    '<div style="max-width:340px;margin:0 auto;text-align:left">'+
+    '<div style="font-size:13px;color:#5f6368;margin-bottom:12px">A short note shown on every PDA (bottom bar) until each one is dismissed. Clear it to remove.</div>'+
+    '<textarea id="ntTxt" rows="3" style="display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #c6ccd2;border-radius:10px;font-size:15px;margin-bottom:12px" placeholder="e.g. W8 walk 3 diversion today"></textarea>'+
+    '<button type="button" id="ntSend" style="display:block;width:100%;min-height:54px;border:none;border-radius:14px;background:#0b3d2e;color:#fff;font-size:15px;font-weight:900;margin-bottom:10px">Send to all PDAs</button>'+
+    '<button type="button" id="ntClear" style="display:block;width:100%;min-height:48px;border:1px solid #c6ccd2;border-radius:12px;background:#fff;font-size:14px;font-weight:800">Clear the notice</button>'+
+    '<div id="ntMsg" style="font-size:12.5px;color:#5f6368;margin-top:10px;min-height:16px"></div>'+
+    '</div>'+backBtn("ntBack","Back to Fleet");
+  b.querySelector("#ntBack").onclick=function(){try{showHandFleet();}catch(e){}};
+  var msg=b.querySelector("#ntMsg");var c=cfg();
+  function writeNotice(text){
+    if(msg){msg.textContent="Sending…";msg.style.color="#5f6368";}
+    ghPut(c,"notice.json",J({text:text,rev:uid(),by:myName(),ts:nowTs()}),"notice").then(function(){
+      if(msg){msg.textContent=text?"Sent.":"Cleared.";msg.style.color="#1b5e20";}
+    },function(){if(msg){msg.textContent="Failed — check connection.";msg.style.color="#8a5300";}});
+  }
+  b.querySelector("#ntSend").onclick=function(){var t=(b.querySelector("#ntTxt")||{}).value||"";t=t.trim();if(!t){if(msg)msg.textContent="Type a note first.";return;}writeNotice(t);};
+  b.querySelector("#ntClear").onclick=function(){writeNotice("");};
+};
+
+function agoTxt(ts){
+  if(!ts)return "never";
+  var m=Math.round((Date.now()-ts)/60000);
+  if(m<1)return "just now";if(m<60)return m+" min ago";var h=Math.round(m/60);if(h<48)return h+" h ago";return Math.round(h/24)+" d ago";
+}
+window.showHandFleet=function(){
+  var b=box();if(!b)return;try{handNav("fleet",showHandFleet);}catch(e){}b.dataset.sub="fleet";
+  var me=myName()||"(unnamed)";
+  var head=top1("Fleet")+
+    '<div style="max-width:360px;margin:0 auto;text-align:left">'+
+    '<div style="font-size:13px;margin-bottom:6px">You are on: <b>'+esc(me)+'</b>'+(myBattery()!=null?(" — "+myBattery()+"%"):"")+' — '+esc(myArea())+' — build '+myBuild()+'</div>'+
+    '<div style="font-size:11.5px;color:#5f6368;margin-bottom:12px">Tap a PDA to send it an alarm, lock, message, lost mode, or switch its area.</div>'+
+    '<div id="flList" style="font-size:13px">Loading…</div>'+
+    '</div>'+backBtn("flBack","Back to Options");
+  b.innerHTML=head;
+  var bk=b.querySelector("#flBack");if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
+  if(!provisioned()){var l0=b.querySelector("#flList");if(l0)l0.innerHTML='<div style="color:#5f6368">Not set up yet. Use <b>Fleet setup</b> to scan the setup code.</div>';return;}
+  var c=cfg();
+  ghList(c,"roster").then(function(files){
+    return Promise.all(files.map(function(x){return ghGet(c,"roster/"+x.name).then(function(f){return f&&P(f.text);}).catch(function(){return null;});}));
+  }).then(function(recs){
+    recs=(recs||[]).filter(Boolean);
+    var maxBuild=myBuild();recs.forEach(function(r){if(r.build>maxBuild)maxBuild=r.build;});
+    var l=b.querySelector("#flList");if(!l)return;
+    if(!recs.length){l.innerHTML='<div style="color:#5f6368">No PDAs have checked in yet.</div>';return;}
+    recs.sort(function(a,z){return String(a.name).localeCompare(String(z.name));});
+    l.innerHTML=recs.map(function(r){
+      var low=(r.battery!=null&&r.battery<=15);
+      var behind=(r.build<maxBuild);
+      var flags=(low?'<span style="color:#b3261e;font-weight:800"> ⚠ low</span>':'')+(behind?'<span style="color:#8a5300;font-weight:800"> ⚠ old build</span>':'');
+      var mine=(r.name===myName());
+      return '<div class="flRow" data-n="'+esc(r.name)+'" style="padding:11px;border:1px solid #e8ebef;border-radius:12px;margin-bottom:8px;'+(mine?'background:#eef6f0;':'background:#fff;')+'cursor:pointer">'+
+        '<div style="font-weight:800">'+esc(r.name)+(mine?' (this one)':'')+flags+'</div>'+
+        '<div style="font-size:11.5px;color:#5f6368;margin-top:3px">'+(r.battery!=null?r.battery+"% · ":"")+esc(r.area||"?")+' · build '+(r.build||"?")+' · '+agoTxt(r.ts)+(r.note?(' · '+esc(r.note)):'')+'</div>'+
+      '</div>';
+    }).join("");
+    var rows=l.querySelectorAll(".flRow");
+    for(var i=0;i<rows.length;i++){(function(row){row.onclick=function(){fleetActions(row.getAttribute("data-n"));};})(rows[i]);}
+  },function(){var l=b.querySelector("#flList");if(l)l.innerHTML='<div style="color:#8a5300">Could not load the fleet — check connection.</div>';});
+};
+
+function fleetActions(target){
+  var b=box();if(!b)return;
+  var acts=[
+    ["Alarm (sound it)","alarm","#b3261e"],
+    ["Flash a message","message","#8a1414"],
+    ["Lost mode — alarm + message + lock","lostmode","#6a1b9a"],
+    ["Cancel — unlock, stop alarm, clear message","clear","#1b5e20"],
+    ["Switch to W2","area_W2","#334"],
+    ["Switch to W8","area_W8","#334"],
+    ["Remove from board","remove","#555"]
+  ];
+  b.innerHTML=top1("Send to "+esc(target))+
+    '<div style="max-width:340px;margin:0 auto;text-align:left">'+
+    acts.map(function(a){return '<button type="button" class="faBtn" data-t="'+a[1]+'" style="display:block;width:100%;min-height:52px;margin-bottom:9px;border:none;border-radius:12px;background:'+a[2]+';color:#fff;font-size:15px;font-weight:800">'+esc(a[0])+'</button>';}).join("")+
+    '<div id="faMsg" style="font-size:12.5px;color:#5f6368;margin-top:8px;min-height:16px"></div>'+
+    '</div>'+backBtn("faBack","Back to Fleet");
+  b.querySelector("#faBack").onclick=function(){showHandFleet();};
+  var msg=b.querySelector("#faMsg");
+  var btns=b.querySelectorAll(".faBtn");
+  for(var i=0;i<btns.length;i++){(function(btn){btn.onclick=function(){
+    var type=btn.getAttribute("data-t");var text="";
+    if(type==="remove"){
+      var ok=true;try{ok=confirm("Remove "+target+" from the board?\n\nUse this to clear a ghost or an old name. If that PDA is still live it will reappear on its next check-in.");}catch(e){}
+      if(!ok)return;
+      if(msg){msg.textContent="Removing…";msg.style.color="#5f6368";}
+      ghDelete(cfg(),"roster/"+safeName(target)+".json").then(
+        function(){if(msg){msg.textContent="Removed.";msg.style.color="#1b5e20";}setTimeout(function(){try{showHandFleet();}catch(e){}},700);},
+        function(){if(msg){msg.textContent="Failed — check connection.";msg.style.color="#8a5300";}});
+      return;
+    }
+    var pin="";
+    if(type==="alarm"){try{text=prompt("Alarm message to show on "+target+" (optional)","PDA ALARM")||"";}catch(e){}}
+    if(type==="message"||type==="lostmode"){try{text=prompt("Message to show on "+target,"RETURN TO DELIVERY OFFICE")||"";}catch(e){}if(type==="message"&&!text)return;}
+    if(msg){msg.textContent="Sending…";msg.style.color="#5f6368";}
+    sendCommand(target,type,text,pin).then(function(){if(msg){msg.textContent="Sent to "+target+" — it will act on its next check-in (within ~3 min).";msg.style.color="#1b5e20";}},
+      function(){if(msg){msg.textContent="Failed — check connection.";msg.style.color="#8a5300";}});
+  };})(btns[i]);}
+}
+
+/* ---- boot: code gate, restore any remote lock, then start polling ---- */
+/* forceBoot clears the "already entered" flag and re-shows the gate, so coming
+   back to the app after HOME re-locks it (not just a cold start). */
+function forceBoot(){try{sessionStorage.removeItem("wildBootOk");}catch(e){}try{showBootGate();}catch(e){}}
+/* Boot code removed at Ash's request (build 258) — the app starts straight in. */
+try{setTimeout(function(){try{lockRestore();}catch(e){}},300);}catch(e){}
+/* The kiosk WebView doesn't reliably fire visibilitychange, so listen on
+   several signals (blur/focus, pageshow, visibility) AND use a timer-gap
+   backstop: when our interval misses ticks, the app was away (HOME / asleep),
+   so re-assert the gate and any lock. */
+var wasAway=false;
+/* The camera scanner (qrPanel) stalls timers and fires focus/blur while it
+   opens — that is NOT the user leaving via HOME, so never re-lock while it's
+   open, or it yanks them straight off the camera. */
+function camOpen(){try{var p=document.getElementById("qrPanel");return !!(p&&p.classList.contains("show"));}catch(e){return false;}}
+function markAway(){wasAway=true;}
+function backToFront(){
+  if(camOpen()){wasAway=false;return;}          // in the camera, not away
+  if(wasAway){wasAway=false;try{lockRestore();}catch(e){}}
+}
+try{window.addEventListener("blur",markAway);}catch(e){}
+try{window.addEventListener("focus",backToFront);}catch(e){}
+try{window.addEventListener("pageshow",function(){markAway();backToFront();});}catch(e){}
+try{document.addEventListener("visibilitychange",function(){if(document.hidden)markAway();else backToFront();});}catch(e){}
+var bootTick=Date.now();
+try{setInterval(function(){var now=Date.now();if(!camOpen() && now-bootTick>6000){markAway();backToFront();}bootTick=now;},2000);}catch(e){}
+/* ---- keep kiosk mode across a RESET / restart ----
+   Kiosk on/off lives in the native wrapper and a hard restart (RESET APP)
+   reinitialises it to off. Remember what it was and switch it back on at
+   start-up if it was on. We watch the live state so a toggle by any route
+   (the in-app row or holding BACK) is remembered. */
+var KIOSK_WANT_KEY="wildKioskWanted_v1";
+function kioskNow(){try{return (window.WildKiosk&&typeof WildKiosk.state==="function")?!!WildKiosk.state():null;}catch(e){return null;}}
+var _kioskSeeded=false,_kioskLast=null,_kioskGraceUntil=0;
+/* Prefer the wrapper's direct setter (build 259+): it sets kiosk WITHOUT
+   re-opening the native kiosk menu, which the pick(0) toggle always does. */
+function kioskSetNative(on){
+  try{
+    if(window.WildKiosk&&typeof WildKiosk.kioskSet==="function"){WildKiosk.kioskSet(on?1:0);return true;}
+    if(window.WildKiosk&&typeof WildKiosk.pick==="function"){var st=kioskNow();if(st!==null&&st!==!!on)WildKiosk.pick(0);return true;}
+  }catch(e){}
+  return false;
+}
+function kioskWatch(){
+  var st=kioskNow();if(st===null)return;
+  if(!_kioskSeeded){
+    _kioskSeeded=true;
+    var want=null;try{want=localStorage.getItem(KIOSK_WANT_KEY);}catch(e){}
+    if(want==="on"&&st===false){kioskSetNative(true);_kioskLast=true;_kioskGraceUntil=Date.now()+8000;return;}
+    _kioskLast=st;return;
+  }
+  if(Date.now()<_kioskGraceUntil)return;      // let the restore settle before trusting a reading
+  if(st!==_kioskLast){_kioskLast=st;try{localStorage.setItem(KIOSK_WANT_KEY,st?"on":"off");}catch(e){}}
+}
+try{setTimeout(kioskWatch,3000);}catch(e){}
+try{setInterval(kioskWatch,2500);}catch(e){}
+try{
+  setTimeout(function(){try{selfHeal();}catch(e){} try{pollOnce();}catch(e){}},8000);
+  setInterval(function(){try{selfHeal();}catch(e){} try{pollOnce();}catch(e){}},POLL_MS);
+}catch(e){}
+})();
+</script>
+
+<script>
+/* ══════════ v7.32 MESSAGES FROM ASH'S PHONE ══════════
    A message is just the text of message.txt in the update repo. Ash edits
    it on his phone (GitHub app or website → Commit) and every PDA shows it
    as a card at the bottom of the screen, with a chime and read out once.
@@ -14597,7 +15590,7 @@ document.addEventListener("visibilitychange",()=>{
     hide();
     var card=document.createElement("div");
     card.id="wildMsgCard";
-    card.style.cssText=["position:fixed","left:8px","right:8px","bottom:8px","z-index:2147483645",
+    card.style.cssText=["position:fixed","left:8px","right:8px","bottom:8px","z-index:2147483100",
       "background:#0d2a4a","color:#fff","border-radius:12px","padding:12px 14px",
       "box-shadow:0 4px 16px rgba(0,0,0,.45)","font-family:inherit","max-height:60vh",
       "display:flex","flex-direction:column","gap:10px","border:3px solid #ffd54f"].join(";");
