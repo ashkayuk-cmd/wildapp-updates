@@ -2342,7 +2342,7 @@ var qrcode = function() {
 
 
 function val(id){return (document.getElementById(id).value||"");}
-function q(s){return String(s).replace(/([\;,:"])/g,"\\$1");}
+function q(s){return String(s).replace(/([\\;,:"])/g,"\\$1");}
 function img(text,cap){var qr=qrcode(0,"M");qr.addData(text);qr.make();
   return '<div class="cap">'+cap+'</div><img alt="'+cap+'" src="'+qr.createDataURL(6,8)+'">';}
 function need(){var s=val("ssid").trim(),u=val("user").trim(),p=val("pass");var o=document.getElementById("out");
