@@ -639,7 +639,7 @@ function rowsFromWorkbook(wb){
 // The build baked into this APK. ONE constant for the whole app — the
 // version string, the on-screen tag and the update check all read it, so the
 // stamps can no longer drift apart. (v1.45)
-const THIS_BUILD_NUM=286;
+const THIS_BUILD_NUM=288;
 const WILD_SITE_URL="https://wildapp.gt.tc/";
 /* ── AREA: W2 or W8 (v6.7) ──────────────────────────────────────────────
    Ash: "add the west 8 walk list to the app. have a option on the pda to
@@ -709,7 +709,7 @@ const BAKED_DATA_BUILD=57;
 // Where updates come from: the APK, the app file and the address data all live
 // in this one repo.
 const WILD_UPDATE_BASE="https://raw.githubusercontent.com/ashkayuk-cmd/wildapp-updates/main/";
-const BUILD_NAME="v7.51";
+const BUILD_NAME="v7.53";
 // ── WHAT IS IN THE REPO (v1.64) ───────────────────────────────────────
 // These stamps are written into this file by the build script whenever
 // anything is published, so nothing in the repo has to be edited by hand
@@ -2188,6 +2188,7 @@ function finishBoot(){
   try{wildAreaApply();}catch(e){}
   // Addresses added by hand join the round before anything is derived from it.
   try{mergeUserAddrs();}catch(e){}
+  try{mergeSharedAddrs();}catch(e){}   // v7.52: addresses added on the other PDAs
   // allData already reflects every move/edit/deletion/folder assignment made
   // so far this session (they're applied directly and permanently as they
   // happen) — just make sure the derived postcode/building fields are
@@ -3399,6 +3400,15 @@ const HAND_IDLE_BTN="padding:14px 18px;border:1px solid #1558B0;border-radius:12
 window.__wildVolumeHud=function(cur,max){
   try{
     cur=parseInt(cur,10)||0; max=parseInt(max,10)||0;
+    // v7.53: volume UP while everything is muted ends the mute and puts every
+    // level back; volume DOWN leaves it muted.
+    try{
+      if(muteAllOn()&&cur>0){
+        muteAll(false);
+        const a=wildAudio();if(a){const v=a.vol(3);if(v>=0)cur=v;}
+        try{const b=document.getElementById("handResult");if(b&&b.dataset.sub==="sound")showHandSound();}catch(e){}
+      }
+    }catch(e){}
     let el=document.getElementById("wildVolHud");
     if(!el){
       el=document.createElement("div");
@@ -4273,6 +4283,49 @@ function audioStreams(){
   }
   return out.length?out:null;
 }
+/* -- MUTE EVERYTHING (v7.53) --------------------------------------------
+   Ash: "a setting to mute and set all volume to zero". One switch that
+   silences the app's beeps, the read-aloud, every phone volume and the
+   scanner's own beep — and remembers each level first, so turning it off
+   puts every one of them back exactly as it was. Vibration is left alone, so
+   a scan still registers in the hand. A fleet alarm still sounds (it maxes
+   its own streams on purpose) and the mute is re-applied when it stops. */
+const MUTE_KEY="wildMuteAll_v1";            // saved levels while muted; absent = not muted
+function muteAllOn(){try{return !!localStorage.getItem(MUTE_KEY);}catch(e){return false;}}
+function muteStreamsToZero(){
+  const a=wildAudio();if(!a)return;
+  AUDIO_STREAMS.forEach(st=>{try{a.set(st.id,0);}catch(e){}});
+}
+function muteAll(on){
+  const a=wildAudio();
+  if(on){
+    if(muteAllOn()){muteStreamsToZero();return true;}
+    const saved={beep:soundLevel(),speak:(typeof handSpeakEnabled!=="undefined"&&handSpeakEnabled)?1:0,streams:{},scan:null};
+    if(a){
+      AUDIO_STREAMS.forEach(st=>{try{const v=a.vol(st.id);if(v>=0)saved.streams[st.id]=v;}catch(e){}});
+      try{saved.scan=!!a.beep();}catch(e){}
+    }
+    try{localStorage.setItem(MUTE_KEY,JSON.stringify(saved));}catch(e){}
+    setSoundLevel(0);
+    try{handSpeakEnabled=false;}catch(e){}
+    try{speechSynthesis.cancel();}catch(e){}
+    muteStreamsToZero();
+    try{if(a&&saved.scan)a.setBeep(false);}catch(e){}
+    return true;
+  }
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem(MUTE_KEY)||"null");}catch(e){}
+  try{localStorage.removeItem(MUTE_KEY);}catch(e){}
+  if(!saved)return false;
+  setSoundLevel(typeof saved.beep==="number"?saved.beep:SOUND_DEFAULT);
+  try{handSpeakEnabled=!!saved.speak;}catch(e){}
+  if(a){
+    for(const id in (saved.streams||{})){try{a.set(+id,saved.streams[id]);}catch(e){}}
+    try{if(saved.scan)a.setBeep(true);}catch(e){}
+  }
+  return false;
+}
+window.__wildReMute=function(){try{if(muteAllOn())muteStreamsToZero();}catch(e){}};
 function scannerBeepOn(){
   const a=wildAudio();
   if(!a)return null;                       // null = no bridge, don't offer it
@@ -4358,8 +4411,23 @@ function showHandSound(){
         +'<span id="beepKnob" style="position:absolute;top:3px;left:'+(beepOn?"29px":"3px")+';width:26px;height:26px;border-radius:13px;background:#fff;transition:left .15s"></span></button>'
       +'</div>');
 
+  const muted=muteAllOn();
+  const dim=muted?'<div style="opacity:.4;pointer-events:none">':'<div>';
+  const muteHtml=card(
+     '<div style="display:flex;align-items:center;gap:12px">'
+      +'<div style="font-size:24px;flex-shrink:0">'+(muted?"\uD83D\uDD07":"\uD83D\uDD0A")+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:900;color:var(--txt)">Mute everything</div>'
+      +'<div style="font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4">'+(muted
+        ?'<b style="color:#d32f2f">Muted.</b> Beeps, read-aloud and every phone volume are at zero. Turn off \u2014 or press volume up \u2014 to put them all back as they were.'
+        :'Sets the beeps, the read-aloud and every phone volume to zero, and remembers them so turning it off puts each one back. Vibration carries on.')+'</div></div>'
+      +'<button type="button" id="muteSw" role="switch" aria-checked="'+(muted?"true":"false")+'" style="flex-shrink:0;width:58px;height:32px;border:none;border-radius:16px;'
+      +'background:'+(muted?"#d32f2f":"#c9ced4")+';cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'
+      +'<span style="position:absolute;top:3px;left:'+(muted?"29px":"3px")+';width:26px;height:26px;border-radius:13px;background:#fff;transition:left .15s"></span></button>'
+    +'</div>');
   box.innerHTML='<div style="width:100%;max-width:360px;margin:0 auto;text-align:left;padding:14px 4px">'
     +handTopBar("Sound &amp; vibration")
+    +'<div style="margin-top:6px"></div>'+muteHtml
+    +dim
     +head("Beep volume")
     +card(
        '<div style="font-size:12px;color:var(--sub);line-height:1.45">The app\u2019s own level, separate from the phone\u2019s. The PDA\u2019s volume keys change this very setting. At 0 the beeps stop but the buzz carries on, so a scan still registers in your hand.</div>'
@@ -4371,6 +4439,7 @@ function showHandSound(){
       +'</div>')
     +devVolHtml
     +beepHtml
+    +'</div>'
     +head("Vibration")
     +card(
        '<div style="display:flex;align-items:center;gap:12px">'
@@ -4396,6 +4465,13 @@ function showHandSound(){
     +'border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to Options</button>'
   +'</div>';
 
+  const msw=document.getElementById("muteSw");
+  if(msw)msw.onclick=function(){
+    const now=muteAll(!muteAllOn());
+    if(!now){try{outcomeTone("building");}catch(e){}}    // a beep to prove sound is back
+    else{try{wildVibrate(60);}catch(e){}}
+    showHandSound();
+  };
   const sl=document.getElementById("handVol"), num=document.getElementById("handVolNum");
   const show=n=>{if(num)num.textContent=n?n+"%":"Off";};
   const apply=(n,beep)=>{
@@ -5674,6 +5750,7 @@ document.getElementById("qrCopy").addEventListener("click",()=>{
 // the same address logic as the camera scanner; only the presentation differs.
 let handSpeakEnabled=true;
 try{if(localStorage.getItem("wildHandSpeak_v1")==="0")handSpeakEnabled=false;}catch(e){}
+try{if(localStorage.getItem("wildMuteAll_v1"))handSpeakEnabled=false;}catch(e){}   // v7.53: muted stays muted across a restart
 let handShowRaw=false;
 handShowRaw=true; // handheld-only build: raw scan result always shown
 let handLastRaw=""; // remembered so toggling re-renders the same scan
@@ -5813,7 +5890,103 @@ function userOverrideAddrKeyLegacy(pcNoSpace,raw){
 // the exact scanned label) is tried FIRST — it's the most specific — then the
 // postcode+house-number key. A bare postcode+no-number key still exists for
 // deliberate whole-postcode corrections, and is the pc|"" fallback.
+/* ── SHARED CORRECTIONS (v7.52) ─────────────────────────────────────────
+   Ash runs 7 PDAs. A walk fix made on one used to stay on that one, so the
+   same wrong walk had to be fixed seven times. Each set-up PDA now posts its
+   own corrections (and hand-added addresses) to the PRIVATE fleet repo, and
+   picks up everyone else's on its 3-minute check-in — see syncShared in the
+   fleet module. What arrives is kept here, per PDA, and is only ever read:
+     • THIS PDA's own fix always wins (looked up first, untouched);
+     • between other PDAs, the newest fix wins;
+     • deleting a fix on the PDA that made it removes it everywhere, because
+       each PDA's file is replaced whole on every change.
+   Switch-off: Fleet & messages → Shared corrections (wildSharedOn_v1 = "0"). */
+const SHARED_OV_KEY="wildSharedOv_v1";      // {pdas:{file:{name,ts,ov:{},add:[]}}}
+const SHARED_ON_KEY="wildSharedOn_v1";
+function sharedOn(){try{return localStorage.getItem(SHARED_ON_KEY)!=="0";}catch(e){return true;}}
+function sharedStore(){
+  try{const o=JSON.parse(localStorage.getItem(SHARED_OV_KEY)||"{}");return (o&&typeof o==="object"&&o.pdas&&typeof o.pdas==="object")?o:{pdas:{}};}
+  catch(e){return {pdas:{}};}
+}
+let sharedOvCache=null, sharedOvCacheFor="";
+// Every other PDA's corrections in one map, newest fix per key, each tagged
+// with the PDA it came from. Cached against the stored text so a scan never
+// re-merges unless something new has arrived.
+function sharedOverrideMap(){
+  let raw="";try{raw=localStorage.getItem(SHARED_OV_KEY)||"";}catch(e){}
+  if(sharedOvCache&&sharedOvCacheFor===raw)return sharedOvCache;
+  const out={};
+  const pd=sharedStore().pdas;
+  for(const f in pd){
+    const p=pd[f];if(!p||!p.ov||typeof p.ov!=="object")continue;
+    for(const k in p.ov){
+      const r0=p.ov[k];if(!r0||!r0.walk||/[<>&"]/.test(String(r0.walk)))continue;
+      const clean=v=>String(v==null?"":v).replace(/[<>&"]/g,"");
+      const r={walk:String(r0.walk),addr:clean(r0.addr),pc:clean(r0.pc),hn:clean(r0.hn),pcShown:clean(r0.pcShown),scope:r0.scope==="address"?"address":"",when:+r0.when||0};
+      const prev=out[k];
+      if(!prev||(r.when||0)>(prev.when||0))out[k]=Object.assign({},r,{from:String(p.name||f)});
+    }
+  }
+  sharedOvCache=out;sharedOvCacheFor=raw;
+  return out;
+}
+function sharedOverrideCount(){return Object.keys(sharedOverrideMap()).length;}
+function lookupOverrideIn(m,pcNoSpace,hn,raw){
+  if(raw){
+    const ar=m[userOverrideAddrKey(pcNoSpace,raw,hn)];
+    if(ar&&ar.walk)return ar;
+    const lg=m[userOverrideAddrKeyLegacy(pcNoSpace,raw)];
+    if(lg&&lg.walk)return lg;
+  }
+  const rec=m[userOverrideKey(pcNoSpace,hn)];
+  return rec&&rec.walk?rec:null;
+}
 function getUserOverride(pcNoSpace,hn,raw){
+  if(!pcNoSpace)return null;
+  const own=ownUserOverride(pcNoSpace,hn,raw);
+  if(own)return own;
+  if(!sharedOn())return null;
+  try{return lookupOverrideIn(sharedOverrideMap(),pcNoSpace,hn,raw);}catch(e){return null;}
+}
+// Hand-added addresses from the other PDAs join the round the same way this
+// PDA's own do, marked so they can be taken out again when withdrawn.
+function sharedAddrList(){
+  const out=[],seen=new Set();
+  if(!sharedOn())return out;
+  const pd=sharedStore().pdas;
+  for(const f in pd){
+    const p=pd[f];if(!p||!Array.isArray(p.add))continue;
+    p.add.forEach(u=>{
+      if(!u||!u.d)return;
+      const k=String(u.d).trim().toLowerCase();
+      if(seen.has(k))return;seen.add(k);
+      out.push(Object.assign({},u,{from:String(p.name||f)}));
+    });
+  }
+  return out;
+}
+function mergeSharedAddrs(){
+  if(typeof allData==="undefined"||!allData)return 0;
+  let changed=0;
+  for(let i=allData.length-1;i>=0;i--){if(allData[i]&&allData[i]._sharedAdded){allData.splice(i,1);changed++;}}
+  const have=new Set(allData.map(d=>String(d.d||"").trim().toLowerCase()));
+  sharedAddrList().forEach(u=>{
+    try{const ua=wildAddrArea(u.d);if(ua&&ua!==WILD_AREA)return;}catch(e){}
+    const k=String(u.d).trim().toLowerCase();
+    if(have.has(k))return;
+    const e={s:u.s||"",d:u.d,r:u.r||"",_sharedAdded:true,_sharedFrom:u.from};
+    try{e._pc=getPostcode(e.d);e._bldg=bldgOf(e);}catch(err){}
+    allData.push(e);have.add(k);changed++;
+  });
+  if(changed)handDropDataIndexes();
+  return changed;
+}
+// Called by the fleet sync when something new has arrived from another PDA.
+window.__wildSharedChanged=function(){
+  sharedOvCache=null;
+  try{mergeSharedAddrs();}catch(e){}
+};
+function ownUserOverride(pcNoSpace,hn,raw){
   if(!pcNoSpace)return null;
   const m=userOverrides();
   if(raw){
@@ -5935,7 +6108,7 @@ const WALK_AZ_SHEET=JSON.parse('[["F","55 N wharf rd",""],["6","55 N wharf rd (F
    so the WALK LISTS screen can name each walk exactly as the sheet does
    rather than through the round's own walk names. */
 const WALK_AZ_NAMES=JSON.parse('{"1":"ALFRED","2":"WOODCHESTER","3":"JOHN AIRD","4":"ST. MARY\'S","5":"HALL PLACE","6":"SHELDON","7":"EDGWARE ROAD","8":"ST GEORGES","9":"PARK WEST","11":"NORFOLK","12":"WESTCLIFF","10":"RAYNHAM","13":"RADNORE","14":"SUSSEX GARDENS","15":"BATHURST","16":"WESTBOURNE TERR","17":"LANCASTER GATE","18":"GLOUCESTER TERR","19":"COLONNADES","20":"HALLFIELD","21":"CRAVEN","22":"PORCHESTER","23":"INVERNESS","24":"QUEENSWAY","25":"ST PETERSBURGH","26":"LINDEN","27":"PEMBRIDGE","28":"KGS","29":"HATHERLY","30":"CHEPSTEPHENS","31":"ARTESIAN","32":"BRUNEL","33":"HEREFORD","34":"KILDARE","35":"CLEVELAND"}');
-const WALK_AZ_ENTRIES=JSON.parse('{"1":[["WESTMINSTER ACADEMY (255 HARROW ROAD)","Harrow Road"],["ALFRED ROAD",""],["ASTLEY HOUSE","Alfred Road"],["BOURNE TERRACE 92-108 , 161-233",""],["BRINDLEY HOUSE","Alfred Road"],["BRINKLOW HOUSE","Torquay Street"],["CIRENCESTER STREET",""],["FORRESTER COURT","Cirencester Street"],["GAYDON HOUSE","Bourne Terrace"],["GEORGE LOWE COURT",""],["HARROW ROAD 209-233 , 255-300",""],["HARROW ROAD 255 (WESTMINISTER ACADEMY)",""],["LANGLEY HOUSE","Alfred Road"],["LEYF NURSERIES (294 Harrow Rd)","Harrow Road"],["NORTHGATE (GEORGE LOWE COURT)","George Lowe Court"],["OLDBURY HOUSE","Harrow Road"],["OUR LADY OF DOLOURS (SCHOOL)","Cirencester Street"],["OVERSLEY HOUSE","Alfred Road"],["POLESWORTH HOUSE","Alfred Road"],["RADWAY HOUSE","Alfred Road"],["SENIOR STREET",""],["SOUTHGATE (GEORGE LOWE COURT)","George Lowe Court"],["STOWE CLUB",""],["TORQUAY STREET",""],["WESTBOURNE GREEN SURGERY","Harrow Road"]],"2":[["AFRICA HOUSE","Blomfield Villas"],["ATHERSTONE COURT","Delamere Terrace"],["BLOMFIELD VILLAS",""],["BOURNE TERRACE 10-80 , 17-157",""],["CHICHESTER ROAD",""],["DARTINGTON HOUSE","Senior Street"],["DELAMERE TERRACE (REST)",""],["DESBOROUGH CLOSE",""],["EDWARD WILSON SCHOOL",""],["LAPWORTH COURT","Chichester Road"],["LORD HILLS ROAD",""],["PARKVIEW LODGE PRE-SCHOOL",""],["PRINCETHORPE HOUSE","Woodchester Square"],["ROWINGTON CLOSE",""],["ST MARY MAGDALENE SCHOOL",""],["WILMCOTE HOUSE","Woodchester Square"]],"3":[["AMILCAR CABRAL COURT","Porteus Road"],["BEAUCHAMP LODGE (WARWICK CRESCENT)","Warwick Crescent"],["DELAMERE TERRACE 1, 2, TOLL HOUSE",""],["FIRE STATION (156 HARROW ROAD)","Harrow Road"],["FLEMING COURT","St. Marys Square"],["FLOATING BOATER (THE)",""],["GILPIN CLOSE",""],["HARROW ROAD 156 (FIRE STATION)",""],["HOGAN MEWS",""],["HOWLEY PLACE",""],["HURLINGHAM HOUSE","Westbourne Terrace Road"],["JOHN AIRD COURT",""],["LEO COURT (JOHN AIRD)","John Aird Court"],["PORTEUS ROAD",""],["TOLL HOUSE","Delamere Terrace"],["WARWICK AVENUE",""],["WARWICK CRESCENT",""],["WESTBOURNE TERRACE ROAD",""]],"4":[["ALEXANDRA HOUSE (ST. MARYS TERRACE)","St. Marys Terrace"],["AUBREY HOUSE","Maida Avenue"],["CALLARD CLOSE",""],["DOUGLAS HOUSE","Maida Avenue"],["EDGWARE ROAD 304-508 (EVENS), 429-453 (ODDS)",""],["LAMPARD HOUSE","Maida Avenue"],["MAIDA AVENUE",""],["OSBORNE HOUSE",""],["PARK PLACE VILLAS",""],["ST. MARY\'S MANSIONS","St. Marys Terrace"],["ST. MARY\'S TERRACE",""],["STAFFORD HOUSE","Maida Avenue"]],"5":[["ADPAR STREET",""],["ADPAR STREET 1A",""],["ARK PADDINGTON GREEN PRIMARY ACADEMY",""],["ASQUITH HOUSE (133 CHURCH STREET)","Church Street"],["BOND MANSIONS (285 EDGWARE ROAD)","Edgware Road"],["BOWEN MANSIONS","Newcastle Place"],["BRAITHWAITE TOWER","Hall Place"],["CAMPBELL HOUSE","Hall Place"],["CHURCH STREET","149-151"],["CHURCHFIELD HOUSE","Hall Place"],["CROMPTON HOUSE","Hall Place"],["CROMPTON STREET",""],["CUTHBERT HOUSE","Hall Place"],["DEVONSHIRE HOUSE (ADPAR STREET)","Adpar Street"],["EDGWARE ROAD 285-427 (ODDS)",""],["EDWARD HOUSE","Hall Place"],["GARRETT MANSIONS (287 EDGWARE ROAD)","Edgware Road"],["GILBERT SHELDON HOUSE","Edgware Road"],["HALL PLACE",""],["HALL TOWER","Hall Place"],["HETHPOOL HOUSE","Hall Place"],["HEYWOOD HOUSE",""],["HOWELL HOUSE","Hall Place"],["LAWRENCE MANSIONS (289 EDGWARE ROAD)","Edgware Road"],["MARY ADELAIDE","Paddington Green"],["MAYNE HOUSE","Hall Place"],["NEWCASTLE PLACE",""],["PADDINGTON GREEN",""],["PARKER HOUSE","CUTHBERT STREET 5"],["PARSONS HOUSE",""],["PHILIP COURT","Hall Place"],["PRINCESS LOUISE CLOSE",""],["WESTMARK TOWER (NEWCASTLE PLACE)","Newcastle Place"],["WINICOTTE HOUSE","Princess Louise Close"]],"6":[["55 N wharf rd (FLATS)",""],["ASTER HOUSE","North Wharf Road"],["BETULA HOUSE","North Wharf Road"],["CAMELLIA HOUSE","North Wharf Road"],["CANALSIDE WALK 3",""],["DAHLIA HOUSE","North Wharf Road"],["DUDLEY HOUSE","North Wharf Road"],["HARROW ROAD 133-181",""],["HEIST BANK 5",""],["HERMITAGE STREET",""],["MARSHALL BUILDING","Hermitage Street"],["MONTGOMERY HOUSE","Harrow Road"],["MUNKENBECK BUILDING","Hermitage Street"],["NISSAN DESIGN EUROPE (HARROW ROAD 181)","Harrow Road"],["PREMIER INN (N wharf rd)",""],["SHELDON SQUARE (REST)",""],["The Gym Group (33 N wharf rd)",""],["TRAVIS PERKINS ( 149 HARROW ROAD)","Harrow Road"],["Wilde Aparthotels (4 N wharf rd)",""]],"7":[["CONNAUGHT PLACE",""],["CONNAUGHT SQUARE",""],["EDGWARE ROAD 2-258 (EVENS), 7-217 (ODDS)",""],["FORSET COURT","Edgware Road"],["FREDERICK CLOSE",""],["GROSVENOR COURT MANSIONS","Edgware Road"],["LEX HOUSE ( 17 CONNAUGHT PLACE)","Connaught Place"],["SEYMOUR STREET",""],["STANHOPE HOUSE ( 18 STANHOPE PLACE)","Stanhope Place"],["STANHOPE PLACE",""],["VICTORY SERVICE CLUB (SEYMOUR STREET)","Seymour Street"],["WESTCHESTER HOUSE","Seymour Street"]],"8":[["ALBION CLOSE",""],["ALBION GATE","Hyde Park Place"],["ALBION MEWS",""],["ALBION STREET",""],["ARCHERY CLOSE",""],["ARCHERY STEPS","St. Georges Fields"],["CONNAUGHT CLOSE",""],["CONNAUGHT COURT","Connaught Street"],["CONNAUGHT STREET",""],["HANOVER STEPS","St. Georges Fields"],["HYDE PARK PLACE",""],["HYDE PARK SQUARE",""],["HYDE PARK STREET",""],["KENDAL STEPS","St. Georges Fields"],["Miss Daisy\'s Nursery School","St. Georges Fields"],["NORTH RISE","St. Georges Fields"],["PARK STEPS","St. Georges Fields"],["SOUTH RISE","St. Georges Fields"],["ST. GEORGES FIELDS","St. Georges Fields"],["WEST RISE","St. Georges Fields"]],"9":[["PARK WEST","Edgware Road / park west place"],["PORTSEA HALL","Portsea Place"],["PORTSEA MEWS",""],["PORTSEA PLACE",""],["WATER GARDENS",""]],"10":[["CAMBRIDGE SQUARE",""],["CONISTON COURT (KENDAL STREET)","Kendal Street"],["KENDAL STREET","St. Georges Fields"],["MONKEY PUZZLE (NORFOLK CRECSENT)","Norfolk Crescent"],["NORFOLK CRESCENT",""],["OXFORD SQUARE",""],["PARK HOUSE","Kendal Street"],["PORCHESTER PLACE",""],["QUADRANGLE",""],["RAYNHAM (NORFOLK CRECSENT)","Norfolk Crescent"],["WEST GARDEN PLACE (KENDAL STREET)","Kendal Street"]],"11":[["BOUVERIE PLACE",""],["EDNA HOUSE","Norfolk Square"],["JUNCTION MEWS (REST)",""],["JUNCTION PLACE",""],["LEYF - MICKY STAR NURSERY & PRE-SCHOOL",""],["LEYF NURSERIES (58-61 St Michaels street)","St Michaels street"],["LONDON MEWS",""],["LONDON STREET",""],["MACMILLAN HOUSE (Paddington Station)",""],["NORFOLK PLACE",""],["NORFOLK SQUARE",""],["NORFOLK SQUARE MEWS",""],["PADDINGTON STATION",""],["PRAED MEWS",""],["RAINSFORD STREET",""],["SALE PLACE",""],["SINCLAIR COURT ( 80-86 ST. MICHAEL\'S STREET)","St. Michaels Street"],["SOUTHWICK MEWS",""],["SOUTHWICK STREET (REST)",""],["ST. MARY\'S HOUSE","Bouverie Place"],["ST. MICHAEL\'S STREET",""],["ST. MICHAEL\'S STREET 75-77 (BT)",""],["STAR STREET",""],["STAR STREET 1",""],["TOURNAMENT HOUSE (GWR PADDINGTON)","Paddington Station"]],"12":[["BALMORAL APARTMENTS","Praed Street"],["HARBET ROAD",""],["MERCHANT SQUARE 3",""],["MERCHANT SQUARE EAST",""],["PENINSULA APARTMENTS","Praed Street"],["PRAED STREET (REST)",""],["SOUTH WHARF ROAD 11, 11a, westcliff",""],["WEST END QUAY","South Wharf Road"],["WESTCLIFFE APARTMENTS","South Wharf Road"]],"13":[["ARVON COURT","Titchborne Row"],["CASTLEACRE","Hyde Park Crescent"],["CHARTWELL COURT (GLOUCESTER SQUARE)","Gloucester Square"],["CHELWOOD HOUSE","Gloucester Square"],["CHESTER HOUSE (CLARENDON PLACE)","Clarendon Place"],["CHURCH OF ST. JOHN\'S","Hyde Park Cres"],["CLARENDON CLOSE",""],["CLARENDON HOUSE (STRATHEARN PLACE)","Strathearn Place"],["CLARENDON MEWS",""],["CLARENDON PLACE",""],["DEVONPORT (SOUTHWICK STREET)","Southwick Street"],["FALMOUTH HOUSE","Clarendon Place"],["GLOUCESTER SQUARE",""],["HYDE PARK CRESCENT",""],["RADNOR LODGE","Sussex Place"],["RADNOR MEWS",""],["RADNOR PLACE",""],["SOMERS CRESCENT",""],["SOUTHACRE","Hyde Park Crescent"],["SOUTHWICK PLACE",""],["SOUTHWICK STREET 1-23",""],["SOUTHWICK YARD","Titchborne Row"],["STRATHEARN HOUSE","Strathearn Place"],["STRATHEARN PLACE",""],["SUSSEX PLACE (RADNOR LODGE)",""],["TITCHBORNE ROW",""]],"14":[["ALLEYN COURT (SUSSEX GARDENS)","Sussex Gardens"],["CAMBRIDGE COURT","Sussex Gardens"],["CHILWORTH MEWS",""],["CLARE COURT ( 144-146 SUSSEX GARDENS)","Sussex Gardens"],["CONDUIT MEWS",""],["CONDUIT PASSAGE",""],["CRAVEN ROAD 1 - 19 , 22 - 24",""],["LANCESTER COURT HOTEL (SUSSEX GARDENS)","Sussex Gardens"],["SPRING STREET",""],["ST. JAMES\'S CHURCH","Sussex Gardens"],["SUSSEX COURT","Spring Street"],["SUSSEX GARDENS (REST)",""],["TALBOT SQUARE (REST)",""]],"15":[["BATHURST MEWS",""],["BATHURST STREET",""],["BUCKHILL LODGE","Bayswater Road"],["CLIFTON PLACE",""],["HYDE PARK GARDENS",""],["HYDE PARK GARDENS MEWS",""],["STANHOPE TERRACE",""],["SUSSEX LODGE","Sussex Place"],["SUSSEX MEWS EAST",""],["SUSSEX MEWS WEST",""],["SUSSEX PLACE (REST)",""],["SUSSEX SQUARE",""],["WESTBOURNE STREET",""]],"16":[["BARNESS COURT","Westbourne Terrace"],["BISHOPS BRIDGE ROAD 20 (BREWERS COURT)",""],["BISHOPS BRIDGE ROAD 21-23",""],["BISHOPSBOURNE (WESTBOURNE TERRACE)","Westbourne Terrace"],["BREWERS COURT ( 20 BISHOPS BRIDGE ROAD)","Bishops Bridge Road"],["CHILWORTH STREET 15-19 (ODDS) 16-22 (EVENS)",""],["CLEVELAND TERRACE 1-27 , 2-22",""],["EASTBOURNE MEWS",""],["WESTBOURNE CRESCENT",""],["WESTBOURNE CRESCENT MEWS",""],["WESTBOURNE TERRACE (REST)",""],["WESTBOURNE TERRACE MEWS",""]],"17":[["AMBASSADOR COURT (CRAVEN TERRACE)","Craven Terrace"],["BARRIE HOUSE","Lancaster Gate"],["BAYSWATER ROAD 61-109",""],["BROOK MEWS NORTH",""],["CARROLL HOUSE","Craven Terrace"],["CERNEY MEWS",""],["CRAVEN TERRACE",""],["ELMS MEWS",""],["GARSON HOUSE","Gloucester Terrace"],["GILRAY HOUSE","Gloucester Terrace"],["HERON COURT","Lancaster Gate"],["LANCASTER COURT ( 100 LANCASTER GATE)","Lancaster Gate"],["LANCASTER GATE",""],["LANCASTER HOUSE ( 31 LANCASTER GATE)","Lancaster Gate"],["LANCASTER MEWS",""],["LANCASTER TERRACE",""],["LEINSTER MEWS",""],["LEINSTER TERRACE",""],["MAITLAND COURT","Lancaster Terrace"],["SPIRE HOUSE","Lancaster Gate"]],"18":[["CHILWORTH STREET (REST)",""],["CLEVELAND TERRACE 29-33",""],["GLOUCESTER MEWS",""],["GLOUCESTER MEWS WEST",""],["GLOUCESTER TERRACE (REST)",""],["LANCASTER HOUSE ( 165 GLOUCESTER TERRACE)","Gloucester Terrace"],["POWELL HOUSE","Gloucester Terrace"],["SWINTON HOUSE","Gloucester Terrace"],["TRINITY COURT","Gloucester Terrace"],["UPBROOK MEWS",""],["WILDE HOUSE","Gloucester Terrace"],["WORSLEY HOUSE (UPBROOK MEWS)","Upbrook Mews"]],"19":[["BISHOPS BRIDGE ROAD (REST)",""],["BISHOPS BRIDGE ROAD 76 (BISHOPS COURT)",""],["BISHOPS COURT (76 BISHOPS BRIDGE ROAD)","Bishops Bridge Road"],["COLONNADES","Porchester Square"],["GLOUCESTER GARDENS",""],["GLOUCESTER TERRACE 214-272 ODDS",""],["HOLY TRINITY HOUSE","Orsett Terrace"],["ORSETT TERRACE",""],["PICKERING MEWS",""],["PORCHESTER SQUARE",""],["PORCHESTER SQUARE MEWS",""],["PORCHESTER TERRACE NORTH",""],["WESTBOURNE COURT","Orsett Terrace"]],"20":[["BRECON HOUSE","Hallfield Estate"],["BRIDGEWATER HOUSE","Hallfield Estate"],["CAERNARVON HOUSE",""],["CLOVELLY HOUSE","Hallfield Estate"],["EXETER HOUSE","Hallfield Estate"],["HALLFIELD CLINIC",""],["HALLFIELD SCHOOL",""],["LEINSTER GARDENS 1-16",""],["LYNTON HOUSE","Hallfield Estate"],["MARLOW HOUSE","Hallfield Estate"],["NEWBURY HOUSE","Hallfield Estate"],["PEMBROKE HOUSE","Hallfield Estate"],["PICKERING HOUSE","Hallfield Estate"],["READING HOUSE","Hallfield Estate"],["TAUNTON HOUSE","Hallfield Estate"],["TENBY HOUSE","Hallfield Estate"],["WINCHESTER HOUSE","Hallfield Estate"],["WORCESTER HOUSE","Hallfield Estate"]],"21":[["AMERSHAM HOUSE (CRAVEN ROAD)","Craven Road"],["ASTOR HOUSE (CRAVEN HILL)","Craven Hill"],["CORRINGHAM ( 13-16 CRAVEN HILL)","Craven Hill"],["CRASTOCK COURT 7-9 (QUEENS GARDENS)","Queens Gardens"],["CRAVEN HILL",""],["CRAVEN HILL GARDENS",""],["CRAVEN HILL GARDENS 13-16 (CORRINGHAM)",""],["CRAVEN HILL MEWS",""],["CRAVEN LODGE (CRAVEN HILL GARDENS)","Craven Hill Gardens"],["CRAVEN ROAD (REST)",""],["DEVONSHIRE TERRACE",""],["QUEENS GARDENS",""],["SMALLBROOK MEWS",""]],"22":[["CELBRIDGE MEWS",""],["DURHAM TERRACE",""],["PADDINGTON LIBRARY (PORCHESTER ROAD)","Porchester Road"],["PETERS COURT (PORCHESTER ROAD)","Porchester Road"],["PORCHESTER LIBRARY",""],["PORCHESTER ROAD",""],["QUEENSWAY (RALPH COURT)",""],["RALPH COURT (QUEENSWAY)","Queensway"],["ROYAL OAK STATION","Porchester Road"],["SUNDERLAND TERRACE",""],["VERE COURT","Westbourne Gardens"],["WESTBOURNE GARDENS",""]],"23":[["AIRD HOUSE (INVERNESS TERRACE)","Inverness Terrace"],["BAYSWATER ROAD 119-123",""],["BEAUFORT HOUSE","Queensborough Terrace"],["CENTRE COURT APARTMENTS",""],["CERVANTES COURT","Inverness Terrace"],["FOSBURY MEWS",""],["INTERCON HOUSE","Inverness Place"],["INVER COURT","Inverness Terrace"],["INVERNESS MEWS",""],["INVERNESS PLACE",""],["INVERNESS TERRACE",""],["JOANNE HOUSE (CROMARTY VILLAS)","Queensborough Mews"],["QUEENSBOROUGH MEWS",""],["QUEENSBOROUGH PASSAGE",""],["QUEENSBOROUGH STUDIOS",""],["QUEENSBOROUGH TERRACE",""],["RIVEN COURT","Inverness Terrace"]],"24":[["ARTHUR COURT","Queensway"],["BEAUMANOR MANSIONS","Queensway"],["BRIDGEFIELD HOUSE","Queensway"],["CLAREMONT COURT (QUEENSWAY)","Queensway"],["CONSORT HOUSE","Queensway"],["OLYMPIA MEWS",""],["PORCHESTER CENTRE","Porchester Road"],["PRINCESS COURT","Queensway"],["QUEENS COURT","Queensway"],["QUEENS HOUSE ( 73-77 QUEENSWAY)","Queensway"],["QUEENSWAY (REST)",""],["SARDA HOUSE","Queensway"]],"25":[["ALEXANDRA COURT",""],["BARK PLACE",""],["BAYSWATER ROAD 126-154",""],["BLACK LION LODGE","Kensington Gardens / HYDE PARK"],["BURNHAM COURT","Moscow Road"],["CAROLINE CLOSE",""],["CAROLINE HOUSE","Bayswater Road"],["CAROLINE PLACE",""],["CAROLINE PLACE MEWS",""],["CHAPEL SIDE","Moscow Road"],["CHENIES HOUSE","Moscow Road"],["CLOISTERS (THE)","Salem Road"],["DUKES COURT","Moscow Road"],["INVERNESS MANSIONS","Moscow Road"],["LANCASTER CLOSE","St. Petersburgh Place"],["LOMBARDY PLACE",""],["MERITAS COURT","Salem Road"],["MOSCOW PLACE",""],["MOSCOW ROAD (REST)",""],["NEW WEST END SYNAGOGUE",""],["NORTH LODGE","Kensington Gardens"],["OLD DAIRY FLATS",""],["ORME COURT",""],["ORME COURT MEWS",""],["ORME LANE",""],["ORME SQUARE",""],["POPLAR PLACE",""],["SALEM MANSIONS","Salem Road"],["SALEM ROAD",""],["SHAFTESBURY HOUSE (MOSCOW ROAD)","Moscow Road"],["SOUTH LODGE","Kensington Gardens"],["ST. OLAVES COURT","St. Petersburgh Place"],["ST. PETERSBURGH MEWS",""],["ST. PETERSBURGH PLACE",""],["ST. SOPHIAS CHURCH VICARAGE","Moscow Road"],["TELEPHONE EXCHANGE (MOSCOW ROAD)","Moscow Road"],["WINDSOR COURT","Moscow Road"]],"26":[["APSLEY MANSIONS","Clanricarde Gardens"],["CLANRICARDE GARDENS",""],["CLANRICARDE MANSIONS","Clanricarde Gardens"],["GARDEN MEWS",""],["LIMES (THE)","Linden Gardens"],["LINDEN GARDENS",""],["LINDEN MEWS",""],["LITTLE HOUSE (LINDEN)",""],["LITTLE OSSINGTON HOUSE","Ossington Street"],["OSSINGTON CLOSE",""],["OSSINGTON STREET",""],["PALACE COURT",""],["SAXON HALL","Palace Court"],["VICTORIA GROVE MEWS",""],["WELLINGTON TERRACE",""]],"27":[["DAWSON PLACE",""],["MOSCOW ROAD 89-95",""],["PALACE COURT 52-85 (MANSIONS)",""],["PEMBRIDGE GARDENS",""],["PEMBRIDGE PLACE",""],["PEMBRIDGE SQUARE (REST)",""],["PRINCES EDWARDS MANSIONS (MOSCOW ROAD/HEREFORD ROAD)","Moscow Road"],["RADFORD HOUSE","Pembridge Gardens"],["VISCOUNT COURT (PEMBRIDGE VILLAS)","Pembridge Villas"]],"28":[["BENTLEY COURT","Kensington Gardens Square"],["BERRINGTON HOUSE","Hereford Road"],["CLIFFORD COURT (KGS)",""],["COMPASS HOUSE ( 22 REDAN PLACE)","Redan Place"],["EVESHAM HOUSE","Hereford Road"],["GARDEN HOUSE (KGS)","Kensington Gardens Square"],["KENSINGTON GARDENS SQUARE",""],["PORCHESTER COURT","Porchester Gardens"],["PORCHESTER GARDENS 7-31",""],["PRINCES MEWS",""],["PRINCES SQUARE",""],["QUEENS MEWS",""],["REDAN PLACE 22 (COMPASS HOUSE)",""],["WESTBOURNE GROVE 1-63 (EVENS)",""]],"29":[["BURDETT MEWS",""],["GREVILLE LODGE (WESTBOURNE GROVE TERRACE)","Westbourne Grove Terrace"],["HATHERLEY COURT","Hatherley Grove"],["HATHERLEY GROVE",""],["MONMOUTH PLACE",""],["MONMOUTH ROAD",""],["NEWTON ROAD",""],["QUEENSWAY POST OFFICE (70 WG)","Westbourn Grove"],["ST. STEPHENS MANSIONS","Monmouth Road"],["TENNYSON HOUSE","Westbourne Grove Terrace"],["WESTBOURNE GROVE (REST)",""],["WESTBOURNE GROVE TERRACE",""],["WHITELEYS (QUEENSWAY)","Queensway"]],"30":[["BOTTS MEWS",""],["CHEPSTOW CORNER",""],["CHEPSTOW PLACE",""],["CHEPSTOW ROAD",""],["REDE PLACE",""],["SHREWSBURY MEWS (REST)",""],["ST. STEPHENS CRESCENT",""],["ST. STEPHENS GARDENS",""],["ST. STEPHENS MEWS",""]],"31":[["ANGLEBURY HOUSE",""],["ARTESIAN ROAD",""],["COURTNELL STREET",""],["MOORHOUSE ROAD",""],["NORTHUMBERLAND PLACE",""],["SHOTTSFORD","Talbot Road"],["SUTHERLAND PLACE",""],["TALBOT ROAD (REST)",""],["WEATHERBURY","Talbot Road"],["WESTBOURNE, THE (ARTESIAN ROAD)","Artesian Road"]],"32":[["BUCKSHEAD HOUSE","Great Western Road"],["CLIFFORD COURT (WESTBOURNE PARK VILLAS)","Westbourne Park Villas"],["COMBE HOUSE","Great Western Road"],["CULHAM HOUSE","Great Western Road"],["DAINTON HOUSE","Great Western Road"],["DERRYCOMBE HOUSE","Great Western Road"],["DEVONPORT HOUSE (GREAT WESTERN ROAD)","Great Western Road"],["ELSIE LANE COURT","Westbourne Park Villas"],["GREAT WESTERN ROAD",""],["HANWELL HOUSE","Great Western Road"],["KEYHAM HOUSE","Westbourne Park Road"],["LANDOR HOUSE","Westbourne Park Road"],["MICKLETON HOUSE","Westbourne Park Road"],["MOULSFORD HOUSE","Westbourne Park Road"],["POLPERRO HOUSE","Westbourne Park Road"],["PORTISHEAD HOUSE","Westbourne Park Road"],["RIVERFORD HOUSE","Westbourne Park Road"],["SAPPERTON HOUSE","Westbourne Park Road"],["SHREWSBURY MEWS 2A , 2B , 2C",""],["SHREWSBURY ROAD",""],["ST. MARY OF THE ANGELS CATHOLIC PRIMARY SCHOOL","Shrewsbury Road"],["STONEHOUSE HOUSE","Westbourne Park Road"],["SUNDERLAND HOUSE","Westbourne Park Road"],["TRURO HOUSE","Westbourne Park Road"],["WESTBOURNE PARK ROAD 107-137",""],["WESTBOURNE PARK VILLAS",""]],"33":[["BAYNARDS (THE)",""],["COLLEGE PARK SCHOOL (GARWAY ROAD)","Garway Road"],["GARWAY ROAD",""],["HEREFORD MANSIONS","Hereford Road"],["HEREFORD MEWS",""],["HEREFORD ROAD",""],["LEINSTER SQUARE",""],["OPAL APARTMENTS","Hereford Road"]],"34":[["ALEXANDER MEWS",""],["ALEXANDER STREET",""],["BRIDSTOW PLACE",""],["GURNEY HOUSE (ALEXANDER STREET)","Alexander Street"],["KILDARE COURT","Kildare Terrace"],["KILDARE GARDENS",""],["KILDARE TERRACE",""],["SWANLEYS","Westbourne Park Road"],["TALBOT ROAD 1-35 , 2-18",""],["WESTBOURNE PARK ROAD (REST)",""]],"35":[["BAYSWATER ROAD 104 (THISTLE/SHELL/WAITROSE)",""],["CASTLETON COURT (CLEVELAND GARDENS)","Cleveland Gardens"],["CLEVELAND GARDENS",""],["CLEVELAND SQUARE",""],["FULTON MEWS",""],["HYDE PARK TOWERS","Porchester Terrace"],["LEINSTER GARDENS (REST)",""],["PORCHESTER GARDENS 1 , 2",""],["PORCHESTER GATE","Bayswater Road"],["PORCHESTER TERRACE",""],["TENNIEL CLOSE",""]],"F":[["ALFRED ROAD 65",""],["BISHOPS BRIDGE ROAD 8-12",""],["BOAT HOUSE (HYDPE PARK)","Hyde Park"],["BRUNEL BUILDING ( 2 CANALSIDE WALK)","Canalside Walk"],["CANALSIDE WALK 1, 2",""],["CUMBERLAND LODGE (HYDE PARK)","Hyde Park"],["EASTBOURNE TERRACE",""],["EDGWARE ROAD 105, 150, 464, 225",""],["GARFIELD HOUSE (86-88 EDGWARE ROAD)","Edgware Road"],["HYDE PARK",""],["HYDE PARK NURSERY (HYDE PARK)","Hyde Park"],["JUNCTION MEWS 1-2",""],["KINGDOM STREET",""],["LANCASTER GATE 75-89, 104",""],["MAGAZINE COTTAGE (HYDE PARK)","Hyde Park"],["MERCHANT SQUARE 5",""],["MOUTH & FOOT ( 9 INVERNESS PLACE)","Inverness Place"],["NEW LODGE (HYDE PARK)","Hyde Park"],["NORFOLK SQUARE 1 (MILNE HOUSE MEDICAL CENTER)",""],["NORFOLK SQUARE 35-43 (BRUNEI HALL)",""],["NORTH WHARF ROAD (REST)",""],["OLD POLICE HOUSE, THE (HYDE PARK)","Hyde Park"],["PADDINGTON CITI VIEW ( 15-25 TALBOT SQUARE)","Talbot Square"],["PADDINGTON GREEN 25 (COLLEGE)",""],["PADDINGTON SQUARE ( 128-142 PRAED STREET)","Praed Street"],["PEMBRIDGE SQUARE 5",""],["PRAED STREET 5A , 7 , 61 , 128-142 (PADDINGTON SQUARE)","Paddington Square"],["RANGERS COTTAGE (HYDE PARK)","Hyde Park"],["RANGERS LODGE (HYDE PARK)","Hyde Park"],["ROYAL LANCASTER HOTEL","Lancaster Terrace"],["SERPENTINE GALLERIES (HYDE PARK) (KENSINGTON GARDENS)","Hyde Park"],["SHELDON SQUARE 1 , 3",""],["SOUTH WHARF ROAD (REST)",""],["ST MARY\'S HOSPITAL","Praed Street"],["SUSSEX GARDENS 38-76 (WILSON HOUSE)",""],["TALBOT SQUARE 15-25 (PADDINGTON CITI VIEW)",""],["TENNIS CLUB (HYDE PARK)","Hyde Park"],["VICTORIA GATE LODGE (HYDE PARK)","Hyde Park"],["VINCENT HOUSE ( 5 PEMBRIDGE SQUARE)","Pembridge Square"],["WESTBOURNE GROVE 5-11 , 36-38",""],["WESTBOURNE TERRACE 121-141",""],["WILSON HOUSE 38-76 (SUSSEX GARDENS)","Sussex Gardens"]]}');
+const WALK_AZ_ENTRIES=JSON.parse('{"1":[["WESTMINSTER ACADEMY (255 HARROW ROAD)","Harrow Road"],["ALFRED ROAD",""],["ASTLEY HOUSE","Alfred Road"],["BOURNE TERRACE 92-108 , 161-233",""],["BRINDLEY HOUSE","Alfred Road"],["BRINKLOW HOUSE","Torquay Street"],["CIRENCESTER STREET",""],["FORRESTER COURT","Cirencester Street"],["GAYDON HOUSE","Bourne Terrace"],["GEORGE LOWE COURT",""],["HARROW ROAD 209-233 , 255-300",""],["HARROW ROAD 255 (WESTMINISTER ACADEMY)",""],["LANGLEY HOUSE","Alfred Road"],["LEYF NURSERIES (294 Harrow Rd)","Harrow Road"],["NORTHGATE (GEORGE LOWE COURT)","George Lowe Court"],["OLDBURY HOUSE","Harrow Road"],["OUR LADY OF DOLOURS (SCHOOL)","Cirencester Street"],["OVERSLEY HOUSE","Alfred Road"],["POLESWORTH HOUSE","Alfred Road"],["RADWAY HOUSE","Alfred Road"],["SENIOR STREET",""],["SOUTHGATE (GEORGE LOWE COURT)","George Lowe Court"],["STOWE CLUB",""],["TORQUAY STREET",""],["WESTBOURNE GREEN SURGERY","Harrow Road"]],"2":[["AFRICA HOUSE","Blomfield Villas"],["ATHERSTONE COURT","Delamere Terrace"],["BLOMFIELD VILLAS",""],["BOURNE TERRACE 10-80 , 17-157",""],["CHICHESTER ROAD",""],["DARTINGTON HOUSE","Senior Street"],["DELAMERE TERRACE (REST)",""],["DESBOROUGH CLOSE",""],["EDWARD WILSON SCHOOL",""],["LAPWORTH COURT","Chichester Road"],["LORD HILLS ROAD",""],["PARKVIEW LODGE PRE-SCHOOL",""],["PRINCETHORPE HOUSE","Woodchester Square"],["ROWINGTON CLOSE",""],["ST MARY MAGDALENE SCHOOL",""],["WILMCOTE HOUSE","Woodchester Square"]],"3":[["AMILCAR CABRAL COURT","Porteus Road"],["BEAUCHAMP LODGE (WARWICK CRESCENT)","Warwick Crescent"],["DELAMERE TERRACE 1, 2, TOLL HOUSE",""],["FIRE STATION (156 HARROW ROAD)","Harrow Road"],["FLEMING COURT","St. Marys Square"],["FLOATING BOATER (THE)",""],["GILPIN CLOSE",""],["HARROW ROAD 156 (FIRE STATION)",""],["HOGAN MEWS",""],["HOWLEY PLACE",""],["HURLINGHAM HOUSE","Westbourne Terrace Road"],["JOHN AIRD COURT",""],["LEO COURT (JOHN AIRD)","John Aird Court"],["PORTEUS ROAD",""],["TOLL HOUSE","Delamere Terrace"],["WARWICK AVENUE",""],["WARWICK CRESCENT",""],["WESTBOURNE TERRACE ROAD",""]],"4":[["ALEXANDRA HOUSE (ST. MARYS TERRACE)","St. Marys Terrace"],["AUBREY HOUSE","Maida Avenue"],["CALLARD CLOSE",""],["DOUGLAS HOUSE","Maida Avenue"],["EDGWARE ROAD 304-508 (EVENS), 429-453 (ODDS)",""],["LAMPARD HOUSE","Maida Avenue"],["MAIDA AVENUE",""],["OSBORNE HOUSE",""],["PARK PLACE VILLAS",""],["ST. MARY\'S MANSIONS","St. Marys Terrace"],["ST. MARY\'S TERRACE",""],["STAFFORD HOUSE","Maida Avenue"]],"5":[["ADPAR STREET",""],["ADPAR STREET 1A",""],["ARK PADDINGTON GREEN PRIMARY ACADEMY",""],["ASQUITH HOUSE (133 CHURCH STREET)","Church Street"],["BOND MANSIONS (285 EDGWARE ROAD)","Edgware Road"],["BOWEN MANSIONS","Newcastle Place"],["BRAITHWAITE TOWER","Hall Place"],["CAMPBELL HOUSE","Hall Place"],["CHURCH STREET","149-151"],["CHURCHFIELD HOUSE","Hall Place"],["CROMPTON HOUSE","Hall Place"],["CROMPTON STREET",""],["CUTHBERT HOUSE","Hall Place"],["DEVONSHIRE HOUSE (ADPAR STREET)","Adpar Street"],["EDGWARE ROAD 285-427 (ODDS)",""],["EDWARD HOUSE","Hall Place"],["GARRETT MANSIONS (287 EDGWARE ROAD)","Edgware Road"],["GILBERT SHELDON HOUSE","Edgware Road"],["HALL PLACE",""],["HALL TOWER","Hall Place"],["HETHPOOL HOUSE","Hall Place"],["HEYWOOD HOUSE",""],["HOWELL HOUSE","Hall Place"],["LAWRENCE MANSIONS (289 EDGWARE ROAD)","Edgware Road"],["MARY ADELAIDE","Paddington Green"],["MAYNE HOUSE","Hall Place"],["NEWCASTLE PLACE",""],["PADDINGTON GREEN",""],["PARKER HOUSE","CUTHBERT STREET 5"],["PARSONS HOUSE",""],["PHILIP COURT","Hall Place"],["PRINCESS LOUISE CLOSE",""],["WESTMARK TOWER (NEWCASTLE PLACE)","Newcastle Place"],["WINICOTTE HOUSE","Princess Louise Close"]],"6":[["55 N wharf rd (FLATS)",""],["ASTER HOUSE","North Wharf Road"],["BETULA HOUSE","North Wharf Road"],["CAMELLIA HOUSE","North Wharf Road"],["CANALSIDE WALK 3",""],["DAHLIA HOUSE","North Wharf Road"],["DUDLEY HOUSE","North Wharf Road"],["HARROW ROAD 133-181",""],["HEIST BANK 5",""],["HERMITAGE STREET",""],["MARSHALL BUILDING","Hermitage Street"],["MONTGOMERY HOUSE","Harrow Road"],["MUNKENBECK BUILDING","Hermitage Street"],["NISSAN DESIGN EUROPE (HARROW ROAD 181)","Harrow Road"],["PREMIER INN (N wharf rd)",""],["SHELDON SQUARE (REST)",""],["The Gym Group (33 N wharf rd)",""],["TRAVIS PERKINS ( 149 HARROW ROAD)","Harrow Road"],["Wilde Aparthotels (4 N wharf rd)",""]],"7":[["CONNAUGHT PLACE",""],["CONNAUGHT SQUARE",""],["EDGWARE ROAD 2-258 (EVENS), 7-217 (ODDS)",""],["FORSET COURT","Edgware Road"],["FREDERICK CLOSE",""],["GROSVENOR COURT MANSIONS","Edgware Road"],["LEX HOUSE ( 17 CONNAUGHT PLACE)","Connaught Place"],["SEYMOUR STREET",""],["STANHOPE HOUSE ( 18 STANHOPE PLACE)","Stanhope Place"],["STANHOPE PLACE",""],["VICTORY SERVICE CLUB (SEYMOUR STREET)","Seymour Street"],["WESTCHESTER HOUSE","Seymour Street"]],"8":[["ALBION CLOSE",""],["ALBION GATE","Hyde Park Place"],["ALBION MEWS",""],["ALBION STREET",""],["ARCHERY CLOSE",""],["ARCHERY STEPS","St. Georges Fields"],["CONNAUGHT CLOSE",""],["CONNAUGHT COURT","Connaught Street"],["CONNAUGHT STREET",""],["HANOVER STEPS","St. Georges Fields"],["HYDE PARK PLACE",""],["HYDE PARK SQUARE",""],["HYDE PARK STREET",""],["KENDAL STEPS","St. Georges Fields"],["Miss Daisy\'s Nursery School","St. Georges Fields"],["NORTH RISE","St. Georges Fields"],["PARK STEPS","St. Georges Fields"],["SOUTH RISE","St. Georges Fields"],["ST. GEORGES FIELDS","St. Georges Fields"],["WEST RISE","St. Georges Fields"]],"9":[["PARK WEST","Edgware Road / park west place"],["PORTSEA HALL","Portsea Place"],["PORTSEA MEWS",""],["PORTSEA PLACE",""],["WATER GARDENS",""]],"10":[["CAMBRIDGE SQUARE",""],["CONISTON COURT (KENDAL STREET)","Kendal Street"],["KENDAL STREET","St. Georges Fields"],["MONKEY PUZZLE (NORFOLK CRECSENT)","Norfolk Crescent"],["NORFOLK CRESCENT",""],["OXFORD SQUARE",""],["PARK HOUSE","Kendal Street"],["PORCHESTER PLACE",""],["QUADRANGLE",""],["RAYNHAM (NORFOLK CRECSENT)","Norfolk Crescent"],["WEST GARDEN PLACE (KENDAL STREET)","Kendal Street"]],"11":[["BOUVERIE PLACE",""],["EDNA HOUSE","Norfolk Square"],["JUNCTION MEWS (REST)",""],["JUNCTION PLACE",""],["LEYF - MICKY STAR NURSERY & PRE-SCHOOL",""],["LEYF NURSERIES (58-61 St Michaels street)","St Michaels street"],["LONDON MEWS",""],["LONDON STREET",""],["MACMILLAN HOUSE (Paddington Station)",""],["NORFOLK PLACE",""],["NORFOLK SQUARE",""],["NORFOLK SQUARE MEWS",""],["PADDINGTON STATION",""],["PRAED MEWS",""],["RAINSFORD STREET",""],["SALE PLACE",""],["SINCLAIR COURT ( 80-86 ST. MICHAEL\'S STREET)","St. Michaels Street"],["SOUTHWICK MEWS",""],["SOUTHWICK STREET (REST)",""],["ST. MARY\'S HOUSE","Bouverie Place"],["ST. MICHAEL\'S STREET",""],["ST. MICHAEL\'S STREET 75-77 (BT)",""],["STAR STREET",""],["STAR STREET 1",""],["TOURNAMENT HOUSE (GWR PADDINGTON)","Paddington Station"]],"12":[["BALMORAL APARTMENTS","Praed Street"],["HARBET ROAD",""],["MERCHANT SQUARE 3",""],["MERCHANT SQUARE EAST",""],["PENINSULA APARTMENTS","Praed Street"],["PRAED STREET (REST)",""],["SOUTH WHARF ROAD 11, 11a, westcliff",""],["WEST END QUAY","South Wharf Road"],["WESTCLIFFE APARTMENTS","South Wharf Road"]],"13":[["ARVON COURT","Titchborne Row"],["CASTLEACRE","Hyde Park Crescent"],["CHARTWELL COURT (GLOUCESTER SQUARE)","Gloucester Square"],["CHELWOOD HOUSE","Gloucester Square"],["CHESTER HOUSE (CLARENDON PLACE)","Clarendon Place"],["CHURCH OF ST. JOHN\'S","Hyde Park Cres"],["CLARENDON CLOSE",""],["CLARENDON HOUSE (STRATHEARN PLACE)","Strathearn Place"],["CLARENDON MEWS",""],["CLARENDON PLACE",""],["DEVONPORT (SOUTHWICK STREET)","Southwick Street"],["FALMOUTH HOUSE","Clarendon Place"],["GLOUCESTER SQUARE",""],["HYDE PARK CRESCENT",""],["RADNOR LODGE","Sussex Place"],["RADNOR MEWS",""],["RADNOR PLACE",""],["SOMERS CRESCENT",""],["SOUTHACRE","Hyde Park Crescent"],["SOUTHWICK PLACE",""],["SOUTHWICK STREET 1-23",""],["SOUTHWICK YARD","Titchborne Row"],["STRATHEARN HOUSE","Strathearn Place"],["STRATHEARN PLACE",""],["SUSSEX PLACE (RADNOR LODGE)",""],["TITCHBORNE ROW",""]],"14":[["ALLEYN COURT (SUSSEX GARDENS)","Sussex Gardens"],["CAMBRIDGE COURT","Sussex Gardens"],["CHILWORTH MEWS",""],["CLARE COURT ( 144-146 SUSSEX GARDENS)","Sussex Gardens"],["CONDUIT MEWS",""],["CONDUIT PASSAGE",""],["CRAVEN ROAD 1 - 19 , 22 - 24",""],["LANCESTER COURT HOTEL (SUSSEX GARDENS)","Sussex Gardens"],["SPRING STREET",""],["ST. JAMES\'S CHURCH","Sussex Gardens"],["SUSSEX COURT","Spring Street"],["SUSSEX GARDENS (REST)",""],["TALBOT SQUARE (REST)",""]],"15":[["BATHURST MEWS",""],["BATHURST STREET",""],["BUCKHILL LODGE","Hyde Park"],["CLIFTON PLACE",""],["HYDE PARK GARDENS",""],["HYDE PARK GARDENS MEWS",""],["STANHOPE TERRACE",""],["SUSSEX LODGE","Sussex Place"],["SUSSEX MEWS EAST",""],["SUSSEX MEWS WEST",""],["SUSSEX PLACE (REST)",""],["SUSSEX SQUARE",""],["WESTBOURNE STREET",""]],"16":[["BARNESS COURT","Westbourne Terrace"],["BISHOPS BRIDGE ROAD 20 (BREWERS COURT)",""],["BISHOPS BRIDGE ROAD 21-23",""],["BISHOPSBOURNE (WESTBOURNE TERRACE)","Westbourne Terrace"],["BREWERS COURT ( 20 BISHOPS BRIDGE ROAD)","Bishops Bridge Road"],["CHILWORTH STREET 15-19 (ODDS) 16-22 (EVENS)",""],["CLEVELAND TERRACE 1-27 , 2-22",""],["EASTBOURNE MEWS",""],["WESTBOURNE CRESCENT",""],["WESTBOURNE CRESCENT MEWS",""],["WESTBOURNE TERRACE (REST)",""],["WESTBOURNE TERRACE MEWS",""]],"17":[["AMBASSADOR COURT (CRAVEN TERRACE)","Craven Terrace"],["BARRIE HOUSE","Lancaster Gate"],["BAYSWATER ROAD 61-109",""],["BROOK MEWS NORTH",""],["CARROLL HOUSE","Craven Terrace"],["CERNEY MEWS",""],["CRAVEN TERRACE",""],["ELMS MEWS",""],["GARSON HOUSE","Gloucester Terrace"],["GILRAY HOUSE","Gloucester Terrace"],["HERON COURT","Lancaster Gate"],["LANCASTER COURT ( 100 LANCASTER GATE)","Lancaster Gate"],["LANCASTER GATE",""],["LANCASTER HOUSE ( 31 LANCASTER GATE)","Lancaster Gate"],["LANCASTER MEWS",""],["LANCASTER TERRACE",""],["LEINSTER MEWS",""],["LEINSTER TERRACE",""],["MAITLAND COURT","Lancaster Terrace"],["SPIRE HOUSE","Lancaster Gate"]],"18":[["CHILWORTH STREET (REST)",""],["CLEVELAND TERRACE 29-33",""],["GLOUCESTER MEWS",""],["GLOUCESTER MEWS WEST",""],["GLOUCESTER TERRACE (REST)",""],["LANCASTER HOUSE ( 165 GLOUCESTER TERRACE)","Gloucester Terrace"],["POWELL HOUSE","Gloucester Terrace"],["SWINTON HOUSE","Gloucester Terrace"],["TRINITY COURT","Gloucester Terrace"],["UPBROOK MEWS",""],["WILDE HOUSE","Gloucester Terrace"],["WORSLEY HOUSE (UPBROOK MEWS)","Upbrook Mews"]],"19":[["BISHOPS BRIDGE ROAD (REST)",""],["BISHOPS BRIDGE ROAD 76 (BISHOPS COURT)",""],["BISHOPS COURT (76 BISHOPS BRIDGE ROAD)","Bishops Bridge Road"],["COLONNADES","Porchester Square"],["GLOUCESTER GARDENS",""],["GLOUCESTER TERRACE 214-272 ODDS",""],["HOLY TRINITY HOUSE","Orsett Terrace"],["ORSETT TERRACE",""],["PICKERING MEWS",""],["PORCHESTER SQUARE",""],["PORCHESTER SQUARE MEWS",""],["PORCHESTER TERRACE NORTH",""],["WESTBOURNE COURT","Orsett Terrace"]],"20":[["BRECON HOUSE","Hallfield Estate"],["BRIDGEWATER HOUSE","Hallfield Estate"],["CAERNARVON HOUSE",""],["CLOVELLY HOUSE","Hallfield Estate"],["EXETER HOUSE","Hallfield Estate"],["HALLFIELD CLINIC",""],["HALLFIELD SCHOOL",""],["LEINSTER GARDENS 1-16",""],["LYNTON HOUSE","Hallfield Estate"],["MARLOW HOUSE","Hallfield Estate"],["NEWBURY HOUSE","Hallfield Estate"],["PEMBROKE HOUSE","Hallfield Estate"],["PICKERING HOUSE","Hallfield Estate"],["READING HOUSE","Hallfield Estate"],["TAUNTON HOUSE","Hallfield Estate"],["TENBY HOUSE","Hallfield Estate"],["WINCHESTER HOUSE","Hallfield Estate"],["WORCESTER HOUSE","Hallfield Estate"]],"21":[["AMERSHAM HOUSE (CRAVEN ROAD)","Craven Road"],["ASTOR HOUSE (CRAVEN HILL)","Craven Hill"],["CORRINGHAM ( 13-16 CRAVEN HILL)","Craven Hill"],["CRASTOCK COURT 7-9 (QUEENS GARDENS)","Queens Gardens"],["CRAVEN HILL",""],["CRAVEN HILL GARDENS",""],["CRAVEN HILL GARDENS 13-16 (CORRINGHAM)",""],["CRAVEN HILL MEWS",""],["CRAVEN LODGE (CRAVEN HILL GARDENS)","Craven Hill Gardens"],["CRAVEN ROAD (REST)",""],["DEVONSHIRE TERRACE",""],["QUEENS GARDENS",""],["SMALLBROOK MEWS",""]],"22":[["CELBRIDGE MEWS",""],["DURHAM TERRACE",""],["PADDINGTON LIBRARY (PORCHESTER ROAD)","Porchester Road"],["PETERS COURT (PORCHESTER ROAD)","Porchester Road"],["PORCHESTER LIBRARY",""],["PORCHESTER ROAD",""],["QUEENSWAY (RALPH COURT)",""],["RALPH COURT (QUEENSWAY)","Queensway"],["ROYAL OAK STATION","Porchester Road"],["SUNDERLAND TERRACE",""],["VERE COURT","Westbourne Gardens"],["WESTBOURNE GARDENS",""]],"23":[["AIRD HOUSE (INVERNESS TERRACE)","Inverness Terrace"],["BAYSWATER ROAD 119-123",""],["BEAUFORT HOUSE","Queensborough Terrace"],["CENTRE COURT APARTMENTS",""],["CERVANTES COURT","Inverness Terrace"],["FOSBURY MEWS",""],["INTERCON HOUSE","Inverness Place"],["INVER COURT","Inverness Terrace"],["INVERNESS MEWS",""],["INVERNESS PLACE",""],["INVERNESS TERRACE",""],["JOANNE HOUSE (CROMARTY VILLAS)","Queensborough Mews"],["QUEENSBOROUGH MEWS",""],["QUEENSBOROUGH PASSAGE",""],["QUEENSBOROUGH STUDIOS",""],["QUEENSBOROUGH TERRACE",""],["RIVEN COURT","Inverness Terrace"]],"24":[["ARTHUR COURT","Queensway"],["BEAUMANOR MANSIONS","Queensway"],["BRIDGEFIELD HOUSE","Queensway"],["CLAREMONT COURT (QUEENSWAY)","Queensway"],["CONSORT HOUSE","Queensway"],["OLYMPIA MEWS",""],["PORCHESTER CENTRE","Porchester Road"],["PRINCESS COURT","Queensway"],["QUEENS COURT","Queensway"],["QUEENS HOUSE ( 73-77 QUEENSWAY)","Queensway"],["QUEENSWAY (REST)",""],["SARDA HOUSE","Queensway"]],"25":[["ALEXANDRA COURT",""],["BARK PLACE",""],["BAYSWATER ROAD 126-154",""],["BLACK LION LODGE","Kensington Gardens / HYDE PARK"],["BURNHAM COURT","Moscow Road"],["CAROLINE CLOSE",""],["CAROLINE HOUSE","Bayswater Road"],["CAROLINE PLACE",""],["CAROLINE PLACE MEWS",""],["CHAPEL SIDE","Moscow Road"],["CHENIES HOUSE","Moscow Road"],["CLOISTERS (THE)","Salem Road"],["DUKES COURT","Moscow Road"],["INVERNESS MANSIONS","Moscow Road"],["LANCASTER CLOSE","St. Petersburgh Place"],["LOMBARDY PLACE",""],["MERITAS COURT","Salem Road"],["MOSCOW PLACE",""],["MOSCOW ROAD (REST)",""],["NEW WEST END SYNAGOGUE",""],["NORTH LODGE","Kensington Gardens"],["OLD DAIRY FLATS",""],["ORME COURT",""],["ORME COURT MEWS",""],["ORME LANE",""],["ORME SQUARE",""],["POPLAR PLACE",""],["SALEM MANSIONS","Salem Road"],["SALEM ROAD",""],["SHAFTESBURY HOUSE (MOSCOW ROAD)","Moscow Road"],["SOUTH LODGE","Kensington Gardens"],["ST. OLAVES COURT","St. Petersburgh Place"],["ST. PETERSBURGH MEWS",""],["ST. PETERSBURGH PLACE",""],["ST. SOPHIAS CHURCH VICARAGE","Moscow Road"],["TELEPHONE EXCHANGE (MOSCOW ROAD)","Moscow Road"],["WINDSOR COURT","Moscow Road"]],"26":[["APSLEY MANSIONS","Clanricarde Gardens"],["CLANRICARDE GARDENS",""],["CLANRICARDE MANSIONS","Clanricarde Gardens"],["GARDEN MEWS",""],["LIMES (THE)","Linden Gardens"],["LINDEN GARDENS",""],["LINDEN MEWS",""],["LITTLE HOUSE (LINDEN)",""],["LITTLE OSSINGTON HOUSE","Ossington Street"],["OSSINGTON CLOSE",""],["OSSINGTON STREET",""],["PALACE COURT",""],["SAXON HALL","Palace Court"],["VICTORIA GROVE MEWS",""],["WELLINGTON TERRACE",""]],"27":[["DAWSON PLACE",""],["MOSCOW ROAD 89-95",""],["PALACE COURT 52-85 (MANSIONS)",""],["PEMBRIDGE GARDENS",""],["PEMBRIDGE PLACE",""],["PEMBRIDGE SQUARE (REST)",""],["PRINCES EDWARDS MANSIONS (MOSCOW ROAD/HEREFORD ROAD)","Moscow Road"],["RADFORD HOUSE","Pembridge Gardens"],["VISCOUNT COURT (PEMBRIDGE VILLAS)","Pembridge Villas"]],"28":[["BENTLEY COURT","Kensington Gardens Square"],["BERRINGTON HOUSE","Hereford Road"],["CLIFFORD COURT (KGS)",""],["COMPASS HOUSE ( 22 REDAN PLACE)","Redan Place"],["EVESHAM HOUSE","Hereford Road"],["GARDEN HOUSE (KGS)","Kensington Gardens Square"],["KENSINGTON GARDENS SQUARE",""],["PORCHESTER COURT","Porchester Gardens"],["PORCHESTER GARDENS 7-31",""],["PRINCES MEWS",""],["PRINCES SQUARE",""],["QUEENS MEWS",""],["REDAN PLACE 22 (COMPASS HOUSE)",""],["WESTBOURNE GROVE 1-63 (EVENS)",""]],"29":[["BURDETT MEWS",""],["GREVILLE LODGE (WESTBOURNE GROVE TERRACE)","Westbourne Grove Terrace"],["HATHERLEY COURT","Hatherley Grove"],["HATHERLEY GROVE",""],["MONMOUTH PLACE",""],["MONMOUTH ROAD",""],["NEWTON ROAD",""],["QUEENSWAY POST OFFICE (70 WG)","Westbourn Grove"],["ST. STEPHENS MANSIONS","Monmouth Road"],["TENNYSON HOUSE","Westbourne Grove Terrace"],["WESTBOURNE GROVE (REST)",""],["WESTBOURNE GROVE TERRACE",""],["WHITELEYS (QUEENSWAY)","Queensway"]],"30":[["BOTTS MEWS",""],["CHEPSTOW CORNER",""],["CHEPSTOW PLACE",""],["CHEPSTOW ROAD",""],["REDE PLACE",""],["SHREWSBURY MEWS (REST)",""],["ST. STEPHENS CRESCENT",""],["ST. STEPHENS GARDENS",""],["ST. STEPHENS MEWS",""]],"31":[["ANGLEBURY HOUSE",""],["ARTESIAN ROAD",""],["COURTNELL STREET",""],["MOORHOUSE ROAD",""],["NORTHUMBERLAND PLACE",""],["SHOTTSFORD","Talbot Road"],["SUTHERLAND PLACE",""],["TALBOT ROAD (REST)",""],["WEATHERBURY","Talbot Road"],["WESTBOURNE, THE (ARTESIAN ROAD)","Artesian Road"]],"32":[["BUCKSHEAD HOUSE","Great Western Road"],["CLIFFORD COURT (WESTBOURNE PARK VILLAS)","Westbourne Park Villas"],["COMBE HOUSE","Great Western Road"],["CULHAM HOUSE","Great Western Road"],["DAINTON HOUSE","Great Western Road"],["DERRYCOMBE HOUSE","Great Western Road"],["DEVONPORT HOUSE (GREAT WESTERN ROAD)","Great Western Road"],["ELSIE LANE COURT","Westbourne Park Villas"],["GREAT WESTERN ROAD",""],["HANWELL HOUSE","Great Western Road"],["KEYHAM HOUSE","Westbourne Park Road"],["LANDOR HOUSE","Westbourne Park Road"],["MICKLETON HOUSE","Westbourne Park Road"],["MOULSFORD HOUSE","Westbourne Park Road"],["POLPERRO HOUSE","Westbourne Park Road"],["PORTISHEAD HOUSE","Westbourne Park Road"],["RIVERFORD HOUSE","Westbourne Park Road"],["SAPPERTON HOUSE","Westbourne Park Road"],["SHREWSBURY MEWS 2A , 2B , 2C",""],["SHREWSBURY ROAD",""],["ST. MARY OF THE ANGELS CATHOLIC PRIMARY SCHOOL","Shrewsbury Road"],["STONEHOUSE HOUSE","Westbourne Park Road"],["SUNDERLAND HOUSE","Westbourne Park Road"],["TRURO HOUSE","Westbourne Park Road"],["WESTBOURNE PARK ROAD 107-137",""],["WESTBOURNE PARK VILLAS",""]],"33":[["BAYNARDS (THE)",""],["COLLEGE PARK SCHOOL (GARWAY ROAD)","Garway Road"],["GARWAY ROAD",""],["HEREFORD MANSIONS","Hereford Road"],["HEREFORD MEWS",""],["HEREFORD ROAD",""],["LEINSTER SQUARE",""],["OPAL APARTMENTS","Hereford Road"]],"34":[["ALEXANDER MEWS",""],["ALEXANDER STREET",""],["BRIDSTOW PLACE",""],["GURNEY HOUSE (ALEXANDER STREET)","Alexander Street"],["KILDARE COURT","Kildare Terrace"],["KILDARE GARDENS",""],["KILDARE TERRACE",""],["SWANLEYS","Westbourne Park Road"],["TALBOT ROAD 1-35 , 2-18",""],["WESTBOURNE PARK ROAD (REST)",""]],"35":[["BAYSWATER ROAD 104 (THISTLE/SHELL/WAITROSE)",""],["CASTLETON COURT (CLEVELAND GARDENS)","Cleveland Gardens"],["CLEVELAND GARDENS",""],["CLEVELAND SQUARE",""],["FULTON MEWS",""],["HYDE PARK TOWERS","Porchester Terrace"],["LEINSTER GARDENS (REST)",""],["PORCHESTER GARDENS 1 , 2",""],["PORCHESTER GATE","Bayswater Road"],["PORCHESTER TERRACE",""],["TENNIEL CLOSE",""]],"F":[["ALFRED ROAD 65",""],["BISHOPS BRIDGE ROAD 8-12",""],["BOAT HOUSE (HYDPE PARK)","Hyde Park"],["BRUNEL BUILDING ( 2 CANALSIDE WALK)","Canalside Walk"],["CANALSIDE WALK 1, 2",""],["CUMBERLAND LODGE (HYDE PARK)","Hyde Park"],["EASTBOURNE TERRACE",""],["EDGWARE ROAD 105, 150, 464, 225",""],["GARFIELD HOUSE (86-88 EDGWARE ROAD)","Edgware Road"],["HYDE PARK",""],["HYDE PARK NURSERY (HYDE PARK)","Hyde Park"],["JUNCTION MEWS 1-2",""],["KINGDOM STREET",""],["LANCASTER GATE 75-89, 104",""],["MAGAZINE COTTAGE (HYDE PARK)","Hyde Park"],["MERCHANT SQUARE 5",""],["MOUTH & FOOT ( 9 INVERNESS PLACE)","Inverness Place"],["NEW LODGE (HYDE PARK)","Hyde Park"],["NORFOLK SQUARE 1 (MILNE HOUSE MEDICAL CENTER)",""],["NORFOLK SQUARE 35-43 (BRUNEI HALL)",""],["NORTH WHARF ROAD (REST)",""],["OLD POLICE HOUSE, THE (HYDE PARK)","Hyde Park"],["PADDINGTON CITI VIEW ( 15-25 TALBOT SQUARE)","Talbot Square"],["PADDINGTON GREEN 25 (COLLEGE)",""],["PADDINGTON SQUARE ( 128-142 PRAED STREET)","Praed Street"],["PEMBRIDGE SQUARE 5",""],["PRAED STREET 5A , 7 , 61 , 128-142 (PADDINGTON SQUARE)","Paddington Square"],["RANGERS COTTAGE (HYDE PARK)","Hyde Park"],["RANGERS LODGE (HYDE PARK)","Hyde Park"],["ROYAL LANCASTER HOTEL","Lancaster Terrace"],["SERPENTINE GALLERIES (HYDE PARK) (KENSINGTON GARDENS)","Hyde Park"],["SHELDON SQUARE 1 , 3",""],["SOUTH WHARF ROAD (REST)",""],["ST MARY\'S HOSPITAL","Praed Street"],["SUSSEX GARDENS 38-76 (WILSON HOUSE)",""],["TALBOT SQUARE 15-25 (PADDINGTON CITI VIEW)",""],["TENNIS CLUB (HYDE PARK)","Hyde Park"],["VICTORIA GATE LODGE (HYDE PARK)","Hyde Park"],["VINCENT HOUSE ( 5 PEMBRIDGE SQUARE)","Pembridge Square"],["WESTBOURNE GROVE 5-11 , 36-38",""],["WESTBOURNE TERRACE 121-141",""],["WILSON HOUSE 38-76 (SUSSEX GARDENS)","Sussex Gardens"]]}');
 // Returns the walk's raw [name,street] pairs.
 function azEntriesForWalk(walk){
   const w=String(walk||"").trim().toUpperCase();
@@ -8237,12 +8410,24 @@ function showHandManage(){
         <button class="handAddrDel" data-a="${encodeURIComponent(u.d)}" style="padding:8px 12px;background:transparent;border:1px solid #e53935;border-radius:10px;font-size:12px;font-weight:800;color:#e53935;cursor:pointer">Delete</button>
       </div>`).join("")}
     </div>`:"";
+  // v7.52: fixes from the other PDAs, read-only — they're changed on the PDA
+  // that made them. Shown under this PDA's own so it's clear which wins.
+  const shM=sharedOn()?sharedOverrideMap():{}, shK=overrideKeysNewestFirst(shM), shA=sharedAddrList();
+  const shOwn=userOverrides();
+  const sharedHtml=(shK.length||shA.length)?`<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--div)">
+      <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">From the other PDAs (${shK.length+shA.length})</div>
+      <div style="font-size:11.5px;color:var(--sub);margin-top:4px;line-height:1.45">Used on this PDA too. A fix made here always wins. To change or delete one, do it on the PDA it came from.</div>
+      ${shK.slice(0,60).map(k=>`<div style="${OV_ROW_WRAP}${shOwn[k]?";opacity:.55":""}"><div style="flex:1;min-width:0">${overrideRowInner(shM[k])}<div style="font-size:11px;color:var(--sub);margin-top:3px">from ${escHtml(shM[k].from)}${shOwn[k]?" · overridden by this PDA's fix":""}</div></div></div>`).join("")}
+      ${shK.length>60?`<div style="font-size:12px;color:var(--sub);margin-top:8px">…and ${shK.length-60} more</div>`:""}
+      ${shA.slice(0,30).map(u=>`<div style="${OV_ROW_WRAP}"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--txt);line-height:1.35;word-break:break-word">${escHtml(u.d)}</div><div style="font-size:12px;color:var(--pri);font-weight:800;margin-top:2px">${escHtml(u.r||"—")} <span style="font-size:11px;color:var(--sub);font-weight:600">· added on ${escHtml(u.from)}</span></div></div></div>`).join("")}
+    </div>`:"";
   box.style.justifyContent="flex-start";
   if(!keys.length){
     box.innerHTML=`<div style="width:100%;text-align:left">
       ${handTopBar("Walk corrections")}
       <div style="font-size:13px;color:var(--sub);margin-top:10px">None saved yet. When a scan shows the wrong walk, tap “Wrong walk?” to fix it.</div>
       ${addedHtml}
+      ${sharedHtml}
       <button id="handMgBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
     </div>`;
   }else{
@@ -8256,6 +8441,7 @@ function showHandManage(){
       ${handTopBar("Walk corrections ("+keys.length+")")}
       ${rows}
       ${addedHtml}
+      ${sharedHtml}
       <button id="handMgExport" style="margin-top:14px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">📤 Back up / copy all corrections</button>
       <button id="handMgGit" style="margin-top:8px;width:100%;padding:11px;background:var(--sur);border:1px solid var(--div);border-radius:12px;font-size:12.5px;font-weight:800;color:var(--txt);cursor:pointer">⬆ Upload corrections to GitHub</button>
       <button id="handMgBack" style="margin-top:8px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back</button>
@@ -8620,49 +8806,196 @@ function scansForWalk(walk){
   const h=(typeof loadScanHistory==="function"?loadScanHistory():[]);
   return h.filter(function(e){return histWalkOf(e).toUpperCase()===W;});
 }
-// v2.9: the scans that DIDN'T resolve to one walk — pick-lists, no-matches,
-// out-of-area labels. These are the real gaps: the raw code is kept, so a
-// week's worth can be sent on and fixed in the data rather than remembered.
-function showHandUnresolved(){
+// v2.9 → v7.52: the scans that DIDN'T resolve to one walk, now as a REPORT.
+// Grouped by the label's postcode, worst first, split by what went wrong:
+//   pick  — it offered a choice of walks / buildings (the data can pin it)
+//   none  — no match at all (likely a missing address)
+//   out   — the postcode isn't on this round (mis-sort, or a missing postcode)
+// "All PDAs" adds every other set-up PDA's list from the fleet repo, so a
+// week's gaps across the whole office are in one place. A scan that has been
+// fixed since (a correction now covers it, here or shared) drops out.
+let unresFrom="recent", unresScope="mine", unresFleet=null, unresFleetAt=0, unresFleetErr="";
+function unresWalkSet(){
+  const set=new Set();
+  try{const idx=streetWalkIndex();for(const k in idx){for(const w in idx[k].walks)set.add(String(w).trim().toUpperCase());}}catch(e){}
+  return set;
+}
+function unresIsResolved(e,walks){
+  if(histWalkOf(e))return true;
+  // camera-path entries put the walk AFTER the address ("addr · 11 NORFOLK")
+  const parts=String(e.res||"").split("·").map(x=>x.replace(/\(.*?\)/g,"").trim().toUpperCase());
+  for(let i=1;i<parts.length;i++){if(walks.has(parts[i]))return true;}
+  return false;
+}
+function unresKind(res){
+  const t=String(res||"");
+  if(/tracking number/i.test(t))return "skip";
+  if(/No postcode found|No usable text/i.test(t))return "nopc";
+  if(/ not in [A-Z]{1,2}\d/i.test(t))return "out";
+  if(/possible walks|possible buildings|closest shown|pick list|asked/i.test(t))return "pick";
+  return "none";
+}
+function unresPcOf(raw){
+  try{
+    const r=String(raw||"").replace(/[  -​]/g," ").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g," ");
+    const p=extractPostcodeToken(r);
+    return p?String(p).toUpperCase().replace(/\s+/g,""):"";
+  }catch(e){return "";}
+}
+function unresFixedNow(raw,pc){
+  if(!pc)return false;
+  try{
+    const r=String(raw||"").replace(/[  -​]/g," ").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g," ");
+    return !!getUserOverride(pc,extractHouseNumber(r),r);
+  }catch(e){return false;}
+}
+// This PDA's unresolved scans, in the shape the fleet sync posts.
+function unresolvedMine(){
+  const walks=unresWalkSet();
+  const h=(typeof loadScanHistory==="function"?loadScanHistory():[]);
+  return h.filter(e=>e&&e.raw&&!unresIsResolved(e,walks)&&unresKind(e.res)!=="skip")
+          .map(e=>({t:e.t||0,raw:String(e.raw).slice(0,300),res:String(e.res||"").slice(0,200)}));
+}
+window.__wildUnresolvedMine=unresolvedMine;
+function unresBuild(lists){
+  // lists: [{name, items:[{t,raw,res}]}]
+  const groups={}, out={pick:[],none:[],out:[],nopc:[]};
+  let total=0, fixed=0;
+  lists.forEach(L=>{(L.items||[]).forEach(e=>{
+    const kind=unresKind(e.res); if(kind==="skip")return;
+    const pc=unresPcOf(e.raw);
+    if(unresFixedNow(e.raw,pc)){fixed++;return;}
+    total++;
+    const key=kind+"|"+(pc||"?");
+    let g=groups[key];
+    if(!g){g=groups[key]={kind:kind,pc:pc,items:[],pdas:new Set(),last:0,addr:""};out[kind].push(g);}
+    g.items.push(Object.assign({from:L.name},e));
+    if(L.name)g.pdas.add(L.name);
+    if((e.t||0)>g.last)g.last=e.t||0;
+    if(!g.addr){try{g.addr=labelAddressText(e.raw)||"";}catch(x){}}
+  });});
+  for(const k in out)out[k].sort((x,y)=>(y.items.length-x.items.length)||(y.last-x.last));
+  return {sections:out,total:total,fixed:fixed};
+}
+const UNRES_TITLES={pick:["Gave a choice of walks","The data could pin these to one walk"],
+                    none:["No match","Likely an address missing from the data"],
+                    out:["Postcode not on this round","Mis-sorts — or a postcode missing from the data"],
+                    nopc:["No postcode on the label","Usually a courier barcode, not the address code"]};
+function unresReportText(rep,scopeLabel){
+  const L=["Royal Snail — scans that didn't resolve — "+scopeLabel+" — "+rep.total+" scans"+(rep.fixed?(" ("+rep.fixed+" fixed since, not listed)"):"")];
+  ["pick","none","out","nopc"].forEach(k=>{
+    const gs=rep.sections[k];if(!gs.length)return;
+    L.push("");L.push("== "+UNRES_TITLES[k][0].toUpperCase()+" ==");
+    gs.forEach(g=>{
+      L.push((g.pc?fmtPc(g.pc):"(no postcode)")+"  ×"+g.items.length+(g.pdas.size>1?"  ("+g.pdas.size+" PDAs)":"")+(g.addr?"  — "+g.addr:""));
+      g.items.slice(0,5).forEach(e=>L.push("    "+fmtWhen(e.t||0)+(e.from?" ["+e.from+"]":"")+"  |  "+String(e.res||"")+"  |  "+String(e.raw||"")));
+      if(g.items.length>5)L.push("    …and "+(g.items.length-5)+" more");
+    });
+  });
+  return L.join("\n");
+}
+function showHandUnresolved(scope){
   const box=document.getElementById("handResult");
   if(!box)return;
+  if(scope)unresScope=scope;
   handNav("unresolved",function(){showHandUnresolved();});
   try{box.dataset.sub="unresolved";window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
   box.style.justifyContent="flex-start";
-  const h=(typeof loadScanHistory==="function"?loadScanHistory():[]).filter(function(e){return !histWalkOf(e);});
-  const rows=h.map((e,i)=>`<button class="handUnPick" data-i="${i}" style="display:block;width:100%;text-align:left;margin-top:8px;padding:12px 14px;background:var(--sur);border:none;border-left:6px solid ${handOutcomeColor(e.res)};border-radius:12px;box-shadow:var(--shad);cursor:pointer">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
-        <div style="font-size:14px;font-weight:700;color:var(--txt);flex:1;min-width:0;line-height:1.3;word-break:break-word">${escHtml(String(e.res||"—"))}</div>
-        <div style="font-size:10px;color:var(--sub);white-space:nowrap">${fmtWhen(e.t||0)}</div>
-      </div>
-      <div style="margin-top:4px;font-size:10.5px;color:var(--sub);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all">${escHtml(e.raw||"")}</div>
-    </button>`).join("");
-  const txt=h.length?("Royal Snail — scans that didn't resolve ("+h.length+")\n"+
-    h.map(e=>fmtWhen(e.t||0)+"  |  "+String(e.res||"")+"  |  "+String(e.raw||"")).join("\n")):"";
-  box.innerHTML=`<div style="width:100%;text-align:left">
-    <div style="font-size:13px;font-weight:800;color:var(--txt);text-transform:uppercase;letter-spacing:.06em">Didn't resolve</div>
-    <div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.45">${h.length} scan${h.length===1?"":"es"} that gave a pick-list, no match, or an out-of-area postcode. The code is kept with each one — copy them and they can be fixed in the data for good.</div>
-    ${rows||'<div style="font-size:13px;color:var(--sub);margin-top:12px">Nothing — every saved scan landed on a walk.</div>'}
-    ${h.length?`<textarea id="handUnBox" readonly style="width:100%;margin-top:14px;height:120px;padding:11px 12px;font-size:11.5px;font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.45;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt);resize:vertical;box-sizing:border-box">${escHtml(txt)}</textarea>
-    <button id="handUnCopy" style="margin-top:8px;width:100%;padding:12px;background:var(--prib);border:none;border-radius:12px;font-size:13px;font-weight:800;color:#23220a;cursor:pointer">Copy the list</button>`:""}
-    <button id="handUnBack" style="margin-top:${h.length?8:16}px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to recent scans</button>
-  </div>`;
-  box.querySelectorAll(".handUnPick").forEach(b=>{
-    b.onclick=()=>{
-      const e=h[+b.dataset.i];
-      if(e&&e.raw){renderHandheld(e.raw,false);try{window.__wildBackTo=function(){showHandUnresolved();};}catch(e2){}}
-    };
+  const fleetReady=!!(window.__wildFleetReady&&window.__wildFleetReady());
+  if(unresScope==="all"&&!fleetReady)unresScope="mine";
+  const me=(window.__wildFleetMyName&&window.__wildFleetMyName())||"this PDA";
+  let lists=[{name:me,items:unresolvedMine()}];
+  let note="Last 200 scans on this PDA.";
+  if(unresScope==="all"){
+    if(!unresFleet&&!unresFleetErr){
+      note="Fetching the other PDAs' lists…";
+      window.__wildFleetUnresolved().then(a=>{unresFleet=a||[];unresFleetAt=Date.now();},()=>{unresFleetErr="Couldn't reach the fleet — showing this PDA only.";})
+        .then(()=>{const b2=document.getElementById("handResult");if(b2&&b2.dataset.sub==="unresolved")showHandUnresolved();});
+    }else if(unresFleetErr){note=unresFleetErr;}
+    else{
+      const others=unresFleet.filter(x=>x.name!==me);
+      lists=lists.concat(others);
+      note="This PDA plus "+others.length+" other PDA"+(others.length===1?"":"s")+" (their last 200 scans, as of their last check-in).";
+    }
+  }
+  const rep=unresBuild(lists);
+  const chip=(v,label)=>`<button class="unScope" data-v="${v}" style="flex:1;padding:10px;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer;border:2px solid ${unresScope===v?"var(--pri)":"var(--div)"};background:${unresScope===v?"var(--sur)":"transparent"};color:${unresScope===v?"var(--pri)":"var(--sub)"}">${label}</button>`;
+  let body="";
+  ["pick","none","out","nopc"].forEach(k=>{
+    const gs=rep.sections[k];if(!gs.length)return;
+    const n=gs.reduce((a,g)=>a+g.items.length,0);
+    body+=`<div style="margin-top:16px">
+      <div style="font-size:12.5px;font-weight:900;color:var(--txt);text-transform:uppercase;letter-spacing:.05em">${UNRES_TITLES[k][0]} · ${n}</div>
+      <div style="font-size:11px;color:var(--sub);margin-top:2px">${UNRES_TITLES[k][1]}</div>
+      ${gs.slice(0,40).map((g,i)=>`<button class="unGrp" data-k="${k}" data-i="${i}" style="display:flex;gap:10px;align-items:center;width:100%;text-align:left;margin-top:7px;padding:11px 13px;background:var(--sur);border:none;border-left:6px solid ${k==="pick"?"#f9a825":(k==="none"?"#d32f2f":"#9aa0a6")};border-radius:12px;box-shadow:var(--shad);cursor:pointer">
+        <div style="font-size:22px;font-weight:900;color:var(--txt);min-width:38px;text-align:center">${g.items.length}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:900;color:var(--pri)">${g.pc?escHtml(fmtPc(g.pc)):"(no postcode)"}</div>
+          <div style="font-size:11.5px;color:var(--sub);margin-top:2px;line-height:1.35;word-break:break-word">${g.addr?escHtml(g.addr)+" · ":""}last ${fmtWhen(g.last)}${g.pdas.size>1?" · "+g.pdas.size+" PDAs":""}</div>
+        </div><div style="color:var(--sub)">›</div></button>`).join("")}
+      ${gs.length>40?`<div style="font-size:12px;color:var(--sub);margin-top:6px">…and ${gs.length-40} more postcodes (all in the copied report)</div>`:""}
+    </div>`;
   });
+  const txt=rep.total?unresReportText(rep,unresScope==="all"?"all PDAs":me):"";
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    ${handTopBar("Didn't resolve")}
+    ${fleetReady?`<div style="display:flex;gap:8px;margin-top:4px">${chip("mine","This PDA")}${chip("all","All PDAs")}</div>`:""}
+    <div style="font-size:12px;color:var(--sub);margin-top:8px;line-height:1.45">${escHtml(note)} <b>${rep.total}</b> scan${rep.total===1?"":"s"} didn't land on one walk${rep.fixed?` · ${rep.fixed} fixed since (not shown)`:""}. Worst postcodes first — tap one to see its scans.</div>
+    ${body||'<div style="font-size:13px;color:var(--sub);margin-top:14px">Nothing — every saved scan landed on a walk.</div>'}
+    ${rep.total?`<textarea id="handUnBox" readonly style="width:100%;margin-top:16px;height:110px;padding:11px 12px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.45;border:1px solid var(--div);border-radius:12px;background:var(--sur);color:var(--txt);resize:vertical;box-sizing:border-box">${escHtml(txt)}</textarea>
+    <button id="handUnCopy" style="margin-top:8px;width:100%;padding:12px;background:var(--prib);border:none;border-radius:12px;font-size:13px;font-weight:800;color:#23220a;cursor:pointer">Copy the report</button>`:""}
+    <button id="handUnBack" style="margin-top:${rep.total?8:16}px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">${unresFrom==="options"?"Back to Options":"Back to recent scans"}</button>
+  </div>`;
+  box.querySelectorAll(".unScope").forEach(b=>{b.onclick=()=>{
+    const v=b.dataset.v;
+    if(v==="all"){unresFleet=null;unresFleetErr="";}   // always fetch fresh when asked
+    unresScope=v;showHandUnresolved();
+  };});
+  box.querySelectorAll(".unGrp").forEach(b=>{b.onclick=()=>{
+    const g=rep.sections[b.dataset.k][+b.dataset.i];
+    if(g)showHandUnresGroup(g);
+  };});
   const cp=document.getElementById("handUnCopy");
   if(cp)cp.onclick=function(){
     const ta=document.getElementById("handUnBox");
     try{ta.focus();ta.select();ta.setSelectionRange(0,ta.value.length);}catch(e){}
     if(typeof copyText==="function")copyText(ta.value);
     else{try{document.execCommand("copy");}catch(e){}}
-    cp.textContent="✓ Copied";setTimeout(()=>{cp.textContent="Copy the list";},1400);
+    cp.textContent="✓ Copied";setTimeout(()=>{cp.textContent="Copy the report";},1400);
   };
   const bk=document.getElementById("handUnBack");
-  if(bk)bk.onclick=function(){try{showHandRecent();}catch(e){}};
+  if(bk)bk.onclick=function(){
+    if(unresFrom==="options"){try{handBackToOptions();}catch(e){}}
+    else{try{showHandRecent();}catch(e){}}
+  };
+}
+// One postcode's scans, newest first; tapping replays it with Back returning here.
+function showHandUnresGroup(g){
+  const box=document.getElementById("handResult");
+  if(!box||!g)return;
+  handNav("unresgrp:"+g.kind+"|"+g.pc,function(){showHandUnresGroup(g);});
+  try{box.dataset.sub="unresolved";}catch(e){}
+  box.style.justifyContent="flex-start";
+  const items=g.items.slice().sort((x,y)=>(y.t||0)-(x.t||0));
+  box.innerHTML=`<div style="width:100%;text-align:left">
+    ${handTopBar("Didn't resolve")}
+    <div style="font-size:24px;font-weight:900;color:var(--pri);margin-top:4px">${g.pc?escHtml(fmtPc(g.pc)):"(no postcode)"}</div>
+    <div style="font-size:12px;color:var(--sub);margin-top:3px">${escHtml(UNRES_TITLES[g.kind][0])} · ${items.length} scan${items.length===1?"":"s"}. Tap one to see it again — “Wrong walk?” is there to fix it.</div>
+    ${items.map((e,i)=>`<button class="handUnPick" data-i="${i}" style="display:block;width:100%;text-align:left;margin-top:8px;padding:12px 14px;background:var(--sur);border:none;border-left:6px solid ${handOutcomeColor(e.res)};border-radius:12px;box-shadow:var(--shad);cursor:pointer">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <div style="font-size:14px;font-weight:700;color:var(--txt);flex:1;min-width:0;line-height:1.3;word-break:break-word">${escHtml(String(e.res||"—"))}</div>
+        <div style="font-size:10px;color:var(--sub);white-space:nowrap">${fmtWhen(e.t||0)}${e.from?" · "+escHtml(e.from):""}</div>
+      </div>
+      <div style="margin-top:4px;font-size:10.5px;color:var(--sub);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all">${escHtml(e.raw||"")}</div>
+    </button>`).join("")}
+    <button id="handUgBack" style="margin-top:16px;width:100%;padding:12px;background:transparent;border:1px solid var(--div);border-radius:12px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer">Back to the report</button>
+  </div>`;
+  box.querySelectorAll(".handUnPick").forEach(b=>{b.onclick=()=>{
+    const e=items[+b.dataset.i];
+    if(e&&e.raw){renderHandheld(e.raw,false);try{window.__wildBackTo=function(){showHandUnresGroup(g);};}catch(e2){}}
+  };});
+  const bk=document.getElementById("handUgBack");
+  if(bk)bk.onclick=function(){showHandUnresolved();};
 }
 function showHandWalkScans(walk){
   const box=document.getElementById("handResult");
@@ -8761,7 +9094,7 @@ function showHandRecent(){
     b.onclick=function(){showHandWalkScans(decodeURIComponent(b.dataset.w));};
   });
   const noneBtn=document.getElementById("handTalNone");
-  if(noneBtn)noneBtn.onclick=function(){showHandUnresolved();};
+  if(noneBtn)noneBtn.onclick=function(){unresFrom="recent";showHandUnresolved();};
   // Two taps to clear: the first turns the button into the confirmation, so
   // a stray tap can't wipe the log. It reverts after 4 s if left alone.
   const clr=document.getElementById("handRecClear");
@@ -9694,7 +10027,7 @@ function renderHandheld(raw,fromScanner){
   // used for numberless scans) is matched before the postcode+number key.
   const uOv=getUserOverride(pcNoSpace,hn,raw);
   if(uOv){
-    if(fromScanner){outcomeTone("exact",uOv.walk);logScan(raw,"✎ "+uOv.walk+" · "+(uOv.addr||pcNoSpace)+" (your correction)",uOv.walk);}
+    if(fromScanner){outcomeTone("exact",uOv.walk);logScan(raw,"✎ "+uOv.walk+" · "+(uOv.addr||pcNoSpace)+(uOv.from?" (correction from "+uOv.from+")":" (your correction)"),uOv.walk);}
     box.style.justifyContent="center";
     const pcFmt=pcNoSpace&&pcNoSpace.length>3?pcNoSpace.slice(0,-3)+" "+pcNoSpace.slice(-3):(pcNoSpace||"");
     handLastAddr=uOv.addr||((hn?hn+" · ":"")+pcFmt);
@@ -9706,7 +10039,7 @@ function renderHandheld(raw,fromScanner){
     const ovPcLine=(uOv.pcShown&&ovSquash(ovAddr).indexOf(ovSquash(uOv.pcShown))<0)
       ?`<div style="font-size:15px;font-weight:800;color:var(--txt);margin-top:2px">${escHtml(uOv.pcShown)} <span style="font-size:11px;font-weight:600;color:var(--sub)">· your postcode fix (label said ${pcFmt})</span></div>`:"";
     box.innerHTML=`
-      <div style="font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.12em;text-transform:uppercase">Walk <span style="color:#2e7d32">✎ your correction</span></div>
+      <div style="font-size:12px;font-weight:800;color:var(--sub);letter-spacing:.12em;text-transform:uppercase">Walk <span style="color:#2e7d32">${uOv.from?"✎ correction from "+escHtml(uOv.from):"✎ your correction"}</span></div>
       <div id="handWalkBig">${uOv.walk}</div>
       <div style="font-size:16px;color:var(--txt);line-height:1.4;max-width:92%">${ovAddr}</div>
       ${ovPcLine}
@@ -10949,12 +11282,9 @@ function openOptionsMenu(){
   };
   const MENU=[
     {e:"ℹ️",label:"App version",sub:"Which build is running, and updates",go:goHand(()=>openAppVersion())},
-    {e:"📶",label:"Wi-Fi setup",sub:"Enter the RM network login (username + password)",go:goHand(()=>showHandWifi())},
-    {e:"📟",label:"Fleet",sub:"See the PDAs, send alarm / lock / message",go:goHand(()=>showHandFleet())},
-    {e:"💬",label:"Messages",sub:"Send a message, alarm or notice — to all PDAs or the ones you pick",go:goHand(()=>showHandMessages())},
-    {e:"⏱",label:"Timed message",sub:"A card on the other PDAs that disappears after a time you pick",go:goHand(()=>showHandTimedMsg())},
+    {e:"📡",label:"Fleet &amp; messages",sub:"Everything that reaches the other PDAs — messages, Wi-Fi login, shared corrections",go:goHand(()=>showHandFleetHub())},
+    {e:"❓",label:"Didn’t resolve",sub:"Scans that didn’t land on one walk — this PDA or all of them",go:goHand(()=>{unresFrom="options";showHandUnresolved();})},
     {e:"😴",label:"Deep sleep",sub:"Keep the PDA awake with the screen off (Wi-Fi + messages keep working)",go:goHand(()=>showHandSleep())},
-    {e:"🔗",label:"Fleet setup",sub:"Scan the setup code, name this PDA",go:goHand(()=>showHandFleetSetup())},
     {e:"✅",label:"Health check",sub:"Scanner, Wi-Fi, fleet link — all at a glance",go:goHand(()=>showHandHealth())},
     {e:"⬅️",label:"Back button menu",sub:"Kiosk mode, exit, StageNow, Android settings",go:goHand(()=>showHandBackHold())},
     ...(wildBrightness()?[{e:"🔆",label:"Brightness",sub:"Screen brightness, auto or fixed",go:goHand(()=>showHandBrightness())}]:[]),
@@ -15003,7 +15333,7 @@ document.addEventListener("visibilitychange",()=>{
       +'<input id="wfAuto" type="checkbox" '+(wifiAuto()?"checked":"")+' style="width:18px;height:18px"> Reconnect automatically on start-up if offline</label>'
       +'<div style="font-size:11.5px;color:#5f6368;margin-top:12px">If the device refuses it, the username or password is probably wrong, or MX isn\'t ready yet — wait a moment and try again.</div>'
       +'</div>'
-      +'<button type="button" id="wfBack" style="margin-top:18px;border:none;background:#f1f3f4;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">‹ Back to Options</button>';
+      +'<button type="button" id="wfBack" style="margin-top:18px;border:none;background:#f1f3f4;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer">‹ Back to Fleet &amp; messages</button>';
     if(typeof rawResultBlock==="function"){try{rawResultBlock(box);}catch(e){}}
     if(typeof wireHandFixButtons==="function"){try{wireHandFixButtons();}catch(e){}}
 
@@ -15017,7 +15347,7 @@ document.addEventListener("visibilitychange",()=>{
     var auto=box.querySelector("#wfAuto");
     if(auto)auto.onchange=function(){try{localStorage.setItem(AUTO_KEY,auto.checked?"1":"0");}catch(e){}};
     var bk=box.querySelector("#wfBack");
-    if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){try{handGoIdle();}catch(_){}}};
+    if(bk)bk.onclick=function(){try{if(window.showHandFleetHub){window.showHandFleetHub();return;}}catch(e){}try{openOptionsMenu();}catch(e){try{handGoIdle();}catch(_){}}};
 
     var btn=box.querySelector("#wfSave"), msg=box.querySelector("#wfMsg");
     if(btn)btn.onclick=function(){
@@ -15186,6 +15516,7 @@ function fleetWake(secs){
 window.__wildWake=fleetWake;
 function alarmStop(){
   fleetWake(0);
+  try{if(window.__wildReMute)setTimeout(window.__wildReMute,300);}catch(e){}   // v7.53
   if(alarmTimer){clearInterval(alarmTimer);alarmTimer=null;}
   if(vibTimer){clearInterval(vibTimer);vibTimer=null;try{navigator.vibrate(0);}catch(e){}}
   try{if(window.WildKiosk&&typeof WildKiosk.alarmTone==="function")WildKiosk.alarmTone(0);}catch(e){}
@@ -15590,6 +15921,8 @@ function pollOnce(){
     .then(function(){return pullNotice(c).catch(function(){});})
     .then(function(){return pullCommands(c).catch(function(){});})
     .then(function(){return retryPendingImages().catch(function(){});})
+    .then(function(){return syncShared(c).catch(function(){});})        // v7.52
+    .then(function(){return syncUnresolved(c).catch(function(){});})    // v7.52
     .then(function(){polling=false;},function(){polling=false;});
 }
 window.wildFleetPoll=pollOnce;
@@ -15854,8 +16187,8 @@ window.showHandFleetSetup=function(){
     '<button type="button" id="fsPaste" style="display:block;width:100%;min-height:50px;border:1px solid #c6ccd2;border-radius:12px;background:#fff;font-size:14px;font-weight:800;margin-bottom:10px">Paste setup code instead</button>'+
     '<button type="button" id="fsClear" style="display:block;width:100%;min-height:50px;border:1px solid #e0b4b4;border-radius:12px;background:#fff;color:#b3261e;font-size:14px;font-weight:800">Remove fleet setup from this PDA</button>'+
     '<div id="fsMsg" style="font-size:12.5px;color:#5f6368;margin-top:10px;min-height:16px"></div>'+
-    '</div>'+backBtn("fsBack","Back to Fleet");
-  b.querySelector("#fsBack").onclick=function(){try{showHandFleet();}catch(e){}};
+    '</div>'+backBtn("fsBack","Back to Fleet & messages");
+  b.querySelector("#fsBack").onclick=hubBack;
   b.querySelector("#fsName").onclick=function(){showHandSetName(false);};
   b.querySelector("#fsClear").onclick=function(){try{localStorage.removeItem(CFG_KEY);}catch(e){}var m=b.querySelector("#fsMsg");if(m){m.textContent="Removed.";}};
   b.querySelector("#fsPaste").onclick=function(){
@@ -16001,8 +16334,8 @@ window.__wildTmRender=tmRender;window.__wildTmAdd=tmAdd;
 window.showHandTimedMsg=function(){
   var b=box();if(!b)return;try{handNav("timedmsg",showHandTimedMsg);}catch(e){}b.dataset.sub="timedmsg";
   try{window.__wildPushOverlay&&window.__wildPushOverlay();}catch(e){}
-  var goBack=function(){try{openOptionsMenu();}catch(e){try{handGoIdle();}catch(_){}}};
-  if(!provisioned()){b.innerHTML=top1("Timed message")+'<div style="padding:20px;text-align:center;color:#5f6368">This PDA isn\u2019t on the fleet yet. Use <b>Fleet setup</b> first.</div>'+backBtn("tmBack","Back to Options");b.querySelector("#tmBack").onclick=goBack;return;}
+  var goBack=hubBack;
+  if(!provisioned()){b.innerHTML=top1("Timed message")+'<div style="padding:20px;text-align:center;color:#5f6368">This PDA isn\u2019t on the fleet yet. Use <b>Fleet setup</b> first.</div>'+backBtn("tmBack","Back to Fleet & messages");b.querySelector("#tmBack").onclick=goBack;return;}
   var DURS=[[5,"5 min"],[15,"15 min"],[30,"30 min"],[60,"1 hour"],[120,"2 hours"],[240,"4 hours"],[480,"8 hours"],[720,"12 hours"]];
   var pickMin=30, pickTo="ALL";
   var chip=function(cls,val,label,on){return '<button type="button" class="'+cls+'" data-v="'+esc(val)+'" style="min-height:42px;padding:0 13px;margin:0 6px 7px 0;border-radius:21px;font-size:14px;font-weight:800;border:2px solid '+(on?'#2e7d32':'#c6ccd2')+';background:'+(on?'#e8f5e9':'#fff')+';color:'+(on?'#1b5e20':'#202124')+'">'+label+'</button>';};
@@ -16020,7 +16353,7 @@ window.showHandTimedMsg=function(){
     '<button type="button" id="tmSend" style="display:block;width:100%;min-height:54px;border:none;border-radius:14px;background:#2e7d32;color:#fff;font-size:15px;font-weight:900;margin-bottom:10px">Send message</button>'+
     (sentRec?'<button type="button" id="tmTake" style="display:block;width:100%;min-height:48px;border:1px solid #c6ccd2;border-radius:12px;background:#fff;font-size:14px;font-weight:800">Take back my last message<div style="font-size:11.5px;font-weight:600;color:#5f6368;margin-top:2px">\u201c'+esc(String(sentRec.text).slice(0,40))+(String(sentRec.text).length>40?"\u2026":"")+'\u201d \u00b7 '+esc(sentRec.target==="ALL"?"all PDAs":sentRec.target)+' \u00b7 until '+esc(tmHHMM(sentRec.until))+'</div></button>':'')+
     '<div id="tmMsg" style="font-size:12.5px;color:#5f6368;margin-top:10px;min-height:16px"></div>'+
-    '</div>'+backBtn("tmBack","Back to Options");
+    '</div>'+backBtn("tmBack","Back to Fleet & messages");
   b.querySelector("#tmBack").onclick=goBack;
   var msg=b.querySelector("#tmMsg");
   var say=function(t,col){if(msg){msg.textContent=t;msg.style.color=col||"#5f6368";}};
@@ -16095,9 +16428,9 @@ window.showHandFleet=function(){
       '<button type="button" id="flSendPicked" style="flex:1;min-height:40px;border:none;border-radius:10px;background:#0b3d2e;color:#fff;font-size:13px;font-weight:900">Send to ticked \u2192</button>'+
     '</div>'+
     '<div id="flList" style="font-size:13px">Loading…</div>'+
-    '</div>'+backBtn("flBack","Back to Options");
+    '</div>'+backBtn("flBack","Back to Fleet & messages");
   b.innerHTML=head;
-  var bk=b.querySelector("#flBack");if(bk)bk.onclick=function(){try{openOptionsMenu();}catch(e){}};
+  var bk=b.querySelector("#flBack");if(bk)bk.onclick=hubBack;
   var pickMode=false, ticked={}, names=[];
   var flAll=b.querySelector("#flAll"),flPick=b.querySelector("#flPick"),flBar=b.querySelector("#flPickBar");
   if(flAll)flAll.onclick=function(){try{showHandMessages({toAll:true});}catch(e){}};
@@ -16186,12 +16519,163 @@ function fleetActions(target){
 }
 
 
+
+/* ══════ v7.52 SHARED CORRECTIONS + DIDN'T-RESOLVE LISTS ══════════════════
+   corrections/<pda>.json  this PDA's walk fixes + hand-added addresses, posted
+                           whole whenever they change (so a delete propagates);
+                           every other PDA's file is pulled when its sha moves.
+   unresolved/<pda>.json   this PDA's scans that didn't land on one walk, at
+                           most every 10 minutes, read on demand by the report.
+   Same private repo, token and 3-minute check-in as everything else here. */
+var SH_SIG_KEY="wildSharedSig_v1", SH_FILE_KEY="wildSharedFile_v1", SH_SHAS_KEY="wildSharedShas_v1", SH_LAST_KEY="wildSharedLast_v1";
+var UN_SIG_KEY="wildUnresSig_v1", UN_FILE_KEY="wildUnresFile_v1", UN_AT_KEY="wildUnresAt_v1";
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,String(v));}catch(e){}}
+function sig(str){try{return wildHash(str);}catch(e){return String(str.length);}}
+function syncShared(c){
+  var name=myName(), mine=name?("corrections/"+safeName(name)+".json"):"";
+  var p=Promise.resolve();
+  if(name){
+    var ov={},add=[];
+    try{ov=userOverrides();}catch(e){}
+    try{add=userAddrList();}catch(e){}
+    var sg=sig(J({ov:ov,add:add})), prev=lsGet(SH_FILE_KEY);
+    if(prev&&prev!==mine)p=p.then(function(){return ghDelete(c,prev).catch(function(){});});
+    if(sg!==lsGet(SH_SIG_KEY)||prev!==mine){
+      p=p.then(function(){return ghPut(c,mine,J({name:name,area:myArea(),build:myBuild(),ts:nowTs(),ov:ov,add:add}),"corrections "+name);})
+         .then(function(){lsSet(SH_SIG_KEY,sg);lsSet(SH_FILE_KEY,mine);});
+    }
+  }
+  return p.then(function(){return pullShared(c,mine);}).then(function(){lsSet(SH_LAST_KEY,nowTs());});
+}
+function pullShared(c,mine){
+  return ghList(c,"corrections").then(function(files){
+    var shas=P(lsGet(SH_SHAS_KEY))||{};
+    var store=P(lsGet("wildSharedOv_v1"));if(!store||typeof store!=="object"||!store.pdas)store={pdas:{}};
+    var keep={},changed=false,jobs=[];
+    (files||[]).forEach(function(f){
+      var path="corrections/"+f.name;
+      if(path===mine||!/\.json$/.test(f.name))return;
+      keep[path]=1;
+      if(shas[path]&&shas[path]===f.sha&&store.pdas[path])return;
+      jobs.push(ghGet(c,path).then(function(g){
+        var o=g&&P(g.text);
+        if(!o||typeof o!=="object")return;
+        store.pdas[path]={name:String(o.name||f.name.replace(/\.json$/,"")).slice(0,40),ts:+o.ts||0,area:String(o.area||""),build:+o.build||0,
+          ov:(o.ov&&typeof o.ov==="object"&&!Array.isArray(o.ov))?o.ov:{},add:Array.isArray(o.add)?o.add.slice(0,300):[]};
+        shas[path]=f.sha;changed=true;
+      }).catch(function(){}));
+    });
+    return Promise.all(jobs).then(function(){
+      for(var k in store.pdas){if(!keep[k]){delete store.pdas[k];changed=true;}}
+      for(var k2 in shas){if(!keep[k2])delete shas[k2];}
+      lsSet(SH_SHAS_KEY,J(shas));
+      if(changed){lsSet("wildSharedOv_v1",J(store));try{if(window.__wildSharedChanged)window.__wildSharedChanged();}catch(e){}}
+    });
+  });
+}
+function syncUnresolved(c,force){
+  var name=myName();if(!name)return Promise.resolve();
+  var last=+(lsGet(UN_AT_KEY)||0);
+  if(!force&&nowTs()-last<600000)return Promise.resolve();
+  var items=[];try{items=window.__wildUnresolvedMine?window.__wildUnresolvedMine():[];}catch(e){}
+  var file="unresolved/"+safeName(name)+".json", prev=lsGet(UN_FILE_KEY), sg=sig(J(items));
+  var p=Promise.resolve();
+  if(prev&&prev!==file)p=p.then(function(){return ghDelete(c,prev).catch(function(){});});
+  if(sg===lsGet(UN_SIG_KEY)&&prev===file){lsSet(UN_AT_KEY,nowTs());return p;}
+  return p.then(function(){return ghPut(c,file,J({name:name,area:myArea(),build:myBuild(),ts:nowTs(),items:items}),"unresolved "+name);})
+          .then(function(){lsSet(UN_SIG_KEY,sg);lsSet(UN_FILE_KEY,file);lsSet(UN_AT_KEY,nowTs());});
+}
+window.__wildFleetReady=provisioned;
+window.__wildFleetMyName=myName;
+window.__wildFleetUnresolved=function(){
+  if(!provisioned())return Promise.resolve([]);
+  var c=cfg();
+  return ghList(c,"unresolved").then(function(files){
+    return Promise.all((files||[]).map(function(f){
+      return ghGet(c,"unresolved/"+f.name).then(function(g){
+        var o=g&&P(g.text);
+        return (o&&Array.isArray(o.items))?{name:String(o.name||f.name.replace(/\.json$/,"")).slice(0,40),ts:+o.ts||0,items:o.items.slice(0,200)}:null;
+      }).catch(function(){return null;});
+    }));
+  }).then(function(a){return (a||[]).filter(Boolean);});
+};
+window.__wildFleetSyncNow=function(){
+  if(!provisioned())return Promise.reject(new Error("not set up"));
+  var c=cfg();
+  return syncShared(c).then(function(){return syncUnresolved(c,true);});
+};
+
+/* ---- 📡 FLEET & MESSAGES (v7.52): Ash — "put all the settings that can send a
+   message to another pda in to one place". Every screen that reaches the
+   other PDAs opens from here, and each one's Back returns here. ---- */
+function hubBack(){try{showHandFleetHub();}catch(e){try{openOptionsMenu();}catch(_){}}}
+window.showHandFleetHub=function(){
+  var b=box();if(!b)return;try{handNav("fleethub",showHandFleetHub);}catch(e){}b.dataset.sub="fleethub";
+  var ok=provisioned(), c=cfg()||{};
+  var nOv=0;try{nOv=(typeof sharedOverrideCount==="function")?sharedOverrideCount():0;}catch(e){}
+  var rows=[
+    ["💬","Messages","Flash a message, alarm, notice bar, picture or locked message — to all PDAs or the ones you pick","showHandMessages"],
+    ["⏱","Timed message","A card on the other PDAs that disappears after a time you pick","showHandTimedMsg"],
+    ["📟","Fleet board","Every PDA — battery, build, last check-in. Tap one for alarm, lost mode, area switch","showHandFleet"],
+    ["✏️","Shared corrections","Walk fixes made on any PDA, used on all of them"+(ok?(" · "+nOv+" from the others"):""),"showHandSharedCorr"],
+    ["📶","Wi-Fi login","This PDA’s RM login — and send it (or a new password) to every PDA","showHandWifi"],
+    ["🔗","Fleet setup","Scan the setup code, name this PDA","showHandFleetSetup"]
+  ];
+  b.innerHTML=top1("Fleet &amp; messages")+
+    '<div style="max-width:360px;margin:0 auto;text-align:left">'+
+    '<div style="font-size:12.5px;margin:2px 0 10px;padding:9px 11px;border-radius:10px;background:'+(ok?'#eef6f0':'#fff4e5')+';color:'+(ok?'#1b5e20':'#8a5300')+';font-weight:700">'+
+      (ok?('This PDA is <b>'+esc(c.name||"(unnamed)")+'</b> on the fleet.'):'This PDA isn’t on the fleet yet — start with <b>Fleet setup</b>.')+'</div>'+
+    rows.map(function(r,i){return '<button type="button" class="fhRow" data-i="'+i+'" style="display:flex;align-items:center;gap:12px;width:100%;padding:13px 12px;margin-bottom:8px;border:1px solid #e8ebef;border-radius:12px;background:#fff;text-align:left;cursor:pointer">'+
+      '<div style="font-size:22px;flex-shrink:0">'+r[0]+'</div><div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:800;color:#202124">'+r[1]+'</div>'+
+      '<div style="font-size:11.5px;color:#5f6368;margin-top:2px;line-height:1.35">'+r[2]+'</div></div><div style="color:#5f6368">›</div></button>';}).join("")+
+    '</div>'+backBtn("fhBack","Back to Options");
+  b.querySelector("#fhBack").onclick=function(){try{handBackToOptions();}catch(e){try{openOptionsMenu();}catch(_){}}};
+  var btns=b.querySelectorAll(".fhRow");
+  for(var i=0;i<btns.length;i++){(function(btn){btn.onclick=function(){
+    var fn=window[rows[+btn.getAttribute("data-i")][3]];if(typeof fn==="function")fn();
+  };})(btns[i]);}
+};
+window.showHandSharedCorr=function(){
+  var b=box();if(!b)return;try{handNav("sharedcorr",showHandSharedCorr);}catch(e){}b.dataset.sub="sharedcorr";
+  var ok=provisioned(), on=true;try{on=sharedOn();}catch(e){}
+  var store=P(lsGet("wildSharedOv_v1"))||{pdas:{}}, pd=store.pdas||{};
+  var mineOv=0,mineAdd=0;try{mineOv=Object.keys(userOverrides()).length;mineAdd=userAddrList().length;}catch(e){}
+  var names=Object.keys(pd).sort(function(a,z){return String(pd[a].name).localeCompare(String(pd[z].name));});
+  var last=+(lsGet(SH_LAST_KEY)||0);
+  var list=names.length?names.map(function(k){var p=pd[k],n=Object.keys(p.ov||{}).length,a=(p.add||[]).length;
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid #e8ebef;border-radius:10px;margin-bottom:6px;font-size:13px">'+
+        '<div style="font-weight:800">'+esc(p.name)+'</div><div style="color:#5f6368;text-align:right">'+n+' fix'+(n===1?'':'es')+(a?(' · '+a+' address'+(a===1?'':'es')):'')+'<div style="font-size:11px">updated '+agoTxt(p.ts)+'</div></div></div>';}).join("")
+    :'<div style="font-size:13px;color:#5f6368">Nothing from the other PDAs yet. Each one sends its fixes on its next check-in once it’s on build 287 or later.</div>';
+  b.innerHTML=top1("Shared corrections")+
+    '<div style="max-width:360px;margin:0 auto;text-align:left;line-height:1.45">'+
+    (ok?'':'<div style="font-size:13px;padding:10px 12px;border-radius:10px;background:#fff4e5;color:#8a5300;margin-bottom:12px">This PDA isn’t on the fleet yet, so nothing is shared. Use <b>Fleet setup</b> first.</div>')+
+    '<div style="font-size:13px;color:#3c4043;margin-bottom:12px">A walk fix made on any PDA is used on every PDA, about 3 minutes later. A fix made on <b>this</b> PDA always wins. Deleting a fix on the PDA that made it removes it everywhere.</div>'+
+    '<label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #c6ccd2;border-radius:12px;font-size:14px;font-weight:800;margin-bottom:12px"><input id="scOn" type="checkbox" style="width:22px;height:22px"'+(on?' checked':'')+'> Use fixes from the other PDAs</label>'+
+    '<div style="font-size:13px;margin-bottom:6px"><b>This PDA shares:</b> '+mineOv+' fix'+(mineOv===1?'':'es')+(mineAdd?(', '+mineAdd+' added address'+(mineAdd===1?'':'es')):'')+'</div>'+
+    '<div style="font-size:13px;font-weight:800;margin:12px 0 6px">From the other PDAs</div>'+list+
+    '<div style="font-size:11.5px;color:#5f6368;margin-top:6px">Last checked: '+agoTxt(last)+'</div>'+
+    (ok?'<button type="button" id="scSync" style="display:block;width:100%;min-height:50px;margin-top:12px;border:none;border-radius:12px;background:#0b3d2e;color:#fff;font-size:14.5px;font-weight:900">↻ Sync now</button>':'')+
+    '<button type="button" id="scSee" style="display:block;width:100%;min-height:46px;margin-top:8px;border:1px solid #c6ccd2;border-radius:12px;background:#fff;font-size:14px;font-weight:800">See every correction</button>'+
+    '<div id="scMsg" style="font-size:12.5px;color:#5f6368;margin-top:8px;min-height:16px"></div>'+
+    '</div>'+backBtn("scBack","Back to Fleet & messages");
+  b.querySelector("#scBack").onclick=hubBack;
+  var cb=b.querySelector("#scOn");
+  if(cb)cb.onchange=function(){lsSet("wildSharedOn_v1",cb.checked?null:"0");try{window.__wildSharedChanged&&window.__wildSharedChanged();}catch(e){}
+    var m=b.querySelector("#scMsg");if(m){m.textContent=cb.checked?"On — the other PDAs’ fixes are used here.":"Off — only this PDA’s own fixes are used.";m.style.color="#1b5e20";}};
+  var sy=b.querySelector("#scSync");
+  if(sy)sy.onclick=function(){var m=b.querySelector("#scMsg");sy.disabled=true;sy.textContent="Syncing…";
+    window.__wildFleetSyncNow().then(function(){showHandSharedCorr();var m2=box()&&box().querySelector("#scMsg");if(m2){m2.textContent="✓ Up to date.";m2.style.color="#1b5e20";}},
+      function(){sy.disabled=false;sy.textContent="↻ Sync now";if(m){m.textContent="Couldn’t reach the fleet — check the connection.";m.style.color="#8a5300";}});};
+  b.querySelector("#scSee").onclick=function(){try{handMgFrom="";}catch(e){}try{showHandManage();}catch(e){}};
+};
+
 /* ---- 💬 MESSAGES (build 267): one place to send a message / alarm / notice,
    to every PDA or just the ones ticked. ---- */
 window.showHandMessages=function(preset){
   var b=box();if(!b)return;try{handNav("fleetmsgs",showHandMessages);}catch(e){}b.dataset.sub="fleetmsgs";
-  var back=function(){try{openOptionsMenu();}catch(e){}};
-  if(!provisioned()){b.innerHTML=top1("Messages")+'<div style="padding:20px;text-align:center;color:#5f6368">Set up the fleet first (Options → Fleet setup).</div>'+backBtn("msBack","Back to Options");b.querySelector("#msBack").onclick=back;return;}
+  var back=hubBack;
+  if(!provisioned()){b.innerHTML=top1("Messages")+'<div style="padding:20px;text-align:center;color:#5f6368">Set up the fleet first (Fleet &amp; messages → Fleet setup).</div>'+backBtn("msBack","Back to Fleet & messages");b.querySelector("#msBack").onclick=back;return;}
   var KINDS=[["message","📢 Flash on screen","Big full-screen message until they tap OK"],
              ["alarm","🚨 Alarm + message","Loud alarm at full volume, with your message"],
              ["notice","📌 Notice bar","Quiet note along the bottom until dismissed"],
@@ -16238,7 +16722,7 @@ window.showHandMessages=function(preset){
       '<div style="font-size:11px;color:#5f6368;margin-top:4px">{to} = who it went to, {pin} = the unlock PIN. Saved on this PDA.</div>'+
       '<div style="display:flex;gap:8px;margin-top:8px"><button type="button" id="msNoteSave" style="flex:1;min-height:40px;border:none;border-radius:10px;background:#0b3d2e;color:#fff;font-size:13px;font-weight:800">Save</button>'+
       '<button type="button" id="msNoteReset" style="flex:1;min-height:40px;border:1px solid #c6ccd2;border-radius:10px;background:#fff;font-size:13px;font-weight:800">Back to default</button></div></details>'+
-    '</div>'+backBtn("msBack","Back to Options");
+    '</div>'+backBtn("msBack","Back to Fleet & messages");
   b.querySelector("#msBack").onclick=back;
   var txt=b.querySelector("#msTxt"), msg=b.querySelector("#msMsg");
   var qs=b.querySelectorAll(".msQ");for(var i=0;i<qs.length;i++){(function(q){q.onclick=function(){txt.value=q.textContent;};})(qs[i]);}
